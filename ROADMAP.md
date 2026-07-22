@@ -33,7 +33,7 @@ Defaults come from `PLAN.md` §3. Research/review amendments are marked and just
 | D6 | Tests | munit 1.3.4 in core; zio-test 2.1.26 in zio module | ✅ as planned |
 | D7 | Style | scalafmt 3.11.4 (`runner.dialect = scala3`, built into Mill) + scalafix 0.14.7 via `com.goyeau::mill-scalafix::0.6.2` | ✅ as planned |
 | D8 | Docs | mdoc 2.9.1 → VitePress 1.6.4 → GH Pages via `actions/deploy-pages@v5` | ✅ as planned |
-| D9 | Publish coordinates | **`io.github.w0rxbend`** — `bend.worx` is impossible | 🔴 **AMENDED — needs ack (§3.3)** |
+| D9 | Publish coordinates | **`com.worxbend`** — reversed from `worxbend.com`, a domain the owner controls. `bend.worx` is impossible. | ✅ **decided** |
 | D10 | JDK | Build on 25; `-java-output-version 17` → JDK 17 floor for consumers | ✅ as planned |
 | D11 | **License** | Add `LICENSE` (Apache-2.0) + `NOTICE` + `THIRD-PARTY.md`. Repo has **never had a license**. | 🔴 **NEW — BLOCKER (§3.4)** |
 | D12 | `Lena.png` | **Delete.** Replace with programmatically generated synthetic fixtures. | 🔧 NEW (§3.5) |
@@ -117,11 +117,15 @@ objdetect    = true      aruco = true
 
 This becomes `OpenCv.load()` (Track B.1) and is a **headline correctness feature** — no `apt-get install libgtk2.0-0t64` needed on any runner.
 
-### 3.3 🔴 `bend.worx` cannot be published
+### 3.3 ✅ groupId is `com.worxbend`
 
-Sonatype Central requires DNS ownership of the reversed groupId. `bend.worx` reverses to `worx.bend`; **`.bend` is not an IANA-delegated TLD** (checked `data.iana.org/TLD/tlds-alpha-by-domain.txt` v2026062302 — 0 hits for `bend` or `worx`). No verification is possible.
+`PLAN.md` D9 proposed `bend.worx`. That cannot be published: Sonatype Central verifies namespace ownership via a DNS TXT record on the reversed groupId, and `bend.worx` reverses to `worx.bend` — **`.bend` is not an IANA-delegated TLD** (checked `data.iana.org/TLD/tlds-alpha-by-domain.txt` v2026062302 — 0 hits for `bend` or `worx`). No verification is possible for that namespace.
 
-Options: **`io.github.w0rxbend`** (auto-verified for GitHub users, recommended) · or a groupId derived from a domain you actually own.
+**Resolved:** the owner controls `worxbend.com`, so the groupId is **`com.worxbend`** and the artifact is `com.worxbend::scalacv`.
+
+Verified: `com` is IANA-delegated; `worxbend.com` has a valid SOA and live NS (`ns09/ns10.domaincontrol.com`) and A records — the zone is under the owner's control, so the verification TXT record can be added.
+
+Remaining step, at publish time (Track G5): register the `com.worxbend` namespace in the Central Portal and add the TXT record it issues to the `worxbend.com` zone. No TXT records exist on the apex today.
 
 ### 3.4 🔴 BLOCKER — this repository has never had a license
 
@@ -234,7 +238,7 @@ This is *the* reason for scalacv to exist, and belongs at the top of the README.
 - [ ] G1 · CI matrix: JDK 17 + 21 + 25 × ubuntu (+ macos-arm64 smoke), per-OS classifier
 - [ ] G2 · compile / test / scalafmt-check / scalafix-check · [ ] G3 · coursier cache action
 - [ ] G4 · Headless-safe: no HighGUI, no JavaFX in CI-built modules; `Hardware`/`Gui` tags auto-skip
-- [ ] G5 · Tag-driven Sonatype Central release scaffold (secrets as marked TODOs)
+- [ ] G5 · Tag-driven Sonatype Central release scaffold (secrets as marked TODOs); register the `com.worxbend` namespace in the Central Portal and add its verification TXT record to the `worxbend.com` zone
 - [ ] G6 · Scala Steward (`mill-plugin` 0.19.1) · [ ] G7 · MiMa armed from `0.2.0`
 
 **Gate:** CI green on PR; `publishLocal` dry-run succeeds.
