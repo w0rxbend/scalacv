@@ -2,7 +2,7 @@
 
 Scala 2.11 / sbt 0.13 / vendored OpenCV 3.0.0-rc1 → **Scala 3 / Mill / OpenCV 4.13.0**.
 
-**Phase:** R (research) complete · V (review) complete & applied · I (implementation) blocked on ack
+**Phase:** R (research) complete · V (review) complete & applied · **I (implementation) in progress** — acked 2026-07-23
 **Sources:** [`NOTES-audit.md`](NOTES-audit.md) (legacy archaeology) · [`NOTES-upstream.md`](NOTES-upstream.md) (upstream/ecosystem) · [`NOTES-experiments.md`](NOTES-experiments.md) (orchestrator experiments E-3…E-11) · [`REVIEW.md`](REVIEW.md) (adversarial review — 2 blockers, 20 should-fix, 19 nits)
 **Supersedes:** `PLAN.md` (four of its "ground truth" claims are corrected below — see §3)
 
@@ -25,11 +25,11 @@ Defaults come from `PLAN.md` §3. Research/review amendments are marked and just
 | # | Decision | Resolution | Status |
 |---|---|---|---|
 | D1 | Build tool | **Mill 1.1.7**, `./mill` bootstrap script + `.mill-version`. No sbt anywhere. | ✅ as planned |
-| D2 | Scala version | **3.3.8 (LTS)** for the published artifact — *not* 3.8.4 | 🔴 **AMENDED — needs ack (§3.1)** |
+| D2 | Scala version | **3.3.8 (LTS)** for the published artifact — *not* 3.8.4 | ✅ **decided 2026-07-23** (§3.1) |
 | D3 | OpenCV binding | `org.bytedeco:opencv:4.13.0-1.5.13`. **Three coordinates per platform** for the build — a classifier dep *replaces* rather than adds (§3.9). | 🔧 **CORRECTED** |
 | D3b | **Which Java API** | **`org.opencv.*`** (official JNI bindings), *not* `org.bytedeco.opencv.*`. bytedeco is the natives-delivery vehicle only. | ✅ resolves audit CONFLICT-2/3/5 |
 | D3c | **Native loading** | `Loader.cacheResources` + `Loader.loadGlobal` + `System.load`. **`Loader.load(classOf[opencv_java])` does NOT work** — §3.2 | 🔧 **CORRECTS PLAN §1** |
-| D3d | **Natives for consumers** | Mill cannot express a classifier in a POM. `core`'s POM stays classifier-free; consumers add one line, documented. **Rejected:** depending on `opencv-platform` (works out of the box, costs every consumer 408 MB). | 🔴 **NEW — BLOCKER (§3.7)** |
+| D3d | **Natives for consumers** | Mill cannot express a classifier in a POM. `core`'s POM stays classifier-free; consumers add one documented line. **Rejected:** depending on `opencv-platform` (zero-config, 408 MB for every consumer, untrimmable). | ✅ **decided 2026-07-23** (§3.7) |
 | D4 | Effects | No effect system in core: synchronous, resource-safe (`Using`, `Releasable`, opaque types). **Not "total"** — `CvException` escapes from ordinary ops (§3.10). Old `Future` API dies. Optional `scalacv-zio`. | 🔧 **CORRECTED** |
 | D5 | Modules | `core` / `zio` published; `examples` / `examples-gui` **not** `PublishModule`s. JavaFX never reaches a CI-built module. | 🔧 refined |
 | D6 | Tests | munit 1.3.4 in core; zio-test 2.1.26 in zio module | ✅ as planned |
@@ -37,10 +37,10 @@ Defaults come from `PLAN.md` §3. Research/review amendments are marked and just
 | D8 | Docs | mdoc 2.9.1 → VitePress 1.6.4 → GH Pages via `actions/deploy-pages@v5` | ✅ as planned |
 | D9 | Publish coordinates | **`com.worxbend`** — reversed from `worxbend.com`, a domain the owner controls. `bend.worx` is impossible. Artifact ids **`scalacv`** and **`scalacv-zio`** via explicit `artifactName`. | ✅ **decided** |
 | D10 | JDK | Build on **25, pinned via `//| mill-jvm-version: zulu:25`** — Mill 1.1.7 silently defaults to zulu 21.0.10 and ignores `JAVA_HOME`. `-java-output-version 17` → JDK 17 floor for consumers. | 🔧 **CORRECTED (§2)** |
-| D11 | **License** | Add `LICENSE` (Apache-2.0) + `NOTICE` + `THIRD-PARTY.md`. Repo has **never had a license**; neither did upstream. | 🔴 **NEW — BLOCKER (§3.4)** |
+| D11 | **License** | **Clean-room is the working assumption**; F1a sends the grant request in parallel and blocks nothing. `LICENSE` (Apache-2.0) + `NOTICE` + `THIRD-PARTY.md`. Repo has **never had a license**; neither did upstream. | ✅ **decided 2026-07-23** (§3.4) |
 | D12 | `Lena.png` | **Delete.** Replace with programmatically generated synthetic fixtures. | 🔧 NEW (§3.5) |
 | D13 | Versioning | Restart at `0.1.0`; `versionScheme = "early-semver"`; MiMa armed from `0.2.0` — do **not** mix in `Mima` before then (an empty `mimaPreviousVersions` fails). | 🔧 refined |
-| D14 | **Freeing natives** | Only 3 of 188 `org.opencv.*` native types have a public `release()` (§3.8). Two regimes: direct `release()` for those three, a gated `delete(long)` bridge for the rest. | 🔴 **NEW — needs adjudication (§3.8)** |
+| D14 | **Freeing natives** | Only 3 of 188 `org.opencv.*` native types have a public `release()` (§3.8). **Two regimes:** direct `release()` for those three; `close()` + `Cleaner` for the rest, with the `delete(long)` bridge as a **gated opt-in that fails loudly**. | ✅ **decided 2026-07-23** (§3.8) |
 
 ---
 
@@ -55,7 +55,7 @@ Defaults come from `PLAN.md` §3. Research/review amendments are marked and just
 | `org.bytedeco:openblas` | `0.3.31-1.5.13` | **Mandatory — but transitive only for the classifier-less jar.** `libopenblas.so.0` (a `NEEDED` of `libopencv_core.so.413`) ships *only* in the per-platform classifier jar, which must be declared explicitly. **`0.3.30-1.5.13` does not exist.** |
 | `org.bytedeco:javacpp` | `1.5.13` | Classifier **not** required — a 3-coordinate set loads with a wiped cache. |
 | Classifiers (JVM-reachable) | `linux-x86_64`, `linux-arm64`, `macosx-arm64`, `macosx-x86_64`, `windows-x86_64` | 12 published in total; `-gpu` variants for linux-x86_64/linux-arm64/windows-x86_64 only. **No `windows-arm64` opencv jar** (javacpp has one, opencv does not) — do not add that CI leg. Slim per-platform totals **49 / 36 / 80 MB** vs **408 MB** for `opencv-platform`. |
-| OpenJFX (`examples-gui`) | `21.0.12` | Pinned by the **build JDK**, not by recency: 25.0.4 (classfile 67) and 26.0.2 (classfile 68) both `UnsupportedClassVersionError` on zulu 21. `javafx-base` + `-graphics` + `-controls`; `-swing` only if `SwingFXUtils` is used (the legacy code is not). No classifier needed — coursier activates the `<os>` profile in the `org.openjfx:javafx` parent POM. **If D10's build JDK moves to 25, bump this to `26.0.2` in the same commit.** |
+| OpenJFX (`examples-gui`) | `26.0.2` | **Follows the build JDK, not recency.** D10 pins zulu 25, so 26.0.2 (classfile 68) is correct and verified running on GraalVM 25.0.3. Were the build to drop back to Mill's zulu-21 default, this **must** become `21.0.12` — 25.0.4 and 26.0.2 both `UnsupportedClassVersionError` there. `javafx-base` + `-graphics` + `-controls`; `-swing` only if `SwingFXUtils` is used (the legacy code is not). No classifier needed — coursier activates the `<os>` profile in the `org.openjfx:javafx` parent POM, so `examples-gui` builds only for its host. That is fine: it is never published and never built in CI. |
 | Hough output shapes | verified by execution | `HoughLines` = `Nx1 CV_32FC2` `(rho, theta)` — **Vec2f, never Vec3f**, invariant under `srn`/`stn`/`min_theta`/`max_theta`/`use_edgeval`. `HoughLinesWithAccumulator` = `Nx1 CV_32FC3` `(rho, theta, votes)`. `HoughLinesP` = `Nx1 CV_32SC4` — **int32**, `(x1, y1, x2, y2)`; a `FloatBuffer` read throws. |
 | Haar cascades | in the classifier jar | 17 `haarcascades/*.xml` + 5 `lbpcascades/*.xml` under `org/bytedeco/opencv/<platform>/share/opencv4/`, on every platform **except `windows-x86_64`, whose `share/` is empty**. Byte-identical to upstream tag `4.13.0`. |
 | munit | `1.3.4` | |
@@ -90,7 +90,7 @@ TASTy is backward- but **not forward-**compatible: a 3.8.4 artifact cannot be co
 
 **Recommendation: publish with 3.3.8.** Cost: none — `scalac 3.3.8 -java-output-version 17` emits zero warnings and major-61 bytecode on the build JDK. (`sun.misc.Unsafe` / `LazyVals$` warnings appear only when the 3.3.x compiler itself runs on JDK 24+ — cosmetic, 4 lines.)
 
-**Your call** — D2 said "latest is the pick", written before this evidence existed.
+**Decided 2026-07-23: 3.3.8.** `PLAN.md` D2's "latest is the pick" was written before this evidence existed.
 
 ### 3.2 🔧 `PLAN.md` §1's native-loading recipe is broken
 
@@ -304,7 +304,7 @@ second delete -> SURVIVED (undefined behaviour — the allocator simply did not 
 
 Use-after-free takes down the JVM from native code: no stack trace, no catch, no test report.
 
-🔴 **Needs your adjudication.** Reviewers split on whether the reflective bridge belongs in a published library. The case against: `delete(long)` is private API with no compatibility promise, and `setAccessible` breaks the moment OpenCV's classes ship on the **module path** rather than the classpath — the real constraint is `--add-opens`, which a consumer controls and we cannot. The case for: the alternative is a documented 634× leak with no remedy at all. **Recommended split:**
+**Decided 2026-07-23 — the two-regime split below.** Reviewers had split on whether the reflective bridge belongs in a published library. The case against: `delete(long)` is private API with no compatibility promise, and `setAccessible` breaks the moment OpenCV's classes ship on the **module path** rather than the classpath — the real constraint is `--add-opens`, which a consumer controls and we cannot. The case for: the alternative is a documented 634× leak with no remedy at all. **The decided split:**
 - **Two regimes, named per class.** Direct `release()` for `Mat`/`VideoCapture`/`VideoWriter`; handle classes get `close()` semantics backed by a `Cleaner` **plus** the `delete(long)` bridge as an explicitly gated opt-in that fails loudly — never silently — when it cannot open.
 - Hard requirements either way, now evidence-backed rather than stylistic: release is an **atomic CAS** on a released flag so double-release is impossible; the scoped API is the only ergonomic path; any post-release call throws `IllegalStateException` in Scala *before* crossing into JNI; a regression test asserts exactly that.
 - A §7 item pins `delete(long)`'s continued existence across bytedeco bumps.
@@ -365,7 +365,7 @@ Two smaller corrections that change task definitions.
 - [ ] B1 · `OpenCv.load()` — idempotent, thread-safe, §3.2 recipe incl. per-OS prefix and highgui-tolerance. `CvError.NativesMissing` names the exact dependency line for the detected OS (§3.7). **Failing test first:** `objdetect` reachable with `DISPLAY` unset
 - [ ] B2 · `CvError` ADT + `imread → Either[CvError, Mat]`. `imread` returns an *empty Mat*, never throws; `imwrite` returns `false` for an unwritable path but **throws** `CvException` for an unknown extension — handle all three shapes
 - [ ] B3 · Mat lifecycle: `Mat.use`, `Using.Manager`, `Releasable`. **No reliance on GC-driven reclamation** (finalizer *or* `Cleaner`) — §3.6. Atomic CAS release flag; release is idempotent; post-release use throws
-- [ ] B3b · 🔴 The other 185 native types (§3.8) — two regimes, gated `delete(long)` bridge, per-class naming. **Blocked on your adjudication.** **Failing test first:** a released `CascadeClassifier` throws rather than SIGSEGVs
+- [ ] B3b · The other 185 native types (§3.8) — two regimes per D14: `close()` + `Cleaner` by default, `delete(long)` bridge as a gated opt-in that fails loudly when it cannot open. Regime named per class in B10–B13. **Failing test first:** a released `CascadeClassifier` throws rather than SIGSEGVs
 - [ ] B4a · Six true enums with `cvValue: Int` — `ColorConversion`, `InterpolationFlag`, `LineType`, `HersheyFont`, `ContourRetrieval`, `ContourApproximation`
 - [ ] B4b · The three that are **bitmask sets, not enums**: `ImreadFlag` and `ThresholdType` as mode + modifier constructors (`enum X(cvValue: Int)` cannot express `THRESH_BINARY | THRESH_OTSU`); `BorderType` plain with `ISOLATED` deferred; `THRESH_MASK` never exposed
 - [ ] B5 · Geometry value types — `Rect`, `Point`, `Size`, `Scalar` copied out at the native boundary; plus `Depth`/`MatType` delegating to `CvType.makeType`, and the submat/ROI aliasing contract
@@ -411,7 +411,7 @@ Two smaller corrections that change task definitions.
 
 ### Track F — README, logo & licensing ✨
 
-- [ ] F1a · 🔴 **Send the relicense request** (named sender, 21-day window). Joins the M1 ack list. Does *not* block Track B — path 2 is the working assumption (§3.4)
+- [ ] F1a · **Send the relicense request** (named sender, 21-day window). Does *not* block Track B — clean-room is the working assumption per D11 (§3.4)
 - [ ] F1b · Transcribe any grant received into `NOTICE`
 - [ ] F2 · `LICENSE` (Apache-2.0) · [ ] F3 · `NOTICE` (mcallisto lineage, Intel/Willow Garage and Shiqi Yu cascade notices kept distinct, isight-java + chimpler credits)
 - [ ] F4 · `THIRD-PARTY.md` — per-asset provenance: URL, branch, SHA-256, fetch date, **SPDX id, notice-required?**
@@ -437,7 +437,7 @@ Two smaller corrections that change task definitions.
 
 ## 5. Milestones
 
-**M0** research merged ✅ → **M1** review applied ✅ + your ack 🔴 (+ F1a sent) → **M2** Track A gate → **M3** Track B gate → **M4** C+D → **M5** E+F+G → **M6** `v0.1.0` tag
+**M0** research merged ✅ → **M1** review applied ✅ + ack ✅ (2026-07-23) → **M2** Track A gate → **M3** Track B gate → **M4** C+D → **M5** E+F+G → **M6** `v0.1.0` tag
 
 D11 no longer gates the milestone chain: path 2 (clean-room) is adopted as the working assumption, so F1a is an email to send, not a wait state.
 
