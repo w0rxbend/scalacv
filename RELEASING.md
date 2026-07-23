@@ -13,6 +13,13 @@ Publishing goes to Maven Central under `com.worxbend`, via the Sonatype Central 
 The groupId reverses a domain the owner controls, so this is the standard DNS proof. `bend.worx`
 was the original proposal and is impossible — `.bend` is not a delegated TLD.
 
+## One-time docs setup
+
+The documentation site deploys to GitHub Pages from the `Docs` workflow. Before the first deploy,
+enable Pages by hand once: in the repository's **Settings -> Pages**, set **Source** to
+**GitHub Actions**. The workflow's token cannot create the Pages site itself, so this single
+setting is an owner action. Once set, every push to `master` rebuilds and redeploys the site.
+
 ## Cutting a release
 
 1. Make sure `master` is green in CI and the working tree is clean.

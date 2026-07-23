@@ -52,11 +52,12 @@ jobs:
           npm ci
           npm run build
 
+      # ONE-TIME OWNER ACTION before the first deploy: in the repository's
+      # Settings -> Pages, set Source to "GitHub Actions". The default GITHUB_TOKEN cannot
+      # create a Pages site itself ("Resource not accessible by integration"), so this cannot
+      # be done from the workflow. Everything above -- mdoc, scaladoc, the VitePress build --
+      # runs regardless; only this deploy step waits on the setting.
       - uses: actions/configure-pages@v6
-        # Turn Pages on from the workflow, so a fresh repo does not need the setting flipped by
-        # hand first. Needs the pages:write permission granted above.
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v5
         with:
           path: docs/vitepress/.vitepress/dist
