@@ -41,21 +41,39 @@ def mvnDeps = Seq(
 )
 ```
 
+**High-level — the `Image` pipeline.** Read, transform, write, as one chain:
+
 ```scala
 import scalacv.*
 
 OpenCv.load()
 
-val edges =
-  for image <- Images.read("photo.jpg")
-  yield image.use: m =>
-    m.cvtColor(ColorConversion.BgrToGray)
-      .pipe(_.gaussianBlur(Size(5, 5)))
-      .pipe(_.canny(80, 160))
-      .use(Images.encode(_, ".png"))
+// Every intermediate frees itself; the chain holds one live image at a time.
+Image.read("photo.jpg").flatMap(_.gray.blur(2).canny(80, 160).write("edges.png"))
 ```
 
-Every intermediate `Mat` is released as the chain moves past it. The original is not touched.
+Detect, annotate, and drop to plain data just as fluently:
+
+```scala
+Image.reading("street.jpg") { img =>
+  val codes = img.qrCodes                       // Seq[QrCode] — decoded, immutable
+  img.markFaces(img.copy.faces(detector))       // draw boxes + landmarks
+     .drawText(s"${codes.size} codes", Point(10, 30))
+     .write("annotated.png")
+}
+```
+
+**Low-level — never walled off.** `mat` borrows the underlying handle; the full typed `org.opencv.*`
+surface and the mid-level `Managed[Mat]` extension ops are always one step away:
+
+```scala
+Image.reading("photo.jpg") { img =>
+  img.mat.cvtColor(ColorConversion.BgrToGray)   // mid-level extension → Managed[Mat]
+     .pipe(_.gaussianBlur(Size(5, 5)))
+     .pipe(_.canny(80, 160))
+     .use(Images.encode(_, ".png"))
+}
+```
 
 ### Why two lines?
 

@@ -31,6 +31,25 @@ final class Managed[A] private (initial: A, releaser: Releasable[A]) extends Aut
       )
     case a => a.asInstanceOf[A]
 
+  /** Hands the object out and leaves this `Managed` spent **without freeing it** — ownership transfers to the
+    * caller, who becomes responsible for release.
+    *
+    * Internal to the high-level [[Image]], which threads one live Mat through a chain of handles: an in-place
+    * step takes the Mat, mutates it, and rewraps it, so the predecessor handle is spent (`get` now throws)
+    * yet nothing is freed or copied. This is deliberately **not** [[release]], which would free the very Mat
+    * being transferred.
+    *
+    * @throws IllegalStateException
+    *   if it has already been released or taken.
+    */
+  private[scalacv] def take(): A =
+    ref.getAndSet(null) match
+      case null =>
+        throw IllegalStateException(
+          s"this ${initial.getClass.getSimpleName} has already been released or transferred"
+        )
+      case a => a.asInstanceOf[A]
+
   /** Releases the native memory. Idempotent — a second call does nothing. */
   def release(): Unit =
     ref.getAndSet(null) match

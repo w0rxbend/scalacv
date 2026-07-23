@@ -1,0 +1,293 @@
+package scalacv
+
+import org.opencv.core.{CvType, Mat}
+import org.opencv.objdetect.{CascadeClassifier, FaceDetectorYN}
+
+/** The high-level, fluent face of scalacv — an owned image you transform by chaining.
+  *
+  * `Image` is the layer to reach for first. It wraps a single native [[org.opencv.core.Mat]] and lets you
+  * express the common OpenCV shape — read, transform, detect, annotate, write — as one readable chain:
+  *
+  * {{{
+  * import scalacv.*
+  * OpenCv.load()
+  *
+  * for _ <- Image.read("photo.jpg").flatMap(_.gray.blur(2).canny(80, 160).write("edges.png"))
+  * yield ()
+  * }}}
+  *
+  * ==Move semantics: a transform consumes the image==
+  *
+  * Every **transform** (`gray`, `blur`, `canny`, `resize`, `crop`, a `draw*`) returns a *new* `Image` and
+  * **spends the one it was called on** — using the old handle afterwards throws [[IllegalStateException]]
+  * rather than reading freed memory. That is what makes the chain leak-free without a scope: each step frees
+  * (or hands on) the previous Mat, so a long pipeline holds exactly one live Mat at a time, never a pile of
+  * intermediates. It is [[Mats.chain]]'s guarantee, surfaced as a type.
+  *
+  * The trade is that you cannot use one `Image` twice. To branch, take a [[copy]] first, or drop to the
+  * mid-level API on a borrowed [[mat]].
+  *
+  * ==Queries borrow, terminals consume==
+  *
+  * A **query** ([[width]], [[faces]], [[qrCodes]], [[contours]]) only reads, so it leaves the image alive. A
+  * **terminal** ([[write]], [[bytes]], [[close]]) consumes it and releases the Mat. If a value escapes the
+  * chain without ever reaching a terminal it leaks, exactly as a stray [[Managed]] would — so prefer
+  * [[Image.reading]], which closes for you even when the body already consumed the image (release is
+  * idempotent).
+  *
+  * ==Not a wall==
+  *
+  * `Image` never hides the library underneath it. [[mat]] borrows the raw `org.opencv.core.Mat` for any
+  * `org.opencv.*` call this type does not wrap; [[managed]] hands the whole [[Managed]] over. The high-level
+  * API is the pleasant default, not a ceiling.
+  *
+  * `Image` is `AutoCloseable`, so `scala.util.Using` manages it too.
+  */
+final class Image private (private val handle: Managed[Mat]) extends AutoCloseable:
+
+  // -- Queries: borrow the Mat, leave this Image alive ---------------------------------------------
+
+  /** Width in pixels. */
+  def width: Int = handle.get.cols
+
+  /** Height in pixels. */
+  def height: Int = handle.get.rows
+
+  /** `Size(width, height)`. */
+  def size: Size = Size(width.toDouble, height.toDouble)
+
+  /** Channel count — 3 for a BGR image, 1 for greyscale, 4 with alpha. */
+  def channels: Int = handle.get.channels
+
+  /** True for a 0×0 image with no pixels. */
+  def isEmpty: Boolean = handle.get.empty()
+
+  /** The underlying Mat, **borrowed** — for any `org.opencv.*` or mid-level extension call `Image` does not
+    * wrap. It stays owned by this `Image`: read from it, pass it to a detector, but do not release it. This
+    * is the escape hatch that keeps the low-level API one method away.
+    */
+  def mat: Mat = handle.get
+
+  // -- Detection: borrow, return plain immutable data ----------------------------------------------
+
+  /** Every QR code in the image, decoded. Self-contained — builds and frees its own detector. */
+  def qrCodes: Seq[QrCode] = Qr.detectAndDecode(handle.get)
+
+  /** Every ArUco marker from `dictionary`. Self-contained — builds and frees its own detector. */
+  def arucoMarkers(dictionary: ArucoDictionary = ArucoDictionary.Dict4x4_50): Seq[ArucoMarker] =
+    Aruco.detect(handle.get, dictionary)
+
+  /** Contours of a binary image — see the mid-level `findContours` for the retrieval/approximation knobs. */
+  def contours(
+      retrieval: ContourRetrieval = ContourRetrieval.External,
+      approximation: ContourApproximation = ContourApproximation.Simple
+  ): Seq[Contour] = handle.get.findContours(retrieval, approximation)
+
+  /** Faces via a YuNet [[FaceDetectorYN]] you supply — the model is yours to build (see [[FaceDetect]]). The
+    * detector is borrowed and mutated (its input size is set to this image), never released here.
+    */
+  def faces(detector: FaceDetectorYN): Seq[Face] = FaceDetect.detect(detector, handle.get)
+
+  /** Rectangles via a Haar [[CascadeClassifier]] you supply (see [[Cascades]]). Borrowed, not released. */
+  def detectHaar(
+      classifier: CascadeClassifier,
+      scaleFactor: Double = 1.1,
+      minNeighbors: Int = 3,
+      minSize: Option[Size] = None
+  ): Seq[Rect] = handle.get.detect(classifier, scaleFactor, minNeighbors, minSize)
+
+  // -- Transforms: consume this Image, return a fresh one ------------------------------------------
+
+  /** Converts to single-channel greyscale (from BGR). */
+  def gray: Image = convert(ColorConversion.BgrToGray)
+
+  /** Converts between colour spaces; the channel count follows the conversion. */
+  def convert(conversion: ColorConversion): Image = transform(_.cvtColor(conversion))
+
+  /** A quick, radius-based Gaussian blur: `radius` 2 is a 5×5 kernel. `radius` 0 is the identity. For full
+    * control over kernel and sigma, use [[gaussianBlur]].
+    */
+  def blur(radius: Int): Image =
+    require(radius >= 0, s"blur radius cannot be negative, got $radius")
+    if radius == 0 then this
+    else
+      val side = radius * 2 + 1
+      transform(_.gaussianBlur(Size(side.toDouble, side.toDouble)))
+
+  /** Gaussian blur with an explicit kernel and sigmas — the mid-level [[Ops]] signature. */
+  def gaussianBlur(kernel: Size, sigmaX: Double = 0, sigmaY: Double = 0): Image =
+    transform(_.gaussianBlur(kernel, sigmaX, sigmaY))
+
+  /** Canny edge detection. The result is always `CV_8UC1`. */
+  def canny(
+      threshold1: Double,
+      threshold2: Double,
+      apertureSize: Int = 3,
+      l2Gradient: Boolean = false
+  ): Image =
+    transform(_.canny(threshold1, threshold2, apertureSize, l2Gradient))
+
+  /** Histogram equalisation — `CV_8UC1` only, so usually preceded by [[gray]]. */
+  def equalizeHist: Image = transform(_.equalizeHist())
+
+  /** Fixed or automatic thresholding. Drops the computed value ([[Threshold.Auto]] users who need it should
+    * use the mid-level `threshold`, which returns it); this is the common "binarise" case.
+    */
+  def threshold(
+      value: Double,
+      maxValue: Double = 255,
+      kind: Threshold = Threshold(Threshold.Mode.Binary)
+  ): Image =
+    transform(_.threshold(value, maxValue, kind)._1)
+
+  /** Resizes to an absolute pixel size. */
+  def resizeTo(size: Size, interpolation: Interpolation = Interpolation.Linear): Image =
+    transform(_.resize(size, interpolation))
+
+  /** Resizes to absolute `width`×`height`. */
+  def resize(width: Int, height: Int): Image = resizeTo(Size(width.toDouble, height.toDouble))
+
+  /** Scales by a single factor on both axes — `0.5` halves each side. */
+  def scale(factor: Double, interpolation: Interpolation = Interpolation.Linear): Image =
+    require(factor > 0, s"scale factor must be positive, got $factor")
+    transform(_.scaled(factor, factor, interpolation))
+
+  /** Crops to `rect`, returning an independent copy (not an aliasing view). The rectangle must lie within the
+    * image.
+    */
+  def crop(rect: Rect): Image =
+    require(
+      rect.x >= 0 && rect.y >= 0 && rect.x + rect.width <= width && rect.y + rect.height <= height,
+      s"crop $rect does not fit inside ${width}x$height"
+    )
+    // submat is an aliasing view of the parent's data; clone makes it independent, and the view Mat is
+    // released before the parent so no header is stranded.
+    val out = Managed.use(handle.get.submat(rect.toCv))(_.clone())
+    try Image(Managed(out))
+    finally handle.release()
+
+  // -- Drawing: mutate in place (we own the Mat), consume this Image -------------------------------
+
+  /** Draws an axis-aligned rectangle. Pass [[Thickness.Filled]] for a solid block. */
+  def drawRect(rect: Rect, color: Scalar = Scalar.White, thickness: Thickness = Thickness.Default): Image =
+    paint(_.drawRect(rect, color, thickness))
+
+  /** Draws a circle. */
+  def drawCircle(
+      center: Point,
+      radius: Int,
+      color: Scalar = Scalar.White,
+      thickness: Thickness = Thickness.Default
+  ): Image =
+    paint(_.drawCircle(center, radius, color, thickness))
+
+  /** Draws text with its baseline's left end at `at` (see [[Draw]] for the baseline caveat). */
+  def drawText(text: String, at: Point, color: Scalar = Scalar.White, scale: Double = 1.0): Image =
+    paint(_.drawText(text, at, color, scale = scale))
+
+  /** Draws every contour — [[Thickness.Filled]] turns them back into a mask. */
+  def drawContours(
+      contours: Seq[Contour],
+      color: Scalar = Scalar.White,
+      thickness: Thickness = Thickness.Default
+  ): Image =
+    paint(_.drawContours(contours, color, thickness))
+
+  /** Annotates detected faces: a box per face and a dot per landmark. The one-call "show me what YuNet found"
+    * convenience.
+    */
+  def markFaces(faces: Seq[Face], color: Scalar = Scalar.Green): Image =
+    paint: m =>
+      faces.foreach: f =>
+        m.drawRect(f.box, color)
+        f.landmarks.foreach(p => m.drawCircle(p, 2, color, Thickness.Filled))
+
+  // -- Terminals: consume this Image and release ---------------------------------------------------
+
+  /** Writes to `path`, choosing the encoder from its extension, then releases. */
+  def write(path: String): Either[CvError, Unit] =
+    try Images.write(path, handle.get)
+    finally close()
+
+  /** Encodes to an in-memory image file (`".png"`, `".jpg"`, …), then releases. */
+  def bytes(format: String = ".png"): Either[CvError, Array[Byte]] =
+    try Images.encode(handle.get, format)
+    finally close()
+
+  /** Hands the underlying [[Managed]] over and spends this `Image` — for when you want to keep managing the
+    * Mat directly. Ownership transfers to the returned `Managed`.
+    */
+  def managed: Managed[Mat] = Managed(handle.take())
+
+  /** Releases the native memory. Idempotent, and called for you by [[Image.reading]] and `Using`. */
+  def close(): Unit = handle.release()
+
+  /** An independent deep copy, so the original can be used again (move semantics otherwise forbid it). */
+  def copy: Image = Image(Managed(handle.get.clone()))
+
+  override def toString: String =
+    if handle.isReleased then "Image(<closed>)" else s"Image(${width}x$height, ${channels}ch)"
+
+  // -- internals -----------------------------------------------------------------------------------
+
+  /** A pure transform: run `op` on the borrowed Mat (it returns a fresh owned Mat via [[Mats.produce]]), then
+    * release the source. Identical to [[Ops.pipe]]; a failure in `op` still releases the source and `op`'s
+    * own half-built Mat, so nothing leaks.
+    */
+  private def transform(op: Mat => Managed[Mat]): Image =
+    try Image(op(handle.get))
+    finally handle.release()
+
+  /** An in-place draw: take the Mat (spending this handle without freeing), mutate it, rewrap it. No copy. */
+  private def paint(draw: Mat => Unit): Image =
+    val m = handle.take()
+    try
+      draw(m)
+      Image(Managed(m))
+    catch
+      case e: Throwable =>
+        m.release()
+        throw e
+
+object Image:
+
+  private[scalacv] def apply(handle: Managed[Mat]): Image = new Image(handle)
+
+  /** Reads an image from the filesystem. `Left` if the path is missing, a directory, or not a decodable image
+    * — the three cases OpenCV reports identically (see [[Images.read]]).
+    */
+  def read(path: String, flags: ImreadFlags = ImreadFlags.Color): Either[CvError, Image] =
+    Images.read(path, flags).map(apply)
+
+  /** Decodes an image from bytes already in memory — an HTTP body, a BLOB, a fixture. */
+  def decode(bytes: Array[Byte], flags: ImreadFlags = ImreadFlags.Color): Either[CvError, Image] =
+    Images.decode(bytes, flags).map(apply)
+
+  /** Adopts an existing [[Managed]]`[Mat]` as an `Image`. Ownership transfers: do not also release the
+    * `Managed` yourself.
+    */
+  def wrap(handle: Managed[Mat]): Image = apply(handle)
+
+  /** A blank canvas, filled with `color`. `channels` is 1, 3 or 4. */
+  def blank(width: Int, height: Int, color: Scalar = Scalar.Black, channels: Int = 3): Image =
+    require(width > 0 && height > 0, s"a blank Image needs a positive size, got ${width}x$height")
+    val cvType = channels match
+      case 1 => CvType.CV_8UC1
+      case 3 => CvType.CV_8UC3
+      case 4 => CvType.CV_8UC4
+      case n => throw IllegalArgumentException(s"channels must be 1, 3 or 4, got $n")
+    apply(Managed(Mat(height, width, cvType, color.toCv)))
+
+  /** Reads `path` and runs `use` on the resulting `Image`, closing it afterwards — even if `use` already
+    * consumed it (close is idempotent) and even on an exception. The scoped, forget-nothing entry point.
+    *
+    * {{{
+    * Image.reading("photo.jpg")(_.gray.canny(80, 160).write("edges.png"))
+    * }}}
+    *
+    * Do not let the `Image` (or one derived from it) escape `use`; it is closed when the block returns.
+    */
+  def reading[A](path: String, flags: ImreadFlags = ImreadFlags.Color)(use: Image => A): Either[CvError, A] =
+    read(path, flags).map: img =>
+      try use(img)
+      finally img.close()

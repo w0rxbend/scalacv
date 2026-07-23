@@ -293,6 +293,67 @@ final class scalacv.Face
   def rightMouthCorner(): scalacv.Point
   def score(): float
   def toString(): java.lang.String
+final class scalacv.Image
+  extends java.lang.Object
+  implements java.lang.AutoCloseable
+  def <init>(scalacv.Managed<org.opencv.core.Mat>): void
+  def arucoMarkers$default$1(): scalacv.ArucoDictionary
+  def arucoMarkers(scalacv.ArucoDictionary): scala.collection.immutable.Seq<scalacv.ArucoMarker>
+  def blur(int): scalacv.Image
+  def bytes$default$1(): java.lang.String
+  def bytes(java.lang.String): scala.util.Either<scalacv.CvError, byte[]>
+  def canny$default$3(): int
+  def canny$default$4(): boolean
+  def canny(double, double, int, boolean): scalacv.Image
+  def channels(): int
+  def close(): void
+  def contours$default$1(): scalacv.ContourRetrieval
+  def contours$default$2(): scalacv.ContourApproximation
+  def contours(scalacv.ContourRetrieval, scalacv.ContourApproximation): scala.collection.immutable.Seq<scalacv.Contour>
+  def convert(scalacv.ColorConversion): scalacv.Image
+  def copy(): scalacv.Image
+  def crop(scalacv.Rect): scalacv.Image
+  def detectHaar$default$2(): double
+  def detectHaar$default$3(): int
+  def detectHaar$default$4(): scala.Option<scalacv.Size>
+  def detectHaar(org.opencv.objdetect.CascadeClassifier, double, int, scala.Option<scalacv.Size>): scala.collection.immutable.Seq<scalacv.Rect>
+  def drawCircle$default$3(): scalacv.Scalar
+  def drawCircle$default$4(): scalacv.Thickness
+  def drawCircle(scalacv.Point, int, scalacv.Scalar, scalacv.Thickness): scalacv.Image
+  def drawContours$default$2(): scalacv.Scalar
+  def drawContours$default$3(): scalacv.Thickness
+  def drawContours(scala.collection.immutable.Seq<scalacv.Contour>, scalacv.Scalar, scalacv.Thickness): scalacv.Image
+  def drawRect$default$2(): scalacv.Scalar
+  def drawRect$default$3(): scalacv.Thickness
+  def drawRect(scalacv.Rect, scalacv.Scalar, scalacv.Thickness): scalacv.Image
+  def drawText$default$3(): scalacv.Scalar
+  def drawText$default$4(): double
+  def drawText(java.lang.String, scalacv.Point, scalacv.Scalar, double): scalacv.Image
+  def equalizeHist(): scalacv.Image
+  def faces(org.opencv.objdetect.FaceDetectorYN): scala.collection.immutable.Seq<scalacv.Face>
+  def gaussianBlur$default$2(): double
+  def gaussianBlur$default$3(): double
+  def gaussianBlur(scalacv.Size, double, double): scalacv.Image
+  def gray(): scalacv.Image
+  def height(): int
+  def isEmpty(): boolean
+  def managed(): scalacv.Managed<org.opencv.core.Mat>
+  def markFaces$default$2(): scalacv.Scalar
+  def markFaces(scala.collection.immutable.Seq<scalacv.Face>, scalacv.Scalar): scalacv.Image
+  def mat(): org.opencv.core.Mat
+  def qrCodes(): scala.collection.immutable.Seq<scalacv.QrCode>
+  def resize(int, int): scalacv.Image
+  def resizeTo$default$2(): scalacv.Interpolation
+  def resizeTo(scalacv.Size, scalacv.Interpolation): scalacv.Image
+  def scale$default$2(): scalacv.Interpolation
+  def scale(double, scalacv.Interpolation): scalacv.Image
+  def size(): scalacv.Size
+  def threshold$default$2(): double
+  def threshold$default$3(): scalacv.Threshold
+  def threshold(double, double, scalacv.Threshold): scalacv.Image
+  def toString(): java.lang.String
+  def width(): int
+  def write(java.lang.String): scala.util.Either<scalacv.CvError, scala.runtime.BoxedUnit>
 final class scalacv.ImreadFlags
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -321,6 +382,7 @@ final class scalacv.Managed<A>
   def get(): A
   def isReleased(): boolean
   def release(): void
+  def take(): A
   def toString(): java.lang.String
   def use<B>(scala.Function1<A, B>): B
 final class scalacv.Point
@@ -956,6 +1018,20 @@ object scalacv.Hough.package
   def houghLinesWithAccumulator$default$7(org.opencv.core.Mat): double
   def houghLinesWithAccumulator$default$8(org.opencv.core.Mat): double
   def houghLinesWithAccumulator(org.opencv.core.Mat, int, double, double, double, double, double, double): scala.collection.immutable.Seq<scalacv.PolarLineWithVotes>
+object scalacv.Image
+  extends java.lang.Object
+  implements java.io.Serializable
+  def apply(scalacv.Managed<org.opencv.core.Mat>): scalacv.Image
+  def blank$default$3(): scalacv.Scalar
+  def blank$default$4(): int
+  def blank(int, int, scalacv.Scalar, int): scalacv.Image
+  def decode$default$2(): scalacv.ImreadFlags
+  def decode(byte[], scalacv.ImreadFlags): scala.util.Either<scalacv.CvError, scalacv.Image>
+  def read$default$2(): scalacv.ImreadFlags
+  def read(java.lang.String, scalacv.ImreadFlags): scala.util.Either<scalacv.CvError, scalacv.Image>
+  def reading$default$2<A>(): scalacv.ImreadFlags
+  def reading<A>(java.lang.String, scalacv.ImreadFlags, scala.Function1<scalacv.Image, A>): scala.util.Either<scalacv.CvError, A>
+  def wrap(scalacv.Managed<org.opencv.core.Mat>): scalacv.Image
 object scalacv.Images
   extends java.lang.Object
   implements java.io.Serializable
