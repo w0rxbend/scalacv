@@ -42,6 +42,10 @@ jobs:
       - name: Test
         run: ./mill core.test zio.test examples.test
 
+      - name: Docs snippets still compile
+        # The docs are a gate, not a courtesy: a code change that breaks an example fails here.
+        run: ./mill docs.mdocCheck
+
       - name: Smoke — natives load with no GUI toolkit present
         # ubuntu-latest has no libgtk-x11-2.0. That is the point: this must pass anyway.
         run: ./mill examples.runMain scalacv.smoke

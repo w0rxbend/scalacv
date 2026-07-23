@@ -225,3 +225,65 @@ object `examples-gui` extends ScalacvModule {
   )
   def forkArgs = Task { Deps.runtimeJvmArgs(jvmMajor()) }
 }
+
+/** The documentation site's mdoc stage.
+  *
+  * No maintained Mill 1.x mdoc plugin exists (atooni/mill-mdoc is archived; quafadas/millSite
+  * pins mdoc 2.7.2 and generates Laika, not VitePress), so mdoc runs as a plain subprocess —
+  * settled in ROADMAP §7 item 10 / U10. Its own POM pins `scala3-compiler_3:3.3.8`, and D2 pins
+  * the project there too, so no explicit compiler co-dep is needed as long as the two agree.
+  *
+  * `mdoc` type-checks every ```scala mdoc``` snippet in `docs/mdoc/` against the *natives* runtime
+  * classpath of core+zio+examples — snippets that call OpenCV must link the JNI, not just the Java
+  * API — and writes the spliced markdown into VitePress's source tree at `docs/site`.
+  */
+object docs extends ScalacvModule {
+  def moduleDeps = Seq(core, zio, examples)
+  def mvnDeps    = Seq(mvn"org.scalameta::mdoc:2.9.1") ++ Deps.opencvNatives
+
+  /** The markdown sources with mdoc snippets. */
+  def mdocSources = Task.Source("mdoc")
+
+  /** Runs mdoc, returning the directory of processed markdown VitePress will consume. */
+  def mdoc = Task {
+    // mdoc writes into the task's own dest; the deploy step copies these pages next to the
+    // committed .vitepress config (Mill forbids a task writing into the source tree).
+    val out = Task.dest / "site"
+    os.makeDir.all(out)
+    val cp = runClasspath().map(_.path)
+    mill.util.Jvm.callProcess(
+      mainClass = "mdoc.Main",
+      classPath = cp,
+      mainArgs = Seq(
+        "--in", mdocSources().path.toString,
+        "--out", out.toString,
+        "--classpath", cp.mkString(java.io.File.pathSeparator)
+      ),
+      stdout = os.Inherit,
+      stderr = os.Inherit,
+      cwd = Task.dest
+    )
+    mill.api.PathRef(out)
+  }
+
+  /** The CI form: mdoc with `--check-only` fails on a snippet that no longer compiles instead of
+    * rewriting it. This is what makes the docs a gate rather than a courtesy.
+    */
+  def mdocCheck = Task {
+    val cp = runClasspath().map(_.path)
+    mill.util.Jvm.callProcess(
+      mainClass = "mdoc.Main",
+      classPath = cp,
+      mainArgs = Seq(
+        "--in", mdocSources().path.toString,
+        "--out", (Task.dest / "check").toString,
+        "--classpath", cp.mkString(java.io.File.pathSeparator),
+        "--check"
+      ),
+      stdout = os.Inherit,
+      stderr = os.Inherit,
+      cwd = Task.dest
+    )
+    ()
+  }
+}

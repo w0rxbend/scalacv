@@ -1,0 +1,12 @@
+{
+  "name": "scalacv-docs",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "build": "vitepress build vitepress",
+    "preview": "vitepress preview vitepress"
+  },
+  "devDependencies": {
+    "vitepress": "1.6.4"
+  }
+}

@@ -1,0 +1,40 @@
+import { defineConfig } from 'vitepress'
+
+// This directory is the VitePress root. The .md pages beside it are written by
+// `./mill docs.mdoc`, which type-checks every scala snippet in `docs/mdoc` before splicing it
+// here — so a snippet that stops compiling breaks the docs build, by design.
+export default defineConfig({
+  title: 'scalacv',
+  description: 'A Scala 3 wrapper for the OpenCV 4.13 Java API',
+  base: '/scalacv/',
+  lastUpdated: true,
+  head: [['link', { rel: 'icon', href: '/scalacv/logo.svg' }]],
+  themeConfig: {
+    logo: '/logo.svg',
+    nav: [
+      { text: 'Getting Started', link: '/getting-started' },
+      { text: 'Concepts', link: '/mat-lifecycle' },
+      { text: 'Cookbook', link: '/cookbook' }
+    ],
+    sidebar: [
+      { text: 'Introduction', items: [
+        { text: 'What is scalacv', link: '/' },
+        { text: 'Getting Started', link: '/getting-started' }
+      ]},
+      { text: 'Concepts', items: [
+        { text: 'Mat lifecycle', link: '/mat-lifecycle' },
+        { text: 'The native cache', link: '/native-cache' }
+      ]},
+      { text: 'Guides', items: [
+        { text: 'Cookbook', link: '/cookbook' },
+        { text: 'ZIO', link: '/zio' },
+        { text: 'Migrating from 3.x', link: '/migration' }
+      ]}
+    ],
+    socialLinks: [{ icon: 'github', link: 'https://github.com/w0rxbend/scalacv' }],
+    footer: {
+      message: 'Apache-2.0. Every snippet here is type-checked by mdoc.',
+      copyright: '© 2026 w0rxbend'
+    }
+  }
+})

@@ -1,0 +1,68 @@
+name: Docs
+
+# Builds the VitePress site and deploys it to GitHub Pages. Every scala snippet is type-checked by
+# mdoc first, so a code change that breaks a doc example fails here rather than shipping a wrong
+# example. The mdoc check also runs on PRs (in ci.yml), so drift is caught before merge, not only
+# at deploy time.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      MILL_JVM_ID: zulu:25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: coursier/cache-action@v8
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: mdoc — type-check and splice the snippets
+        run: ./mill show docs.mdoc
+
+      - name: Scaladoc for core and zio
+        run: ./mill core.docJar zio.docJar
+
+      - name: Assemble the VitePress root
+        run: |
+          set -euo pipefail
+          # mdoc wrote the processed pages under the task's dest; copy them next to the config.
+          cp -r out/docs/mdoc.dest/site/*.md docs/vitepress/
+          # Scaladoc into public/api so the nav "API" link resolves on the published site.
+          mkdir -p docs/vitepress/public/api/core docs/vitepress/public/api/zio
+          unzip -o -q "$(find out/core -name '*-javadoc.jar' | head -1)" -d docs/vitepress/public/api/core || true
+          unzip -o -q "$(find out/zio  -name '*-javadoc.jar' | head -1)" -d docs/vitepress/public/api/zio  || true
+
+      - name: Build the site
+        working-directory: docs
+        run: |
+          npm ci
+          npm run build
+
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/vitepress/.vitepress/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

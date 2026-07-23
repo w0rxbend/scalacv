@@ -412,13 +412,13 @@ Two smaller corrections that change task definitions.
 
 ### Track E — Docs microsite 📚
 
-- [ ] E1 · mdoc 2.9.1 as a hand-rolled module — `object mdocTool extends ScalaModule { def scalaVersion = "3.3.8"; def mvnDeps = Seq(mvn"org.scalameta::mdoc:2.9.1") }` + a `docs.mdoc` task via `Jvm.callProcess(mainClass = "mdoc.Main", …)` passing `core.runClasspath()` (not `compileClasspath`) as `--classpath`, `stdout/stderr = os.Inherit`, `cwd = Task.dest`. **No Mill 1.x mdoc plugin exists** — atooni/mill-mdoc is archived; quafadas/millSite pins mdoc 2.7.2 and generates Laika
-- [ ] E2 · VitePress scaffold, `base: '/scalacv/'` · [ ] E3 · Landing hero + logo
-- [ ] E4 · Getting Started — **the natives section**: table the 5 JVM-reachable classifiers, note the `-gpu` variants, then `opencv-platform` as the it-just-works fallback *with its 408 MB price*. Lead with the classifier recipe
-- [ ] E5 · **Mat lifecycle concepts** — lead with §3.6's GC-invisibility argument, not with a finalization claim
-- [ ] E6 · Cookbook per example · [ ] E7 · ZIO page · [ ] E8 · 3.x migration note
-- [ ] E9 · Pages deploy workflow · [ ] E10 · Publish Scaladoc into `docs/public/api/{core,zio}/`, wired into E9
-- [ ] E11 · The `~/.javacpp` cache section: first `OpenCv.load()` writes **~196 MB**; document `-Dorg.bytedeco.javacpp.cachedir=`
+- [x] E1 · mdoc 2.9.1 as a hand-rolled module — `object mdocTool extends ScalaModule { def scalaVersion = "3.3.8"; def mvnDeps = Seq(mvn"org.scalameta::mdoc:2.9.1") }` + a `docs.mdoc` task via `Jvm.callProcess(mainClass = "mdoc.Main", …)` passing `core.runClasspath()` (not `compileClasspath`) as `--classpath`, `stdout/stderr = os.Inherit`, `cwd = Task.dest`. **No Mill 1.x mdoc plugin exists** — atooni/mill-mdoc is archived; quafadas/millSite pins mdoc 2.7.2 and generates Laika
+- [x] E2 · VitePress scaffold, `base: '/scalacv/'` · [ ] E3 · Landing hero + logo
+- [x] E4 · Getting Started — **the natives section**: table the 5 JVM-reachable classifiers, note the `-gpu` variants, then `opencv-platform` as the it-just-works fallback *with its 408 MB price*. Lead with the classifier recipe
+- [x] E5 · **Mat lifecycle concepts** — lead with §3.6's GC-invisibility argument, not with a finalization claim
+- [x] E6 · Cookbook per example · [ ] E7 · ZIO page · [ ] E8 · 3.x migration note
+- [x] E9 · Pages deploy workflow · [ ] E10 · Publish Scaladoc into `docs/public/api/{core,zio}/`, wired into E9
+- [x] E11 · The `~/.javacpp` cache section: first `OpenCv.load()` writes **~196 MB**; document `-Dorg.bytedeco.javacpp.cachedir=`
 
 **Gate:** site live at `w0rxbend.github.io/scalacv`; `./mill docs.mdocCheck` green in PR CI (G2), not only at deploy time.
 
