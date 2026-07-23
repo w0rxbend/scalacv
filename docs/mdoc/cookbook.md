@@ -1,13 +1,52 @@
 # Cookbook
 
-Every snippet here is compiled by mdoc against the real library, so it cannot drift out of date.
+Every snippet here is compiled by mdoc against the real library, so it cannot drift out of date. The
+recipes lead with the high-level [`Image`](/image-api) API; the [lower-level recipes](#lower-level-recipes)
+at the end show the same work on a raw `Mat` for when you need the extra control.
 
 ```scala mdoc:invisible
 import scalacv.*
 OpenCv.load()
 ```
 
-## Detect edges
+## Edge-detect a photo
+
+```scala mdoc:compile-only
+Image.read("photo.jpg").flatMap(_.gray.blur(2).canny(80, 160).write("edges.png"))
+```
+
+## Make a thumbnail
+
+```scala mdoc:compile-only
+Image.read("photo.jpg").flatMap(_.scale(0.25).write("thumb.jpg"))
+```
+
+## Annotate a scene and encode it
+
+```scala mdoc:silent
+val annotated: Either[CvError, Array[Byte]] =
+  Image
+    .blank(220, 140, Scalar.White)
+    .drawRect(Rect(20, 20, 90, 70), Scalar.Green)
+    .drawCircle(Point(150, 70), 30, Scalar.Red)
+    .drawText("scalacv", Point(20, 125), Scalar.Black)
+    .bytes(".png")
+```
+
+## Read → process → write, scoped
+
+`Image.reading` closes the source for you even if the body already consumed it:
+
+```scala mdoc:compile-only
+Image.reading("photo.jpg")(_.gray.equalizeHist.threshold(128).write("mask.png"))
+```
+
+## Lower-level recipes
+
+The same tasks on a raw `Mat`, for when you want the mid-level [ownership contract](/image-processing)
+and the `Managed[Mat]` chain directly.
+
+### Detect edges
 
 ```scala mdoc:silent
 import org.opencv.core.{CvType, Mat}
@@ -21,7 +60,7 @@ val png: Either[CvError, Array[Byte]] =
   }
 ```
 
-## Read an image safely
+### Read an image safely
 
 `imread` never throws — it returns an empty Mat for a missing or unreadable file. scalacv turns that
 into an `Either` so you cannot forget to check:
@@ -30,7 +69,7 @@ into an `Either` so you cannot forget to check:
 Images.read("/does/not/exist.png").isLeft
 ```
 
-## Decode a QR code
+### Decode a QR code
 
 ```scala mdoc:silent
 import org.opencv.objdetect.QRCodeEncoder
@@ -54,7 +93,7 @@ Qr.detectAndDecode(bgr).map(_.text)
 qr.release(); big.release(); bgr.release()
 ```
 
-## Find faces with a Haar cascade
+### Find faces with a Haar cascade
 
 The cascade is resolved from the platform payload — nothing to download or vendor. The classifier is
 one of the types with no public `release()`, so it is freed through the safe bridge:
