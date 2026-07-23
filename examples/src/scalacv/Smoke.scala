@@ -9,12 +9,12 @@ import org.opencv.core.{CvType, Mat}
   * and exits 0, so a gate built on it passes on any machine, on any platform, having proved nothing.
   * Allocating a Mat crosses JNI, which is the thing under test. See ROADMAP §3.10.
   *
-  * Every native object it touches is released, and it exits with `Runtime.halt` once it has printed OK. Both
-  * are deliberate: a smoke test that leaks detectors leaves their finalizers to run during JVM teardown,
-  * racing the unload of the RTLD_GLOBAL-loaded OpenCV libraries, and that race can make the process exit
-  * non-zero *after* a fully successful run — observed intermittently on JDK 17 in CI. `halt(0)` ends the
-  * process cleanly the instant the check has passed; the gate's question is "do the natives load and work",
-  * which is answered by the time OK prints.
+  * Every native object it touches is released. Even so, the process can exit non-zero *after* a fully
+  * successful run: OpenCV/OpenBLAS native teardown at JVM shutdown occasionally crashes, and that is outside
+  * this program's control. So the gate's success signal is the `OK` line on stdout, not the exit code — CI
+  * asserts on that line. (`Runtime.halt(0)` would force a clean code, but it bypasses Mill's runMain
+  * completion handshake, which makes Mill report the run as failed instead. The teardown crash is cosmetic
+  * for a library anyway: the user's application owns its own shutdown.)
   */
 @main def smoke(): Unit =
   OpenCv.load()
@@ -41,5 +41,3 @@ import org.opencv.core.{CvType, Mat}
     println(s"qrcode        = ${reachable(org.opencv.objdetect.QRCodeDetector())}")
     println(s"dnn           = ${reachable(org.opencv.dnn.Net())}")
     println("OK")
-
-  Runtime.getRuntime.halt(0)
