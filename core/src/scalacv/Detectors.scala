@@ -49,7 +49,7 @@ object Qr:
         val texts = java.util.ArrayList[String]()
         if !detector.detectAndDecodeMulti(mat, texts, points) then Seq.empty
         else
-          val quads = Quads.read(points)
+          val quads = DetectorQuads.read(points)
           texts.asScala.iterator.zipWithIndex
             .map: (text, i) =>
               QrCode(text, if i < quads.size then quads(i) else Seq.empty)
@@ -124,7 +124,7 @@ object Aruco:
             val quads = corners.asScala.toSeq
             (0 until ids.rows).iterator
               .map: i =>
-                val corner = if i < quads.size then Quads.first(quads(i)) else Seq.empty
+                val corner = if i < quads.size then DetectorQuads.first(quads(i)) else Seq.empty
                 ArucoMarker(ids.get(i, 0)(0).toInt, corner)
               .toSeq
           finally corners.asScala.foreach(_.release())
@@ -165,7 +165,7 @@ object Aruco:
   * 4Nx1 shape some OpenCV builds hand back — the alternative is a shape assertion that fails at runtime, in
   * native code, on a version bump.
   */
-private object Quads:
+private object DetectorQuads:
 
   /** Every group of four consecutive points in `m`, dropping a trailing partial group. */
   def read(m: Mat): Seq[Seq[Point]] =

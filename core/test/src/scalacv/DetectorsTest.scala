@@ -104,7 +104,19 @@ class DetectorsTest extends munit.FunSuite:
     val e = intercept[IllegalArgumentException](Qr.detectAndDecode(Mat()))
     assert(e.getMessage.contains("non-empty"), e.getMessage)
 
+  /** The QR *decode* step segfaults the JVM under `OpenCv.load()` as it stands — see the note on this test.
+    * The round-trip matters because it is the only assertion that proves [[Qr]] reads OpenCV's Nx4 CV_32FC2
+    * corner layout correctly, and because it is what caught a real defect in the native loader.
+    */
   test("a QR code encoded by OpenCV round-trips back to its payload"):
+    // This test was briefly skipped because it crashed the JVM:
+    //   SIGSEGV ... cv::Mat::release() <- libopencv_objdetect
+    // The cause was in OpenCv.load(), not here. The old loader dlopen'd every module library
+    // speculatively, and the bundled libopencv_highgui.so carries *unversioned* NEEDED entries,
+    // so loading it made the linker search the system path and map six libopencv_*.so.5.0.0
+    // system libraries into the global namespace, where they interposed on our 4.13.0 symbols.
+    // Decoding a QR code is the first thing in the suite that crosses between the two ABIs.
+    // The loader is now demand-driven and never loads a library the JNI shim did not ask for.
     // QRCodeEncoder emits the symbol at one pixel per module, which is below the detector's
     // resolution floor, so scale up with INTER_NEAREST (anything smoothing would blur the
     // module edges) and then add the quiet zone.

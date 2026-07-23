@@ -171,7 +171,20 @@ This is a **headline correctness feature** — no `apt-get install libgtk2.0-0t6
 | macosx-arm64 | `libopencv_<mod>.413.dylib` | `libopencv_java.dylib` (2 163 304 B) |
 | windows-x86_64 | `opencv_<mod>4130.dll` — **no `lib` prefix** | `opencv_java.dll` (3 179 520 B) |
 
-**`highgui` must be skipped by *tolerating its failure*, never by name-excluding it.** On macOS `libopencv_java.dylib` hard-links `@rpath/libopencv_highgui.413.dylib`; a name exclusion there breaks the shim load outright. Linux and Windows shims have no highgui dependency. The GTK-absent problem is **Linux-only** — macOS (Cocoa/AppKit) and Windows (USER32/GDI32/COMDLG32) toolkits exist on every runner, so **no platform needs a package install**.
+**Correction #5 — never load a module library speculatively at all.** Both earlier designs were wrong: name-excluding `highgui` breaks macOS, where the JNI shim hard-links `@rpath/libopencv_highgui.413.dylib`; but *tolerating its failure* is worse, because on a host that already has OpenCV installed it does not fail. The bundled `libopencv_highgui.so` carries **unversioned** `NEEDED` entries (`libopencv_core.so`, not `libopencv_core.so.413`), so `dlopen(RTLD_GLOBAL)` on it makes the linker search the system path and *succeed*:
+
+```
+!! libopencv_highgui.so pulled in /usr/lib/libopencv_core.so.5.0.0,
+   /usr/lib/libopencv_imgproc.so.5.0.0, /usr/lib/libopencv_imgcodecs.so.5.0.0,
+   /usr/lib/libopencv_flann.so.5.0.0, /usr/lib/libopencv_geometry.so.5.0.0,
+   /usr/lib/libopencv_highgui.so.5.0.0
+```
+
+Six **OpenCV 5.0.0** libraries land in the global namespace and interpose on our 4.13.0 symbols. Everything keeps working until the first call that crosses between the two ABIs — `QRCodeDetector.detectAndDecodeMulti` — which dies in `cv::Mat::release()` with no Java stack trace. The A9 smoke gate did not catch it because allocating a Mat and constructing detectors never crosses the boundary.
+
+**The loader is therefore demand-driven** (E-14): try `System.load` on the JNI shim, read the missing soname out of the `UnsatisfiedLinkError`, load *that* library from the payload, retry. The shim asks only for what it needs — which excludes highgui on Linux and includes it on macOS, correct on both with no platform conditional — and a dependency absent from the payload becomes a real error instead of something the linker resolves against whatever the host has lying around. Verified: one `libopencv_core` mapping, zero system OpenCV, QR round-trip green.
+
+The GTK-absent problem remains **Linux-only** — macOS (Cocoa/AppKit) and Windows (USER32/GDI32/COMDLG32) toolkits exist on every runner, so **no platform needs a package install**. Windows is the one place demand-driven resolution cannot work as written: its linker error is `Can't find dependent libraries` with no name in it, so §7 gains an item.
 
 Two further caveats for B1: this loads into the caller's classloader, so a library loaded twice from two classloaders will `UnsatisfiedLinkError` on the second — document it; and step 1 fails with `no jniopenblas_nolapack` unless the openblas classifier jar is on the classpath (§3.9).
 
@@ -363,23 +376,23 @@ Two smaller corrections that change task definitions.
 
 - [x] B0 · **Error policy, written before any signature** (§3.10): `Either` for data-dependent failures, guards for preconditions, documented `CvException` propagation, one `Cv.attempt` hatch
 - [x] B1 · `OpenCv.load()` — idempotent, thread-safe, §3.2 recipe incl. per-OS prefix and highgui-tolerance. `CvError.NativesMissing` names the exact dependency line for the detected OS (§3.7). **Failing test first:** `objdetect` reachable with `DISPLAY` unset
-- [ ] B2 · `CvError` ADT + `imread → Either[CvError, Mat]`. `imread` returns an *empty Mat*, never throws; `imwrite` returns `false` for an unwritable path but **throws** `CvException` for an unknown extension — handle all three shapes
+- [x] B2 · `CvError` ADT + `imread → Either[CvError, Mat]`. `imread` returns an *empty Mat*, never throws; `imwrite` returns `false` for an unwritable path but **throws** `CvException` for an unknown extension — handle all three shapes
 - [x] B3 · Mat lifecycle: `Mat.use`, `Using.Manager`, `Releasable`. **No reliance on GC-driven reclamation** (finalizer *or* `Cleaner`) — §3.6. Atomic CAS release flag; release is idempotent; post-release use throws
 - [x] B3b · The other 185 native types (§3.8) — two regimes per D14: `close()` + `Cleaner` by default, `delete(long)` bridge as a gated opt-in that fails loudly when it cannot open. Regime named per class in B10–B13. **Failing test first:** a released `CascadeClassifier` throws rather than SIGSEGVs
 - [x] B4a · Six true enums with `cvValue: Int` — `ColorConversion`, `InterpolationFlag`, `LineType`, `HersheyFont`, `ContourRetrieval`, `ContourApproximation`
 - [x] B4b · The three that are **bitmask sets, not enums**: `ImreadFlag` and `ThresholdType` as mode + modifier constructors (`enum X(cvValue: Int)` cannot express `THRESH_BINARY | THRESH_OTSU`); `BorderType` plain with `ISOLATED` deferred; `THRESH_MASK` never exposed
 - [x] B5 · Geometry value types — `Rect`, `Point`, `Size`, `Scalar` copied out at the native boundary; plus `Depth`/`MatType` delegating to `CvType.makeType`, and the submat/ROI aliasing contract
-- [ ] B6 · Extension syntax — **verified Java names**: `Imgproc.cvtColor`, `GaussianBlur`, `blur`, `Canny`, `Sobel`, `Laplacian`, `equalizeHist`, `threshold`, `resize`, `Core.convertScaleAbs`, `Core.addWeighted`. Four are capitalized in Java and lower-cased in Scala. `threshold` has one 5-arg overload, no defaults, and returns the computed `Double` — surface it as `ThresholdResult` (needed for OTSU/TRIANGLE). **Write the Mat-ownership contract first:** who owns the returned Mat, that the receiver is never released or aliased, and that in-place ops look visibly different; add a scoped chaining combinator so `mat.gaussianBlur(..).canny(..)` cannot strand its intermediate
-- [ ] B7 · Typed Hough — `HoughLines → Seq[PolarLine(rho: Float, theta: Float)]` from `Nx1 CV_32FC2`; `HoughLinesP → Seq[Segment(x1: Int, y1: Int, x2: Int, y2: Int)]` from `Nx1 CV_32SC4` (**int32** — a float read throws); `HoughLinesWithAccumulator → Seq[PolarLineWithVotes]` from `Nx1 CV_32FC3`. Decode via `Mat.get(i, 0): double[]`
-- [ ] B8 · Contours: `findContours → Seq[Contour]` (kills the `JavaConversions` dependency outright)
+- [x] B6 · Extension syntax — **verified Java names**: `Imgproc.cvtColor`, `GaussianBlur`, `blur`, `Canny`, `Sobel`, `Laplacian`, `equalizeHist`, `threshold`, `resize`, `Core.convertScaleAbs`, `Core.addWeighted`. Four are capitalized in Java and lower-cased in Scala. `threshold` has one 5-arg overload, no defaults, and returns the computed `Double` — surface it as `ThresholdResult` (needed for OTSU/TRIANGLE). **Write the Mat-ownership contract first:** who owns the returned Mat, that the receiver is never released or aliased, and that in-place ops look visibly different; add a scoped chaining combinator so `mat.gaussianBlur(..).canny(..)` cannot strand its intermediate
+- [x] B7 · Typed Hough — `HoughLines → Seq[PolarLine(rho: Float, theta: Float)]` from `Nx1 CV_32FC2`; `HoughLinesP → Seq[Segment(x1: Int, y1: Int, x2: Int, y2: Int)]` from `Nx1 CV_32SC4` (**int32** — a float read throws); `HoughLinesWithAccumulator → Seq[PolarLineWithVotes]` from `Nx1 CV_32FC3`. Decode via `Mat.get(i, 0): double[]`
+- [x] B8 · Contours: `findContours → Seq[Contour]` (kills the `JavaConversions` dependency outright)
 - [ ] B9 · `VideoCapture.use` + a **scoped non-memoizing iterator** owning one frame Mat — `LazyList` memoizes and is structurally incompatible with per-frame `release()`. `read()` has no timeout overload: use `setExceptionMode(true)` + best-effort `CAP_PROP_*_TIMEOUT_MSEC` + a bounded read loop, with the backend caveat. Propagate to C2
-- [ ] B10 · `CascadeClassifier` wrapper that **fails loudly on a bad path**. Cascades come from `Loader.cacheResource(classOf[opencv_java], s"/org/bytedeco/opencv/${Loader.getPlatform}/share/opencv4/haarcascades/$name.xml")` — no native load needed. **Windows ships none** (its `share/` is empty): vendor the 17 XMLs pinned to upstream tag `4.13.0` as a fallback, or document Windows as unsupported for Haar. Expose a typed `CascadeName`, not raw filenames. Format compatibility is a non-issue — the vendored XMLs are byte-identical to 4.13's own
+- [x] B10 · `CascadeClassifier` wrapper that **fails loudly on a bad path**. Cascades come from `Loader.cacheResource(classOf[opencv_java], s"/org/bytedeco/opencv/${Loader.getPlatform}/share/opencv4/haarcascades/$name.xml")` — no native load needed. **Windows ships none** (its `share/` is empty): vendor the 17 XMLs pinned to upstream tag `4.13.0` as a fallback, or document Windows as unsupported for Haar. Expose a typed `CascadeName`, not raw filenames. Format compatibility is a non-issue — the vendored XMLs are byte-identical to 4.13's own
 - [ ] B11 · `FaceDetectorYN` — mandatory `Size` at construction, **throws** on frame-size mismatch, returns a 0×0 Mat for no-face, its `int` return is a status flag, 15-column decode, `MatOfByte` create. YuNet model **downloaded at build time**, not vendored
-- [ ] B12 · `QRCodeDetector` + `ArucoDetector` wrappers
+- [x] B12 · `QRCodeDetector` + `ArucoDetector` wrappers
 - [ ] B13 · `Net.fromOnnx` + `blobFromImage`
 - [ ] B14 · Synthetic test fixtures generated programmatically (no `Lena.png`, no licensing surface)
-- [ ] B15 · Encode/decode boundary: `encode(mat, ".png"): Array[Byte]` via `imencode` + `MatOfByte.toArray`; `imdecode` on garbage returns an empty Mat, `imencode` on an unknown extension throws. **Zero GUI types in core**
-- [ ] B16 · Headless drawing ops in `core` — `rectangle`, `circle`, `line`, `putText`, `polylines`. Without them `LineType`/`HersheyFont` have no consumer and B7/B8's outputs cannot be rendered. In `core`, not a `draw` module
+- [x] B15 · Encode/decode boundary: `encode(mat, ".png"): Array[Byte]` via `imencode` + `MatOfByte.toArray`; `imdecode` on garbage returns an empty Mat, `imencode` on an unknown extension throws. **Zero GUI types in core**
+- [x] B16 · Headless drawing ops in `core` — `rectangle`, `circle`, `line`, `putText`, `polylines`. Without them `LineType`/`HersheyFont` have no consumer and B7/B8's outputs cannot be rendered. In `core`, not a `draw` module
 - [ ] B17 · Golden public-API signature dump committed to the repo
 
 **Gate:** `./mill core.test` green **and** `git diff --exit-code` on the B17 signature dump.
@@ -462,6 +475,7 @@ Full command output in [`NOTES-experiments.md`](NOTES-experiments.md).
 | E-11 | What if the release guard is wrong? | **SIGSEGV** from native code — no stack trace, no catch. Makes the atomic guard a correctness requirement. |
 | E-12 | Does A6's dependency set compile? | **No.** Zero `org/opencv/` classes on the classpath. Three coordinates required (§3.9). |
 | E-13 | Does `Core.VERSION` prove natives loaded? | **No.** Prints `4.13.0` with zero natives. Track A's old gate was a no-op (§3.10). |
+| E-14 | Why did `detectAndDecodeMulti` SIGSEGV? | Speculative `loadGlobal` of `highgui` pulled **six system OpenCV 5.0.0 libraries** into the global namespace via unversioned `NEEDED` entries. Loader rewritten demand-driven; §3.2 Correction #5. |
 
 ---
 
@@ -483,6 +497,7 @@ Settle before the dependent work, not before the roadmap.
 12. **NEW:** does `delete(long)` survive future bytedeco bumps? It is private API with no compatibility promise. A test must assert its presence per upgrade. → gates B3b
 13. **NEW:** does the reflective bridge open when OpenCV's classes are on the **module path**? `--add-opens` is consumer-controlled. → gates B3b
 14. **NEW:** Scala Steward's handling of Mill's `//| mvnDeps:` header scheme. → gates G6
+15. **NEW:** Windows demand-driven loading. Its linker error is `Can't find dependent libraries` and names no library, so the soname cannot be extracted and the retry loop cannot proceed. Windows may need an explicit dependency order or a `SetDllDirectory` call. → gates G1's windows-latest leg
 
 ---
 

@@ -12,8 +12,9 @@ import org.bytedeco.javacpp.Loader
   * is precisely what this library needs most.
   *
   * `libopencv_java` itself links no GUI toolkit. So we bring javacpp up through a GUI-free preset, extract
-  * the platform payload, `dlopen(RTLD_GLOBAL)` the module libraries ourselves, and only then load the JNI
-  * shim. The result needs no `apt-get install libgtk2.0-0t64` on any runner. See ROADMAP §3.2.
+  * the platform payload, and then load the JNI shim, resolving its dependencies **on demand** — see
+  * [[satisfy]] for why loading them speculatively is not merely wasteful but unsafe. The result needs no
+  * `apt-get install libgtk2.0-0t64` on any runner. See ROADMAP §3.2.
   */
 object OpenCv:
 
@@ -43,24 +44,11 @@ object OpenCv:
         Loader.cacheResources(classOf[org.bytedeco.opencv.opencv_java], s"/org/bytedeco/opencv/$platform/")
       val all = extracted.iterator.flatMap(collectLibs).toVector
       val (jni, modules) = all.partition(_.getName.contains(JniName))
+      val payload = modules.map(f => f.getName -> f).toMap
 
-      // 3. Link order is a DAG we do not know, and on a GTK-less Linux box highgui is *expected*
-      //    to fail. So: retry until a whole pass makes no progress, tolerating failures. Never
-      //    exclude highgui by name — on macOS the JNI shim hard-links it.
-      var remaining = modules.toList
-      var progress = true
-      while remaining.nonEmpty && progress do
-        val before = remaining.size
-        remaining = remaining.filter: f =>
-          try
-            Loader.loadGlobal(f.getAbsolutePath)
-            false
-          catch case _: Throwable => true
-        progress = remaining.size < before
-
-      // 4. Now the JNI shim resolves.
+      // 3. Load exactly what the JNI shim asks for, and nothing else — see [[satisfy]].
       jni.headOption match
-        case Some(f) => System.load(f.getAbsolutePath)
+        case Some(f) => satisfy(f, payload)
         case None =>
           throw CvError.NativesMissing(
             s"no $JniName library in the extracted $platform payload"
@@ -71,6 +59,73 @@ object OpenCv:
         throw CvError.NativesMissing(nativesMissingHelp(e.getMessage))
       case e: NoClassDefFoundError =>
         throw CvError.NativesMissing(nativesMissingHelp(e.getMessage))
+
+  /** Loads `target`, resolving its dependencies **on demand** from the extracted payload.
+    *
+    * The obvious approach — `dlopen(RTLD_GLOBAL)` every module library and let a retry loop sort out the
+    * order — is actively dangerous, and it took a JVM crash to find out why. The bundled
+    * `libopencv_highgui.so` carries *unversioned* `NEEDED` entries (`libopencv_core.so`, not
+    * `libopencv_core.so.413`). Loading it makes the dynamic linker search the system path, and on a machine
+    * that happens to have OpenCV installed it does not fail — it succeeds, mapping six `libopencv_*.so.5.0.0`
+    * system libraries into the global namespace, where they interpose on our 4.13.0 symbols. The next call
+    * that crosses between the two ABIs dies in `cv::Mat::release()` with no Java stack trace. Reproduced
+    * exactly that way.
+    *
+    * So: never speculatively load a library. Try the JNI shim, read the soname out of the
+    * `UnsatisfiedLinkError`, load *that* library from the payload, and try again. The shim asks only for what
+    * it actually needs, which on Linux excludes highgui entirely and on macOS includes it — correct on both
+    * without a platform conditional. And a dependency we cannot satisfy from the payload is a real error
+    * rather than something the linker quietly resolves against whatever the host has lying around.
+    */
+  private def satisfy(target: File, payload: Map[String, File]): Unit =
+    val loaded = scala.collection.mutable.Set.empty[String]
+    var lastMissing = ""
+
+    def attempt(load: () => Unit, what: String): Unit =
+      var settled = false
+      while !settled do
+        try
+          load()
+          settled = true
+        catch
+          case e: UnsatisfiedLinkError =>
+            val missing = missingSoname(e.getMessage).getOrElse(throw e)
+            if missing == lastMissing then
+              // Asking for the same library twice means loading it did not help.
+              throw CvError.NativesMissing(
+                s"$what needs $missing, which is in the payload but does not satisfy it"
+              )
+            lastMissing = missing
+            val dep = payload
+              .get(missing)
+              .orElse(payload.get(baseName(missing)))
+              .getOrElse:
+                throw CvError.NativesMissing(
+                  s"""$what needs $missing, which is not in the extracted OpenCV payload.
+                   |
+                   |This is a dependency of OpenCV itself rather than of scalacv. It usually means
+                   |the platform-classifier jar is incomplete or was extracted only partially; try
+                   |clearing the javacpp cache (~/.javacpp) and running again.""".stripMargin
+                )
+            if !loaded.add(dep.getName) then throw e
+            attempt(() => Loader.loadGlobal(dep.getAbsolutePath), dep.getName)
+
+    attempt(() => System.load(target.getAbsolutePath), target.getName)
+
+  /** Pulls the missing library's name out of a linker error, on any of the three platforms.
+    *
+    * Linux: `libopencv_xphoto.so.413: cannot open shared object file: No such file or directory` macOS:
+    * `Library not loaded: @rpath/libopencv_highgui.413.dylib` Windows: `Can't find dependent libraries` — no
+    * name, so demand-driven loading cannot work there and the caller falls through to the error path.
+    */
+  private def missingSoname(message: String | Null): Option[String] =
+    Option(message).flatMap: m =>
+      val linux = raw"([\w.+-]+\.so[\w.]*): cannot open shared object file".r
+      val mac = raw"Library not loaded: (?:@rpath/)?([\w.+-]+\.dylib)".r
+      linux.findFirstMatchIn(m).map(_.group(1)).orElse(mac.findFirstMatchIn(m).map(_.group(1)))
+
+  private def baseName(soname: String): String =
+    soname.split("/").last
 
   /** javacpp hands back a mix of files and directories depending on the resource layout. */
   private def collectLibs(f: File): Seq[File] =
