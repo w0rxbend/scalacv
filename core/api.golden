@@ -215,6 +215,24 @@ final class scalacv.CvError.EncodeFailed
   def productElement(int): java.lang.Object
   def productElementName(int): java.lang.String
   def productPrefix(): java.lang.String
+final class scalacv.CvError.LoadFailed
+  extends scalacv.CvError
+  implements scala.Product
+  def <init>(java.lang.String, java.lang.String): void
+  def _1(): java.lang.String
+  def _2(): java.lang.String
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): java.lang.String
+  def copy$default$2(): java.lang.String
+  def copy(java.lang.String, java.lang.String): scalacv.CvError$LoadFailed
+  def details(): java.lang.String
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def resource(): java.lang.String
 final class scalacv.CvError.NativeCall
   extends scalacv.CvError
   implements scala.Product
@@ -760,6 +778,7 @@ object scalacv.CvError
   def ordinal(scalacv.CvError): int
   static val DecodeFailed: scalacv.CvError$DecodeFailed$
   static val EncodeFailed: scalacv.CvError$EncodeFailed$
+  static val LoadFailed: scalacv.CvError$LoadFailed$
   static val NativeCall: scalacv.CvError$NativeCall$
   static val NativesMissing: scalacv.CvError$NativesMissing$
 object scalacv.CvError.DecodeFailed
@@ -778,6 +797,14 @@ object scalacv.CvError.EncodeFailed
   def fromProduct(scala.Product): scalacv.CvError$EncodeFailed
   def toString(): java.lang.String
   def unapply(scalacv.CvError$EncodeFailed): scalacv.CvError$EncodeFailed
+object scalacv.CvError.LoadFailed
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def <init>(): void
+  def apply(java.lang.String, java.lang.String): scalacv.CvError$LoadFailed
+  def fromProduct(scala.Product): scalacv.CvError$LoadFailed
+  def toString(): java.lang.String
+  def unapply(scalacv.CvError$LoadFailed): scalacv.CvError$LoadFailed
 object scalacv.CvError.NativeCall
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -888,10 +915,6 @@ object scalacv.FaceDetect
   def detect(org.opencv.objdetect.FaceDetectorYN, org.opencv.core.Mat): scala.collection.immutable.Seq<scalacv.Face>
   def downloadModel(java.nio.file.Path): scala.util.Either<scalacv.CvError, java.nio.file.Path>
   def given_Releasable_FaceDetectorYN(): scalacv.Releasable<org.opencv.objdetect.FaceDetectorYN>
-object scalacv.FinalizerGuard
-  extends java.lang.Object
-  implements java.io.Serializable
-  def disarm(java.lang.Object): boolean
 object scalacv.Font
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Sum

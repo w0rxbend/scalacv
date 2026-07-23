@@ -300,7 +300,7 @@ object Video:
               val withTimeouts = params.use(p => swallowing(withParams(capture, p)))
               if withTimeouts then true else plain(capture)
           if !opened || !capture.isOpened then
-            throw CvError.DecodeFailed(
+            throw CvError.LoadFailed(
               source,
               "VideoCapture.open reported failure without an OpenCV message — the source may not exist, " +
                 "may be in use, or no available backend can read it"

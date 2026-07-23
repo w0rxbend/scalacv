@@ -256,7 +256,7 @@ extension (mat: Mat)
       lineType: LineType = LineType.Connected8
   ): Unit =
     DrawOps.requireDrawable(mat, "drawSegments")
-    if segments.nonEmpty then segments.foreach(s => mat.drawLine(s.start, s.end, color, thickness, lineType))
+    segments.foreach(s => mat.drawLine(s.start, s.end, color, thickness, lineType))
 
 /** File-private helpers. Wrapped in an object rather than left top-level so their names cannot collide with
   * another file's package-private definitions.

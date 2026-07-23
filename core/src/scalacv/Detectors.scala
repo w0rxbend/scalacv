@@ -144,18 +144,11 @@ object Aruco:
   def generateMarker(dictionary: ArucoDictionary, id: Int, sizePixels: Int): Managed[Mat] =
     require(id >= 0, s"an ArUco marker id cannot be negative: $id")
     require(sizePixels > 0, s"an ArUco marker must have a positive size: $sizePixels")
-    val out = Mat()
-    try
-      Managed(Objdetect.getPredefinedDictionary(dictionary.cvValue)).use: dict =>
-        Cv.orThrow("Objdetect.generateImageMarker")(
-          Objdetect.generateImageMarker(dict, id, sizePixels, out)
-        )
-      Managed(out)
-    catch
-      case e: Throwable =>
-        // The Mat never reached a Managed, so nothing else would ever free it.
-        out.release()
-        throw e
+    // Mats.produce is the one place a destination Mat is allocated and released-on-throw; the dictionary's
+    // scope can close before the Mat escapes because the result does not alias it.
+    Managed(Objdetect.getPredefinedDictionary(dictionary.cvValue)).use: dict =>
+      Mats.produce("Objdetect.generateImageMarker"): out =>
+        Objdetect.generateImageMarker(dict, id, sizePixels, out)
 
 /** Reads OpenCV's corner Mats into plain points.
   *

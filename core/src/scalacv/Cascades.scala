@@ -83,13 +83,13 @@ object Cascades:
       // which is exactly the Windows case and also what a missing classifier jar looks like.
       Option(Loader.cacheResource(classOf[org.bytedeco.opencv.opencv_java], resource)) match
         case Some(f) if f.isFile && f.canRead => Right(f)
-        case Some(f) => Left(CvError.DecodeFailed(f.getPath, s"extracted, but not a readable file"))
-        case None => Left(CvError.DecodeFailed(resource, unavailable(platform)))
+        case Some(f) => Left(CvError.LoadFailed(f.getPath, s"extracted, but not a readable file"))
+        case None => Left(CvError.LoadFailed(resource, unavailable(platform)))
     catch
-      case e: IOException => Left(CvError.DecodeFailed(resource, s"could not be extracted: ${e.getMessage}"))
+      case e: IOException => Left(CvError.LoadFailed(resource, s"could not be extracted: ${e.getMessage}"))
       case e: NoClassDefFoundError =>
         Left(
-          CvError.DecodeFailed(resource, s"the bytedeco OpenCV jar is not on the classpath (${e.getMessage})")
+          CvError.LoadFailed(resource, s"the bytedeco OpenCV jar is not on the classpath (${e.getMessage})")
         )
 
   /** Extracts a cascade and loads it, failing if the result is an empty classifier.
@@ -115,7 +115,7 @@ object Cascades:
           // The handle is real even though the model is not, so it still has to be freed.
           Managed(classifier).release()
           Left(
-            CvError.DecodeFailed(
+            CvError.LoadFailed(
               path,
               "OpenCV loaded no cascade from this path. It does not report that as an error — it returns " +
                 "an empty classifier that detects nothing — so scalacv reports it here instead. Check that " +

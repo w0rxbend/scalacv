@@ -56,12 +56,19 @@ final case class Contour(points: Seq[Point]):
     if isEmpty then 0.0
     else
       // arcLength takes MatOfPoint2f specifically, not the MatOfPoint the other two accept.
-      Managed(MatOfPoint2f(points.map(_.toCv)*))
+      Managed(MatOfPoint2f(cvPoints*))
         .use(m => Cv.orThrow("arcLength")(Imgproc.arcLength(m, true)))
+
+  /** The points converted to OpenCV's own type, once. Shared by all three metrics so reading two or three off
+    * the same contour does not re-materialise the conversion each time. Lazy, so a `Contour` a caller never
+    * measures never pays for it. The native Mats below still cannot be shared — each owns a handle that must
+    * be released — but the point conversion feeding them can.
+    */
+  private lazy val cvPoints: Seq[org.opencv.core.Point] = points.map(_.toCv)
 
   /** Materialises the points as a native `MatOfPoint` for the duration of `f`, then frees it. */
   private def withPointMat[A](f: MatOfPoint => A): A =
-    Managed(MatOfPoint(points.map(_.toCv)*)).use(f)
+    Managed(MatOfPoint(cvPoints*)).use(f)
 
 object Contour:
 

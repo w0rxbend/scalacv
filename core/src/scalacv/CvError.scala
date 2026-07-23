@@ -21,6 +21,14 @@ object CvError:
   final case class DecodeFailed(path: String, details: String)
       extends CvError(s"could not decode an image from '$path': $details", null)
 
+  /** A named resource could not be resolved, loaded, or verified — a model file, a Haar cascade, an ONNX
+    * network, a downloaded artifact, a video source. Distinct from [[DecodeFailed]], which is specifically
+    * about image *bytes*: an HTTP 404 for a model download, a missing `.onnx`, or a checksum mismatch is not
+    * an image-decode failure and should not read like one.
+    */
+  final case class LoadFailed(resource: String, details: String)
+      extends CvError(s"could not load '$resource': $details", null)
+
   /** An image could not be written. */
   final case class EncodeFailed(path: String, details: String)
       extends CvError(s"could not write an image to '$path': $details", null)

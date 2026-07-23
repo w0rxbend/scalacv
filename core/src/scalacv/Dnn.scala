@@ -56,15 +56,15 @@ object Dnn:
   def fromOnnx(path: String): Either[CvError, Managed[Net]] =
     val file = File(path)
     if !file.isFile then
-      Left(CvError.DecodeFailed(path, "no such file (or it is a directory), so there is no model to read"))
-    else if !file.canRead then Left(CvError.DecodeFailed(path, "the file exists but is not readable"))
+      Left(CvError.LoadFailed(path, "no such file (or it is a directory), so there is no model to read"))
+    else if !file.canRead then Left(CvError.LoadFailed(path, "the file exists but is not readable"))
     else
       Cv.attempt(s"reading an ONNX model from '$path'")(CvDnn.readNetFromONNX(path))
         .flatMap: net =>
           if net.empty() then
             // The handle is real even though the graph is not, so it still has to be freed.
             Managed(net).release()
-            Left(CvError.DecodeFailed(path, "OpenCV read this file but produced a network with no layers"))
+            Left(CvError.LoadFailed(path, "OpenCV read this file but produced a network with no layers"))
           else Right(Managed(net))
 
   /** Turns an image into the 4-dimensional NCHW blob a network expects.

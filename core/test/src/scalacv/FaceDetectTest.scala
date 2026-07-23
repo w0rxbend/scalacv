@@ -123,7 +123,7 @@ class FaceDetectTest extends munit.FunSuite:
   test("create on a path with no file is a Left, not a detector that silently finds nothing"):
     val missing = modelDir.resolve("definitely-not-here.onnx").toString
     FaceDetect.create(missing, Size(320, 320)) match
-      case Left(e: CvError.DecodeFailed) => assert(e.getMessage.contains(missing), e.getMessage)
+      case Left(e: CvError.LoadFailed) => assert(e.getMessage.contains(missing), e.getMessage)
       case Left(e) => fail(s"wrong error for a missing model: $e")
       case Right(d) =>
         d.release()

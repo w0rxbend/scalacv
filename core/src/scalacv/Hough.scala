@@ -164,14 +164,7 @@ private object Hough:
     * than needing a special case.
     */
   def rows[A](out: Mat)(decode: Array[Double] => A): Seq[A] =
-    val n = out.rows()
-    val b = Vector.newBuilder[A]
-    b.sizeHint(n)
-    var i = 0
-    while i < n do
-      b += decode(out.get(i, 0))
-      i += 1
-    b.result()
+    Vector.tabulate(out.rows())(i => decode(out.get(i, 0)))
 
   /** All three transforms assert `CV_8UC1` in native code. Checking it here turns a JNI-side abort message
     * into an ordinary precondition failure that names the offending type, per the error policy in [[Cv]].

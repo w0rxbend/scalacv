@@ -51,8 +51,8 @@ class DnnTest extends munit.FunSuite:
   test("fromOnnx on a path that does not exist is a Left, not a throw"):
     val missing = "/nonexistent/scalacv/definitely-not-here.onnx"
     Dnn.fromOnnx(missing) match
-      case Left(e: CvError.DecodeFailed) => assert(e.getMessage.contains(missing), e.getMessage)
-      case Left(e) => fail(s"expected a DecodeFailed naming the path, got $e")
+      case Left(e: CvError.LoadFailed) => assert(e.getMessage.contains(missing), e.getMessage)
+      case Left(e) => fail(s"expected a LoadFailed naming the path, got $e")
       case Right(net) => net.release(); fail("a missing model must not load")
 
   test("fromOnnx on a directory is a Left"):

@@ -59,7 +59,7 @@ class CascadesTest extends munit.FunSuite:
       .loadFrom("/does/not/exist.xml")
       .swap
       .getOrElse(fail("a missing cascade must not load successfully"))
-    assert(e.isInstanceOf[CvError.DecodeFailed], s"expected DecodeFailed, got ${e.getClass.getName}")
+    assert(e.isInstanceOf[CvError.LoadFailed], s"expected LoadFailed, got ${e.getClass.getName}")
     assert(e.getMessage.contains("/does/not/exist.xml"), e.getMessage)
 
   test("loadFrom a file that is not a cascade is a Left"):

@@ -1,15 +1,10 @@
 package scalacv
 
-import java.lang.reflect.Field
 import java.net.URI
 import java.net.http.{HttpClient, HttpRequest, HttpResponse}
 import java.nio.file.{Files, Path, StandardCopyOption}
 import java.security.MessageDigest
 import java.time.Duration
-import java.util.Optional
-import java.util.concurrent.ConcurrentHashMap
-
-import scala.jdk.OptionConverters.*
 
 import org.opencv.core.{CvType, Mat, Size as CvSize}
 import org.opencv.objdetect.FaceDetectorYN
@@ -73,28 +68,21 @@ object FaceDetect:
     * needs the `delete(long)` bridge. Public so callers who build their own detector — with a `MatOfByte`
     * buffer, or a non-default `topK` — can `import FaceDetect.given` and manage it on the same terms.
     *
-    * It is **not** plain `Releasable.handle(_.getNativeObjAddr)`, because that is only half a release. Every
-    * generated binding also carries
-    *
-    * {{{protected void finalize() { delete(nativeObj); }}}}
-    *
-    * so once we have deleted the pointer ourselves, the object is a live double-free waiting for the
-    * collector. That is not theoretical — running this class's own tests on it crashed the JVM:
+    * This is the same one-liner every other handle type uses ([[Cascades]], [[Dnn]], [[Qr]], [[Aruco]]):
+    * [[Releasable.handle]] reads the address, then disarms the binding's unconditional `finalize()` *before*
+    * freeing the pointer. That disarm is not optional — without it a released `FaceDetectorYN` is a live
+    * double-free, and because a DNN allocates enough to make the collector run mid-suite, this class's own
+    * tests are where that SIGSEGV first surfaced:
     *
     * {{{
     * SIGSEGV (0xb)  C  [libopencv_java.so+0x163155]  Java_org_opencv_objdetect_FaceDetectorYN_delete
     * Current thread: JavaThread "Finalizer"
     * }}}
     *
-    * A DNN allocates enough to make the collector run mid-suite, which is the only reason this surfaced here
-    * first — the hazard belongs to every one of the 185 types, not to YuNet. [[FinalizerGuard]] zeroes
-    * `nativeObj` *before* the delete, so the finalizer's `delete(0)` is the no-op C++ guarantees it to be.
+    * The hazard belongs to every one of the 185 types, not to YuNet, so the fix lives in `handle` rather than
+    * here.
     */
-  given Releasable[FaceDetectorYN] = detector =>
-    // Read the address first: after disarming, the getter returns 0 and the pointer would be lost.
-    val address = detector.getNativeObjAddr
-    FinalizerGuard.disarm(detector)
-    if address != 0L then Releasable.handle[FaceDetectorYN](_ => address).release(detector)
+  given Releasable[FaceDetectorYN] = Releasable.handle(_.getNativeObjAddr)
 
   /** The number of columns in one row of YuNet's output Mat: `x, y, w, h`, 5 landmark pairs, score. */
   val ResultColumns: Int = 15
@@ -178,7 +166,7 @@ object FaceDetect:
     val file = Path.of(modelPath)
     if !Files.isRegularFile(file) then
       Left(
-        CvError.DecodeFailed(
+        CvError.LoadFailed(
           modelPath,
           "there is no readable file at this path. The YuNet model is not shipped with scalacv — " +
             s"fetch it with FaceDetect.downloadModel(dir), which writes $ModelFileName and verifies its " +
@@ -193,7 +181,7 @@ object FaceDetect:
         FaceDetectorYN.create(modelPath, "", inputSize.toCv, scoreThreshold, nmsThreshold)
       ).flatMap:
         case null =>
-          Left(CvError.DecodeFailed(modelPath, "FaceDetectorYN.create returned null for this model"))
+          Left(CvError.LoadFailed(modelPath, "FaceDetectorYN.create returned null for this model"))
         case d => Right(Managed(d))
 
   /** Detects every face in `image`.
@@ -287,7 +275,7 @@ object FaceDetect:
         fetchFirst(target)
       catch
         case e: Exception =>
-          Left(CvError.DecodeFailed(into.toString, s"could not create the download directory: $e"))
+          Left(CvError.LoadFailed(into.toString, s"could not create the download directory: $e"))
 
   /** Tries each mirror in turn, keeping the first that downloads *and* verifies. */
   private def fetchFirst(target: Path): Either[CvError, Path] =
@@ -304,7 +292,7 @@ object FaceDetect:
       .map(_._2)
     ok.getOrElse(
       Left(
-        CvError.DecodeFailed(
+        CvError.LoadFailed(
           ModelFileName,
           s"could not be downloaded from any known mirror.\n  ${failures.result().mkString("\n  ")}"
         )
@@ -323,13 +311,12 @@ object FaceDetect:
       // ofFile writes the body whatever the status is, so a 404's HTML page lands in tmp too. Hence the
       // explicit status check before anything else looks at those bytes.
       val response = client.send(request, HttpResponse.BodyHandlers.ofFile(tmp))
-      if response.statusCode != 200 then Left(CvError.DecodeFailed(url, s"HTTP ${response.statusCode}"))
+      if response.statusCode != 200 then Left(CvError.LoadFailed(url, s"HTTP ${response.statusCode}"))
       else
         verified(tmp).map: _ =>
           Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING)
           target
-    catch
-      case e: Exception => Left(CvError.DecodeFailed(url, s"${e.getClass.getSimpleName}: ${e.getMessage}"))
+    catch case e: Exception => Left(CvError.LoadFailed(url, s"${e.getClass.getSimpleName}: ${e.getMessage}"))
     finally Files.deleteIfExists(tmp): Unit
 
   /** Size then digest, so a truncated download or an error page is reported as what it is. */
@@ -337,7 +324,7 @@ object FaceDetect:
     val size = Files.size(file)
     if size != ModelSizeBytes then
       Left(
-        CvError.DecodeFailed(
+        CvError.LoadFailed(
           file.toString,
           s"expected $ModelSizeBytes bytes for $ModelFileName but got $size — the download is truncated, " +
             "or the server answered with something that is not the model"
@@ -348,7 +335,7 @@ object FaceDetect:
       if actual == ModelSha256 then Right(file)
       else
         Left(
-          CvError.DecodeFailed(
+          CvError.LoadFailed(
             file.toString,
             s"SHA-256 mismatch for $ModelFileName: expected $ModelSha256, got $actual. Refusing to load " +
               "an unverified model."
@@ -366,48 +353,3 @@ object FaceDetect:
         n = in.read(buf)
     finally in.close()
     digest.digest().map(b => f"$b%02x").mkString
-
-/** Stops a generated OpenCV binding's `finalize()` from freeing a pointer we have already freed.
-  *
-  * Every `org.opencv.*` binding that owns a native pointer keeps it in a `protected final long nativeObj` and
-  * frees it from `finalize()`. Any explicit release therefore leaves the object armed: when the collector
-  * eventually finalizes it, the same pointer is deleted a second time, from a thread with no stack we
-  * control, and the JVM goes down with a SIGSEGV rather than an exception (measured — see the `given` in
-  * [[FaceDetect]]).
-  *
-  * Setting the field to 0 first defuses that: `delete` on a null pointer is a no-op the C++ standard
-  * guarantees, so the finalizer runs and does nothing. `nativeObj` is `final`, but it is a non-static field
-  * of an ordinary class, so `setAccessible(true)` grants write access to it (Java 9+ rules, verified on JDK
-  * 25). The field is declared on the binding itself for some types and on a base class for others
-  * (`QRCodeDetector` inherits it from `GraphicalCodeDetector`), hence the walk up the hierarchy.
-  *
-  * Deliberately best-effort. If reflection is blocked — OpenCV on the module path — this returns `false` and
-  * the caller still frees the pointer, which is exactly the exposure the rest of the library already has;
-  * refusing to release would trade a possible crash for a certain leak. In practice the two fail together,
-  * since [[Releasable.handle]] needs the same access and throws first.
-  */
-private object FinalizerGuard:
-
-  private val fields = ConcurrentHashMap[Class[?], Optional[Field]]()
-
-  /** Zeroes `nativeObj` on `a`. Returns whether the field could be written. */
-  def disarm(a: AnyRef): Boolean =
-    fields.computeIfAbsent(a.getClass, lookUp).toScala match
-      case None => false
-      case Some(f) =>
-        try
-          f.setLong(a, 0L)
-          true
-        catch case _: Throwable => false
-
-  private def lookUp(cls: Class[?]): Optional[Field] =
-    var k: Class[?] | Null = cls
-    while k != null do
-      try
-        val f = k.getDeclaredField("nativeObj")
-        f.setAccessible(true)
-        return Optional.of(f)
-      catch
-        case _: NoSuchFieldException => k = k.getSuperclass
-        case _: Throwable => return Optional.empty()
-    Optional.empty()
