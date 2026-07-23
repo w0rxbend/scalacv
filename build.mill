@@ -4,6 +4,8 @@
 package build
 
 import mill.*, scalalib.*
+import mill.javalib.publish.*
+import mill.util.VcsVersion
 
 object Deps {
   val opencv   = "4.13.0-1.5.13"
@@ -91,7 +93,36 @@ trait ScalacvTests extends TestModule.Munit {
   def forkArgs = Seq("--enable-native-access=ALL-UNNAMED", "-Djava.awt.headless=true")
 }
 
-object core extends ScalacvModule {
+/** Everything that ships to Maven Central.
+  *
+  * Deliberately a separate trait from ScalacvModule: `examples` and `examples-gui` must NOT
+  * extend PublishModule. `publishAll` resolves every PublishModule in the build, so mixing it
+  * into the base trait would ship the example apps -- and examples-gui's per-host OpenJFX --
+  * to Central. ROADMAP §3.7.
+  */
+trait ScalacvPublishModule extends ScalacvModule with PublishModule {
+  /* Without an explicit artifactName Mill publishes the *directory* name, i.e.
+   * com.worxbend:core_3 and com.worxbend:zio_3. */
+  def artifactName: T[String]
+
+  def publishVersion = Task { VcsVersion.calcVcsState(Task.log).format() }
+
+  def pomSettings = PomSettings(
+    description = "A Scala 3 wrapper for the OpenCV 4.13 Java API",
+    organization = "com.worxbend",
+    url = "https://github.com/w0rxbend/scalacv",
+    licenses = Seq(License.`Apache-2.0`),
+    versionControl = VersionControl.github("w0rxbend", "scalacv"),
+    developers = Seq(Developer("w0rxbend", "w0rxbend", "https://github.com/w0rxbend"))
+  )
+
+  /* Consumers read this to know that 0.x still means breaking changes are allowed. */
+  def versionScheme = Task { Some(VersionScheme.EarlySemVer) }
+}
+
+object core extends ScalacvPublishModule {
+  def artifactName = "scalacv"
+
   /* Classifier-less only. The natives are a *test* and *example* concern here; putting them
    * on core would either do nothing for consumers (POM strips the classifier) or, via
    * runMvnDeps, publish a classifier-stripped runtime dep that resolves to no natives at all.
@@ -103,8 +134,9 @@ object core extends ScalacvModule {
   }
 }
 
-object zio extends ScalacvModule {
-  def moduleDeps = Seq(core)
+object zio extends ScalacvPublishModule {
+  def artifactName = "scalacv-zio"
+  def moduleDeps   = Seq(core)
   def mvnDeps    = Seq(mvn"dev.zio::zio:2.1.26", mvn"dev.zio::zio-streams:2.1.26")
 
   object test extends ScalaTests with ScalacvTests {
