@@ -131,6 +131,10 @@ object core extends ScalacvPublishModule {
 
   object test extends ScalaTests with ScalacvTests {
     def mvnDeps = super.mvnDeps() ++ Deps.opencvNatives
+
+    /* PublishedPomTest asserts on the real generated POM rather than on a fixture, so that a
+     * regression in the build cannot be hidden by an out-of-date expectation. */
+    def forkArgs = Task { super.forkArgs() :+ s"-Dscalacv.pom=${core.pom().path}" }
   }
 }
 
