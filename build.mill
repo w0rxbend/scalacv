@@ -51,6 +51,12 @@ object Deps {
     * with zero `org/opencv/` classes. And `libopencv_core` has a NEEDED on `libopenblas.so.0`,
     * which ships only in openblas's own classifier jar. See ROADMAP §3.9.
     */
+  val opencvNatives = Seq(
+    opencvApi,
+    mvn"org.bytedeco:opencv:$opencv;classifier=$platform",
+    mvn"org.bytedeco:openblas:$openblas;classifier=$platform"
+  )
+
   /** JVM flags for modules that touch natives, gated on the JDK that will actually run them.
     *
     * Both flags are noise suppression, and both are **younger than our JDK 17 floor** — passing
@@ -66,12 +72,6 @@ object Deps {
   def runtimeJvmArgs(jvmMajor: Int): Seq[String] =
     if (jvmMajor >= 24) Seq("--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow")
     else Seq.empty
-
-  val opencvNatives = Seq(
-    opencvApi,
-    mvn"org.bytedeco:opencv:$opencv;classifier=$platform",
-    mvn"org.bytedeco:openblas:$openblas;classifier=$platform"
-  )
 }
 
 /** Shared settings for every Scala module in the build.

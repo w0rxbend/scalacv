@@ -3,24 +3,24 @@ package scalacv
 import org.opencv.core.{CvType, Mat}
 import org.opencv.imgproc.Imgproc
 
-/** Typed results for the Hough line transforms.
-  *
-  * OpenCV returns lines as an `Nx1` multi-channel [[org.opencv.core.Mat]] whose element type differs per
-  * transform, and whose channels have no names. Reading one correctly means knowing three separate facts that
-  * nothing in the Java signature tells you — and getting any of them wrong either throws from JNI or, worse,
-  * silently reinterprets bit patterns. Verified against 4.13.0 by execution (ROADMAP §2):
-  *
-  *   - `HoughLines` → `Nx1 CV_32FC2`, `(rho, theta)`. **Vec2f, never Vec3f**, and invariant under `srn`,
-  *     `stn`, `min_theta` and `max_theta`.
-  *   - `HoughLinesWithAccumulator` → `Nx1 CV_32FC3`, `(rho, theta, votes)`.
-  *   - `HoughLinesP` → `Nx1 CV_32SC4`, `(x1, y1, x2, y2)` — **int32**, not float. A float-typed read of this
-  *     Mat throws.
-  *
-  * Everything here decodes through `Mat.get(row, 0): Array[Double]`, which is depth-generic on the Java side
-  * and so is the one accessor that is correct for all three shapes. The intermediate Mat never escapes: it is
-  * released before the call returns, and what comes back is ordinary immutable Scala data that outlives the
-  * image it was computed from.
-  */
+/* Typed results for the Hough line transforms.
+ *
+ * OpenCV returns lines as an `Nx1` multi-channel [[org.opencv.core.Mat]] whose element type differs per
+ * transform, and whose channels have no names. Reading one correctly means knowing three separate facts that
+ * nothing in the Java signature tells you — and getting any of them wrong either throws from JNI or, worse,
+ * silently reinterprets bit patterns. Verified against 4.13.0 by execution (ROADMAP §2):
+ *
+ *   - `HoughLines` → `Nx1 CV_32FC2`, `(rho, theta)`. **Vec2f, never Vec3f**, and invariant under `srn`,
+ *     `stn`, `min_theta` and `max_theta`.
+ *   - `HoughLinesWithAccumulator` → `Nx1 CV_32FC3`, `(rho, theta, votes)`.
+ *   - `HoughLinesP` → `Nx1 CV_32SC4`, `(x1, y1, x2, y2)` — **int32**, not float. A float-typed read of this
+ *     Mat throws.
+ *
+ * Everything here decodes through `Mat.get(row, 0): Array[Double]`, which is depth-generic on the Java side
+ * and so is the one accessor that is correct for all three shapes. The intermediate Mat never escapes: it is
+ * released before the call returns, and what comes back is ordinary immutable Scala data that outlives the
+ * image it was computed from.
+ */
 
 /** A line in Hesse normal form, as `HoughLines` reports it: infinite, with no endpoints.
   *

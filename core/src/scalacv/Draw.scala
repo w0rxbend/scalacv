@@ -5,23 +5,23 @@ import scala.jdk.CollectionConverters.SeqHasAsJava
 import org.opencv.core.{Mat, MatOfPoint}
 import org.opencv.imgproc.Imgproc
 
-/** Drawing primitives, as extension methods on the Mat they draw into.
-  *
-  * **These mutate the receiver.** That is the exact opposite of the rest of the library: every other
-  * operation leaves its input alone and hands back a new, caller-owned Mat. OpenCV's drawing functions have
-  * no out-of-place form — they rasterise straight into the image you give them — so pretending otherwise
-  * would mean cloning a full frame per annotation, which is precisely what a per-frame overlay cannot afford.
-  * Instead the mutation is made obvious in the names: everything here is `drawSomething` or `fillSomething`
-  * and returns `Unit`, so no call site can mistake one for a pure transform.
-  *
-  * These live in `core`, not in a GUI module, and reference nothing from highgui or JavaFX. Drawing is
-  * ordinary raster work: annotating detections before `imwrite`, rendering a mask, burning a timestamp into a
-  * recorded frame — all of which happen on machines with no display. A `draw` module would only have split
-  * `core` in two along a line that does not exist.
-  *
-  * They also give [[LineType]] and [[Font]] their only consumers, and are how the typed results of the Hough
-  * transforms ([[Segment]]) and of `findContours` ([[Contour]]) get rendered.
-  */
+/* Drawing primitives, as extension methods on the Mat they draw into.
+ *
+ * **These mutate the receiver.** That is the exact opposite of the rest of the library: every other
+ * operation leaves its input alone and hands back a new, caller-owned Mat. OpenCV's drawing functions have
+ * no out-of-place form — they rasterise straight into the image you give them — so pretending otherwise
+ * would mean cloning a full frame per annotation, which is precisely what a per-frame overlay cannot afford.
+ * Instead the mutation is made obvious in the names: everything here is `drawSomething` or `fillSomething`
+ * and returns `Unit`, so no call site can mistake one for a pure transform.
+ *
+ * These live in `core`, not in a GUI module, and reference nothing from highgui or JavaFX. Drawing is
+ * ordinary raster work: annotating detections before `imwrite`, rendering a mask, burning a timestamp into a
+ * recorded frame — all of which happen on machines with no display. A `draw` module would only have split
+ * `core` in two along a line that does not exist.
+ *
+ * They also give [[LineType]] and [[Font]] their only consumers, and are how the typed results of the Hough
+ * transforms ([[Segment]]) and of `findContours` ([[Contour]]) get rendered.
+ */
 
 /** How wide a stroke is, or that a shape is filled instead.
   *

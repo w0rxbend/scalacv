@@ -4,13 +4,13 @@ import org.opencv.core.Core
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 
-/** Typed replacements for OpenCV's raw int constants.
-  *
-  * Six of these are genuine enumerations. Three are not, and modelling them as `enum` would make correct code
-  * unrepresentable — `THRESH_BINARY | THRESH_OTSU` is the ordinary way to ask for Otsu's method, and
-  * `IMREAD_COLOR | IMREAD_IGNORE_ORIENTATION` is likewise a combination, not a choice. Those three get a
-  * mode-plus-modifiers shape instead. See ROADMAP §4 B4a/B4b.
-  */
+/* Typed replacements for OpenCV's raw int constants.
+ *
+ * Six of these are genuine enumerations. Three are not, and modelling them as `enum` would make correct code
+ * unrepresentable — `THRESH_BINARY | THRESH_OTSU` is the ordinary way to ask for Otsu's method, and
+ * `IMREAD_COLOR | IMREAD_IGNORE_ORIENTATION` is likewise a combination, not a choice. Those three get a
+ * mode-plus-modifiers shape instead. See ROADMAP §4 B4a/B4b.
+ */
 
 /** Colour space conversions. A true enumeration. */
 enum ColorConversion(val cvValue: Int):
