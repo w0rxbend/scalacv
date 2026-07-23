@@ -13,7 +13,7 @@ export default defineConfig({
     logo: '/logo.svg',
     nav: [
       { text: 'Getting Started', link: '/getting-started' },
-      { text: 'Concepts', link: '/mat-lifecycle' },
+      { text: 'Image API', link: '/image-api' },
       { text: 'Cookbook', link: '/cookbook' },
       // Scaladoc lives under public/api/{core,zio}, populated by the Docs workflow
       // (./mill core.docJar zio.docJar → unzip). These are static HTML, not VitePress
@@ -31,12 +31,32 @@ export default defineConfig({
         { text: 'What is scalacv', link: '/' },
         { text: 'Getting Started', link: '/getting-started' }
       ]},
-      { text: 'Concepts', items: [
-        { text: 'Mat lifecycle', link: '/mat-lifecycle' },
+      { text: 'The high-level API', items: [
+        { text: 'The Image API', link: '/image-api' },
+        { text: 'Cookbook', link: '/cookbook' }
+      ]},
+      { text: 'The OpenCV surface', items: [
+        { text: 'Reading & writing images', link: '/image-io' },
+        { text: 'Image processing', link: '/image-processing' },
+        { text: 'Drawing & annotation', link: '/drawing' },
+        { text: 'Geometry & typed values', link: '/geometry' },
+        { text: 'Contours & shape analysis', link: '/contours' },
+        { text: 'Hough transforms', link: '/hough' }
+      ]},
+      { text: 'Detection & deep learning', items: [
+        { text: 'Object detection', link: '/object-detection' },
+        { text: 'Deep learning (DNN)', link: '/dnn' }
+      ]},
+      { text: 'Video & runtime', items: [
+        { text: 'Video I/O', link: '/video' },
         { text: 'The native cache', link: '/native-cache' }
       ]},
-      { text: 'Guides', items: [
-        { text: 'Cookbook', link: '/cookbook' },
+      { text: 'Concepts', items: [
+        { text: 'Mat lifecycle & resource safety', link: '/mat-lifecycle' },
+        { text: 'The error model', link: '/error-model' },
+        { text: 'Working with the raw OpenCV API', link: '/low-level' }
+      ]},
+      { text: 'Integrations', items: [
         { text: 'ZIO', link: '/zio' }
       ]}
     ],

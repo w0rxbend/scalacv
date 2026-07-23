@@ -43,15 +43,32 @@ import scalacv.*
 OpenCv.load()
 ```
 
-## Your first operation
+## Your first pipeline
 
-Everything is typed. No raw int constants:
+The high-level [`Image`](/image-api) API reads, transforms and writes in a single chain — every
+intermediate is freed for you:
+
+```scala mdoc:compile-only
+Image.read("photo.jpg").flatMap(_.gray.blur(2).canny(80, 160).write("edges.png"))
+```
+
+Here it is end to end on a scene we draw ourselves, so it runs with no image file:
+
+```scala mdoc:silent
+val edges: Either[CvError, Array[Byte]] =
+  Image
+    .blank(160, 120, Scalar.White)
+    .drawRect(Rect(30, 30, 90, 60), Scalar.Black)
+    .gray
+    .canny(50, 150)
+    .bytes(".png")
+```
+
+Everything is typed — no raw `int` constants anywhere:
 
 ```scala mdoc
 ColorConversion.BgrToGray.cvValue
 ```
 
-```scala mdoc
-import scalacv.Threshold
-Threshold.otsu().computesThreshold
-```
+Next: the full [Image API](/image-api) for the high-level story, [Image processing](/image-processing)
+for the operation catalogue, or [Working with the raw OpenCV API](/low-level) to drop to the bindings.
