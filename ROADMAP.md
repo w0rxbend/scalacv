@@ -345,7 +345,7 @@ Two smaller corrections that change task definitions.
 ### Track A — Build resurrection 🏗️
 
 - [x] A1 · Delete sbt scaffolding: `build.sbt`, `project/build.properties`, `project/site.sbt`, `project/`
-- [ ] A2 · Delete `lib/opencv-300.jar` + `lib/` (292 KB of OpenCV 3.0.0-rc1 JNI stubs, zero natives, BSD notice stripped)
+- [x] A2 · Delete `lib/opencv-300.jar` + `lib/` (292 KB of OpenCV 3.0.0-rc1 JNI stubs, zero natives, BSD notice stripped)
 - [ ] A3 · Delete `.github/unicorns` (byte-identical dupe of `.mergify.yml`), `.mergify.yml`, `.whitesource`
 - [ ] A4 · `./mill` bootstrap script + `.mill-version` = `1.1.7`
 - [ ] A5 · `build.mill`: header `//| mill-version: 1.1.7` + **`//| mill-jvm-version: zulu:25`**; modules `core` / `zio` / `examples` / `examples-gui`; Scala 3.3.8; `-java-output-version 17`; `-Wunused:all` (required by scalafix `OrganizeImports.removeUnused`); `forkArgs = Seq("--enable-native-access=ALL-UNNAMED", "-Djava.awt.headless=true")`
