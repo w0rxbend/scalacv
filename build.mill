@@ -51,6 +51,15 @@ object Deps {
     * with zero `org/opencv/` classes. And `libopencv_core` has a NEEDED on `libopenblas.so.0`,
     * which ships only in openblas's own classifier jar. See ROADMAP §3.9.
     */
+  /** JVM flags every module that touches natives needs.
+    *
+    * `--enable-native-access` silences the JEP 472 warning that System.load now emits.
+    * `--sun-misc-unsafe-memory-access=allow` silences four lines that scala3-library 3.3.8's
+    * LazyVals$ provokes on JDK 24+ — a direct consequence of pairing D2 (publish on the LTS)
+    * with D10 (build on 25). Cosmetic, but it would otherwise preface every example run.
+    */
+  val runtimeJvmArgs = Seq("--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow")
+
   val opencvNatives = Seq(
     opencvApi,
     mvn"org.bytedeco:opencv:$opencv;classifier=$platform",
@@ -92,7 +101,7 @@ trait ScalacvTests extends TestModule.Munit {
    * reporting is chatty on stderr. Forking keeps a crashed native call from taking the
    * whole test run with it, and headless=true makes a GUI-toolkit regression fail loudly
    * rather than silently opening a window on a developer machine. */
-  def forkArgs = Seq("--enable-native-access=ALL-UNNAMED", "-Djava.awt.headless=true")
+  def forkArgs = Deps.runtimeJvmArgs :+ "-Djava.awt.headless=true"
 }
 
 /** Everything that ships to Maven Central.
@@ -154,7 +163,7 @@ object zio extends ScalacvPublishModule {
 object examples extends ScalacvModule {
   def moduleDeps = Seq(core, zio)
   def mvnDeps    = Deps.opencvNatives
-  def forkArgs   = Seq("--enable-native-access=ALL-UNNAMED", "-Djava.awt.headless=true")
+  def forkArgs   = Deps.runtimeJvmArgs :+ "-Djava.awt.headless=true"
 }
 
 /** JavaFX examples. Deliberately excluded from CI and never published: OpenJFX resolves
@@ -168,5 +177,5 @@ object `examples-gui` extends ScalacvModule {
     mvn"org.openjfx:javafx-graphics:26.0.2",
     mvn"org.openjfx:javafx-controls:26.0.2"
   )
-  def forkArgs = Seq("--enable-native-access=ALL-UNNAMED")
+  def forkArgs = Deps.runtimeJvmArgs
 }

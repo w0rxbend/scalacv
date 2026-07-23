@@ -354,7 +354,7 @@ Two smaller corrections that change task definitions.
 - [x] A6b · `core`'s POM depends on the classifier-less `org.bytedeco:opencv:4.13.0-1.5.13` alone. **Gate:** inspect the generated POM, not the build classpath
 - [x] A7 · `.gitignore` rewritten for Mill (`out/`, `.bloop/`, `.bsp/`, `.metals/`, `.scala-build/`)
 - [x] A8 · `.scalafmt.conf` (`version = 3.11.4`, `runner.dialect = scala3`) + `.scalafix.conf` (`OrganizeImports`, `targetDialect = Scala3`) via `//| mvnDeps: ["com.goyeau::mill-scalafix::0.6.2"]`, mixing `ScalafixModule` into `ScalacvModule`. **Verified gate commands:** `./mill __.fix --check` and `./mill mill.scalalib.scalafmt.ScalafmtModule/checkFormatAll` — both exit non-zero on drift. *(Not `__.checkFormat`, which does not resolve; not the bare `mill.javalib.scalafmt/…` path, which tries to parse the `mill` bootstrap script as a build file.)*
-- [ ] A9 · Smoke main that **crosses JNI**: `OpenCv.load()`, then `new Mat(8, 8, CV_8UC3).rows == 8`. `Core.VERSION` is a constant and proves nothing (§3.10)
+- [x] A9 · Smoke main that **crosses JNI**: `OpenCv.load()`, then `new Mat(8, 8, CV_8UC3).rows == 8`. `Core.VERSION` is a constant and proves nothing (§3.10)
 - [ ] A10 · Delete `src/main/scala-2.11/` once Track B lands
 
 **Gate:** `./mill __.compile` green **and** `env -u DISPLAY ./mill examples.runMain …Smoke` allocates a real Mat.
@@ -362,7 +362,7 @@ Two smaller corrections that change task definitions.
 ### Track B — Core API 🧠 (TDD, long pole)
 
 - [ ] B0 · **Error policy, written before any signature** (§3.10): `Either` for data-dependent failures, guards for preconditions, documented `CvException` propagation, one `Cv.attempt` hatch
-- [ ] B1 · `OpenCv.load()` — idempotent, thread-safe, §3.2 recipe incl. per-OS prefix and highgui-tolerance. `CvError.NativesMissing` names the exact dependency line for the detected OS (§3.7). **Failing test first:** `objdetect` reachable with `DISPLAY` unset
+- [x] B1 · `OpenCv.load()` — idempotent, thread-safe, §3.2 recipe incl. per-OS prefix and highgui-tolerance. `CvError.NativesMissing` names the exact dependency line for the detected OS (§3.7). **Failing test first:** `objdetect` reachable with `DISPLAY` unset
 - [ ] B2 · `CvError` ADT + `imread → Either[CvError, Mat]`. `imread` returns an *empty Mat*, never throws; `imwrite` returns `false` for an unwritable path but **throws** `CvException` for an unknown extension — handle all three shapes
 - [ ] B3 · Mat lifecycle: `Mat.use`, `Using.Manager`, `Releasable`. **No reliance on GC-driven reclamation** (finalizer *or* `Cleaner`) — §3.6. Atomic CAS release flag; release is idempotent; post-release use throws
 - [ ] B3b · The other 185 native types (§3.8) — two regimes per D14: `close()` + `Cleaner` by default, `delete(long)` bridge as a gated opt-in that fails loudly when it cannot open. Regime named per class in B10–B13. **Failing test first:** a released `CascadeClassifier` throws rather than SIGSEGVs
