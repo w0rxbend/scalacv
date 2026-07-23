@@ -368,7 +368,7 @@ Two smaller corrections that change task definitions.
 - [x] A7 · `.gitignore` rewritten for Mill (`out/`, `.bloop/`, `.bsp/`, `.metals/`, `.scala-build/`)
 - [x] A8 · `.scalafmt.conf` (`version = 3.11.4`, `runner.dialect = scala3`) + `.scalafix.conf` (`OrganizeImports`, `targetDialect = Scala3`) via `//| mvnDeps: ["com.goyeau::mill-scalafix::0.6.2"]`, mixing `ScalafixModule` into `ScalacvModule`. **Verified gate commands:** `./mill __.fix --check` and `./mill mill.scalalib.scalafmt.ScalafmtModule/checkFormatAll` — both exit non-zero on drift. *(Not `__.checkFormat`, which does not resolve; not the bare `mill.javalib.scalafmt/…` path, which tries to parse the `mill` bootstrap script as a build file.)*
 - [x] A9 · Smoke main that **crosses JNI**: `OpenCv.load()`, then `new Mat(8, 8, CV_8UC3).rows == 8`. `Core.VERSION` is a constant and proves nothing (§3.10)
-- [ ] A10 · Delete `src/main/scala-2.11/` once Track B lands
+- [x] A10 · Delete `src/main/scala-2.11/` once Track B lands
 
 **Gate:** `./mill __.compile` green **and** `env -u DISPLAY ./mill examples.runMain …Smoke` allocates a real Mat.
 
@@ -438,11 +438,11 @@ Two smaller corrections that change task definitions.
 
 - [x] G1 · CI matrix: JDK 17 + 21 + 25 × ubuntu, plus **macos-14 (arm64) and windows-latest** smoke legs. Per-rung JVM via `def jvmId` driven by an env var — `setup-java` cannot steer Mill (§2). Each leg asserts its own `java.version`
 - [x] G2 · compile / test / `./mill __.fix --check` / `./mill mill.scalalib.scalafmt.ScalafmtModule/checkFormatAll` / **`./mill docs.mdocCheck`** · [ ] G3 · coursier cache action
-- [ ] G4 · Headless-safe: no HighGUI, no JavaFX in CI-built modules; `Hardware`/`Gui` tags auto-skip
-- [ ] G5 · Tag-driven Sonatype Central release scaffold (secrets as marked TODOs); register the `com.worxbend` namespace and add its TXT record to the `worxbend.com` zone
-- [ ] G6 · Scala Steward (`mill-plugin` 0.19.1) · Dependabot (github-actions only); note manual `mill-scalafix`/`mill-mima` bumps in CONTRIBUTING
-- [ ] G7 · MiMa armed from `0.2.0` — do not mix in `Mima` before then
-- [ ] G8 · `CHANGELOG.md` + `RELEASING.md` (USER_MANAGED deploy → inspect VALIDATED → publish or DELETE)
+- [x] G4 · Headless-safe: no HighGUI, no JavaFX in CI-built modules; `Hardware`/`Gui` tags auto-skip
+- [x] G5 · Tag-driven Sonatype Central release scaffold (secrets as marked TODOs); register the `com.worxbend` namespace and add its TXT record to the `worxbend.com` zone
+- [x] G6 · Scala Steward (`mill-plugin` 0.19.1) · Dependabot (github-actions only); note manual `mill-scalafix`/`mill-mima` bumps in CONTRIBUTING
+- [x] G7 · MiMa armed from `0.2.0` — do not mix in `Mima` before then
+- [x] G8 · `CHANGELOG.md` + `RELEASING.md` (USER_MANAGED deploy → inspect VALIDATED → publish or DELETE)
 
 **Gate:** CI green on PR; **and** the publish gate — golden-file diff of the generated POM's dependency set, no duplicate `groupId:artifactId`, `./mill resolve "__:PublishModule.publishArtifacts"` lists **exactly two** modules, `versionScheme` present, **and a consumer smoke test** resolving the `publishLocal`'d artifact from a throwaway project on a clean coursier cache and calling `OpenCv.load()`.
 

@@ -1,0 +1,18 @@
+name: Scala Steward
+
+# Opens dependency-update PRs on a schedule. Runs against the repo's own build, so it picks up
+# the version pins in build.mill and the //| mvnDeps header.
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays, 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  scala-steward:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Launch Scala Steward
+        uses: scala-steward-org/scala-steward-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}

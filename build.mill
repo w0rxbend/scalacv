@@ -156,6 +156,11 @@ trait ScalacvPublishModule extends ScalacvModule with PublishModule {
 
   /* Consumers read this to know that 0.x still means breaking changes are allowed. */
   def versionScheme = Task { Some(VersionScheme.EarlySemVer) }
+
+  // MiMa is deliberately NOT mixed in yet (D13/G7). It is armed from 0.2.0: before a prior
+  // release exists, an empty mimaPreviousVersions fails, and 0.1.x under early-semver is allowed
+  // to break anyway. When 0.2.0 approaches, mix in com.github.lolgab.mill.mima.Mima and set
+  // mimaPreviousVersions := Seq("0.1.0").
 }
 
 object core extends ScalacvPublishModule {
