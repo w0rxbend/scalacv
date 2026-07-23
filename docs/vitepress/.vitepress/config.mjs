@@ -14,7 +14,17 @@ export default defineConfig({
     nav: [
       { text: 'Getting Started', link: '/getting-started' },
       { text: 'Concepts', link: '/mat-lifecycle' },
-      { text: 'Cookbook', link: '/cookbook' }
+      { text: 'Cookbook', link: '/cookbook' },
+      // Scaladoc lives under public/api/{core,zio}, populated by the Docs workflow
+      // (./mill core.docJar zio.docJar → unzip). These are static HTML, not VitePress
+      // routes, so link to index.html directly and let the browser navigate out of the SPA.
+      {
+        text: 'API',
+        items: [
+          { text: 'scalacv (core)', link: '/api/core/index.html', target: '_blank' },
+          { text: 'scalacv-zio', link: '/api/zio/index.html', target: '_blank' }
+        ]
+      }
     ],
     sidebar: [
       { text: 'Introduction', items: [

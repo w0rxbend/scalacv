@@ -405,7 +405,7 @@ Two smaller corrections that change task definitions.
 
 ### Track D — Examples 🎨
 
-- [x] D1 · `CannyEdges` (headless, CI-asserted output) · [x] D2 · `FaceDetectHaar` (heritage) · [~] D3 · `FaceDetectYN` (modern — wired via B11; example folded into FaceDetectHaar's pattern)
+- [x] D1 · `CannyEdges` (headless, CI-asserted output) · [x] D2 · `FaceDetectHaar` (heritage) · [x] D3 · `FaceDetectYN` (modern — standalone example: downloads + checksum-verifies the YuNet model, builds a detector, prints each face's box/score/landmarks)
 - [x] D4 · `QrDecode` (headless, CI-asserted) · [x] D5 · `ArucoMarkers` · [x] D6 · `CamFaceDetect` → `examples-gui`, run-only (needs camera + display)
 
 **Gate:** all compile; `CannyEdges` + `QrDecode` produce asserted file output in CI.
@@ -413,11 +413,11 @@ Two smaller corrections that change task definitions.
 ### Track E — Docs microsite 📚
 
 - [x] E1 · mdoc 2.9.1 as a hand-rolled module — `object mdocTool extends ScalaModule { def scalaVersion = "3.3.8"; def mvnDeps = Seq(mvn"org.scalameta::mdoc:2.9.1") }` + a `docs.mdoc` task via `Jvm.callProcess(mainClass = "mdoc.Main", …)` passing `core.runClasspath()` (not `compileClasspath`) as `--classpath`, `stdout/stderr = os.Inherit`, `cwd = Task.dest`. **No Mill 1.x mdoc plugin exists** — atooni/mill-mdoc is archived; quafadas/millSite pins mdoc 2.7.2 and generates Laika
-- [x] E2 · VitePress scaffold, `base: '/scalacv/'` · [ ] E3 · Landing hero + logo
+- [x] E2 · VitePress scaffold, `base: '/scalacv/'` · [x] E3 · Landing hero + logo (`layout: home`, logo, four feature cards)
 - [x] E4 · Getting Started — **the natives section**: table the 5 JVM-reachable classifiers, note the `-gpu` variants, then `opencv-platform` as the it-just-works fallback *with its 408 MB price*. Lead with the classifier recipe
 - [x] E5 · **Mat lifecycle concepts** — lead with §3.6's GC-invisibility argument, not with a finalization claim
-- [x] E6 · Cookbook per example · [ ] E7 · ZIO page · [ ] E8 · 3.x migration note
-- [x] E9 · Pages deploy workflow · [ ] E10 · Publish Scaladoc into `docs/public/api/{core,zio}/`, wired into E9
+- [x] E6 · Cookbook per example · [x] E7 · ZIO page (mdoc-checked `acquireRelease`/`ZStream` snippets) · [x] E8 · 3.x migration note
+- [x] E9 · Pages deploy workflow · [x] E10 · Publish Scaladoc into `docs/vitepress/public/api/{core,zio}/` (Docs workflow runs `core.docJar zio.docJar` → unzip), reachable from the site's **API** nav menu
 - [x] E11 · The `~/.javacpp` cache section: first `OpenCv.load()` writes **~196 MB**; document `-Dorg.bytedeco.javacpp.cachedir=`
 
 **Gate:** site live at `w0rxbend.github.io/scalacv`; `./mill docs.mdocCheck` green in PR CI (G2), not only at deploy time.
@@ -437,7 +437,7 @@ Two smaller corrections that change task definitions.
 ### Track G — CI/CD 🔁
 
 - [x] G1 · CI matrix: JDK 17 + 21 + 25 × ubuntu, plus **macos-14 (arm64) and windows-latest** smoke legs. Per-rung JVM via `def jvmId` driven by an env var — `setup-java` cannot steer Mill (§2). Each leg asserts its own `java.version`
-- [x] G2 · compile / test / `./mill __.fix --check` / `./mill mill.scalalib.scalafmt.ScalafmtModule/checkFormatAll` / **`./mill docs.mdocCheck`** · [ ] G3 · coursier cache action
+- [x] G2 · compile / test / `./mill __.fix --check` / `./mill mill.scalalib.scalafmt.ScalafmtModule/checkFormatAll` / **`./mill docs.mdocCheck`** · [x] G3 · coursier cache action (`coursier/cache-action@v8` in ci/release/docs; scala-steward self-caches)
 - [x] G4 · Headless-safe: no HighGUI, no JavaFX in CI-built modules; `Hardware`/`Gui` tags auto-skip
 - [x] G5 · Tag-driven Sonatype Central release scaffold (secrets as marked TODOs); register the `com.worxbend` namespace and add its TXT record to the `worxbend.com` zone
 - [x] G6 · Scala Steward (`mill-plugin` 0.19.1) · Dependabot (github-actions only); note manual `mill-scalafix`/`mill-mima` bumps in CONTRIBUTING
