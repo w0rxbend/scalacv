@@ -77,13 +77,28 @@ class DrawTest extends munit.FunSuite:
           s"anti-aliased line lit ${Core.countNonZero(soft)} pixels, plain lit ${Core.countNonZero(hard)}"
         )
 
-  test("anti-aliasing is accepted by every shape"):
+  test("anti-aliasing draws the right colour in the right place, for every shape"):
+    // Previously this test had no assertions at all: it passed as long as nothing threw, so every
+    // one of these five calls could have drawn nothing, or the wrong colour, or in the wrong
+    // place. It is also the only coverage drawArrow and Font.Duplex get.
     canvas(channels = 3): m =>
       m.drawRect(Rect(5, 5, 20, 20), Scalar.Green, Thickness.Stroke(2), LineType.AntiAliased)
       m.drawCircle(Point(50, 50), 15, Scalar.Blue, Thickness.Filled, LineType.AntiAliased)
       m.drawArrow(Point(10, 90), Point(90, 90), Scalar.Red, lineType = LineType.AntiAliased)
       m.drawText("ok", Point(60, 20), Scalar.White, Font.Duplex, 0.5, lineType = LineType.AntiAliased)
       m.drawPolyline(Seq(Point(70, 60), Point(90, 60), Point(80, 75)), lineType = LineType.AntiAliased)
+
+      // Mats are BGR, so Scalar.Green is (0, 255, 0) and Scalar.Red is (0, 0, 255).
+      def px(x: Int, y: Int): Seq[Double] = m.get(y, x).toSeq
+      assertEquals(px(50, 50), Seq(255.0, 0.0, 0.0), "the filled circle's centre should be blue")
+      assertEquals(px(5, 15), Seq(0.0, 255.0, 0.0), "the rectangle's left edge should be green")
+      // The shaft is anti-aliased, so it lands near 255 rather than on it (measured: 232).
+      // Assert the channel is dominant instead of pinning a blend value the renderer may tune.
+      val shaft = px(50, 90)
+      assert(shaft(2) > 200, s"the arrow shaft should be strongly red, got $shaft")
+      assertEquals(shaft(0), 0.0, s"the arrow shaft should have no blue, got $shaft")
+      assertEquals(shaft(1), 0.0, s"the arrow shaft should have no green, got $shaft")
+      assert(px(80, 40).forall(_ == 0.0), "a point in no shape should still be background")
 
   test("a filled circle whitens its centre and not its corner"):
     canvas(): m =>

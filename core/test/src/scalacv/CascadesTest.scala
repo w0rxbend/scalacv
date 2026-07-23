@@ -3,7 +3,8 @@ package scalacv
 import java.nio.file.Files
 
 import org.bytedeco.javacpp.Loader
-import org.opencv.core.{CvType, Mat, Scalar as CvScalar}
+import org.opencv.core.{CvType, Mat, Point as CvPoint, Scalar as CvScalar, Size as CvSize}
+import org.opencv.imgproc.Imgproc
 
 /** The point of this suite is the *loud* failure.
   *
@@ -99,3 +100,44 @@ class CascadesTest extends munit.FunSuite:
   /** A grey single-channel image. Fixtures are drawn, never loaded — there is no test image in this repo. */
   private def blank(rows: Int, cols: Int): Mat =
     Mat(rows, cols, CvType.CV_8UC1, CvScalar(128))
+
+  /** Everything else here asserts `Seq.empty` on a blank image, which an implementation of `detect` that
+    * always returned nothing would also satisfy. This is the test that makes the detection path falsifiable:
+    * a crude synthetic face, drawn programmatically so no image asset is needed.
+    */
+  private def syntheticFace(): Mat =
+    val m = Mat(400, 400, CvType.CV_8UC1, CvScalar(60))
+    def ellipse(cx: Int, cy: Int, rx: Int, ry: Int, v: Double): Unit =
+      Imgproc.ellipse(m, CvPoint(cx, cy), CvSize(rx, ry), 0, 0, 360, CvScalar(v), -1)
+    ellipse(200, 200, 90, 120, 200) // face
+    ellipse(170, 160, 18, 10, 20) // eyes
+    ellipse(230, 160, 18, 10, 20)
+    ellipse(200, 205, 10, 25, 120) // nose
+    ellipse(200, 260, 40, 12, 30) // mouth
+    m
+
+  test("detect finds a synthetic face, and minSize filters it out again"):
+    Cascades.load(CascadeName.FrontalFaceAlt) match
+      case Left(e) => fail(s"could not load the frontal-face cascade: ${e.getMessage}")
+      case Right(managed) =>
+        managed.use: classifier =>
+          val face = syntheticFace()
+          try
+            val hits = face.detect(classifier, scaleFactor = 1.05, minNeighbors = 1)
+            assertEquals(hits.size, 1, s"expected exactly one detection, got $hits")
+            val r = hits.head
+            assert(
+              r.x >= 0 && r.y >= 0 && r.x + r.width <= 400 && r.y + r.height <= 400,
+              s"detection escaped the image bounds: $r"
+            )
+
+            // The same call with a minSize larger than the face must drop it. Without this the
+            // 6-arg overload is never exercised and a swapped-argument bug there is invisible.
+            val filtered =
+              face.detect(classifier, scaleFactor = 1.05, minNeighbors = 1, minSize = Some(Size(390, 390)))
+            assertEquals(filtered.size, 0, s"minSize 390x390 should have filtered everything, got $filtered")
+
+            val kept =
+              face.detect(classifier, scaleFactor = 1.05, minNeighbors = 1, minSize = Some(Size(10, 10)))
+            assertEquals(kept.size, 1, s"minSize 10x10 should have kept the face, got $kept")
+          finally face.release()

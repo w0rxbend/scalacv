@@ -3,38 +3,38 @@ package scalacv
 import org.opencv.core.{Core, CvType, Mat}
 import org.opencv.imgproc.Imgproc
 
-/** Imgproc and Core operations as extension methods on [[org.opencv.core.Mat]].
-  *
-  * ==The ownership contract==
-  *
-  * Every operation in this file is **pure with respect to its receiver**: it allocates a fresh destination
-  * Mat, writes the result there, and hands that back as a `Managed[Mat]` that the **caller now owns and must
-  * release**. The receiver is never written to, never released, and never aliased into the result — the two
-  * Mats have different `dataAddr()`s, so releasing one cannot invalidate the other. Nothing here takes
-  * ownership of the receiver either, which is why an op can be applied to a borrowed Mat (a video frame, a
-  * detector's input) without any transfer-of-ownership ceremony at the call site. There are no in-place
-  * variants; if one is ever added it will say so in its name and return `Unit`, so that a mutating call can
-  * never be mistaken for a pure one at a glance.
-  *
-  * The corollary is that a two-step pipeline written naively strands a Mat:
-  *
-  * {{{
-  * val edges = src.gaussianBlur(Size(5, 5), 1.5).use(_.canny(50, 150)) // the blur output is freed,
-  *                                                                     // but `use` returns a Mat that
-  *                                                                     // outlives its own Managed
-  * }}}
-  *
-  * [[pipe]] exists for exactly that shape: it feeds the intermediate to the next stage and releases it once
-  * that stage has produced its own output, so the intermediate cannot be leaked and cannot be used after the
-  * chain moves on. [[Mats.chain]] is the n-stage form. See ROADMAP §4 B6.
-  *
-  * ==Errors==
-  *
-  * Preconditions that are programmer errors (an even Gaussian kernel, a zero target size) are `require`d and
-  * throw [[IllegalArgumentException]]. Everything OpenCV itself rejects arrives as a `CvException` from
-  * native code and is rethrown as [[CvError.NativeCall]] naming the operation — see [[Cv]]. In that case the
-  * half-built destination Mat is released before the throw propagates, so a failed op leaks nothing.
-  */
+/* Imgproc and Core operations as extension methods on [[org.opencv.core.Mat]].
+ *
+ * ==The ownership contract==
+ *
+ * Every operation in this file is **pure with respect to its receiver**: it allocates a fresh destination
+ * Mat, writes the result there, and hands that back as a `Managed[Mat]` that the **caller now owns and must
+ * release**. The receiver is never written to, never released, and never aliased into the result — the two
+ * Mats have different `dataAddr()`s, so releasing one cannot invalidate the other. Nothing here takes
+ * ownership of the receiver either, which is why an op can be applied to a borrowed Mat (a video frame, a
+ * detector's input) without any transfer-of-ownership ceremony at the call site. There are no in-place
+ * variants; if one is ever added it will say so in its name and return `Unit`, so that a mutating call can
+ * never be mistaken for a pure one at a glance.
+ *
+ * The corollary is that a two-step pipeline written naively strands a Mat:
+ *
+ * {{{
+ * val edges = src.gaussianBlur(Size(5, 5), 1.5).use(_.canny(50, 150)) // the blur output is freed,
+ *                                                                     // but `use` returns a Mat that
+ *                                                                     // outlives its own Managed
+ * }}}
+ *
+ * [[pipe]] exists for exactly that shape: it feeds the intermediate to the next stage and releases it once
+ * that stage has produced its own output, so the intermediate cannot be leaked and cannot be used after the
+ * chain moves on. [[Mats.chain]] is the n-stage form. See ROADMAP §4 B6.
+ *
+ * ==Errors==
+ *
+ * Preconditions that are programmer errors (an even Gaussian kernel, a zero target size) are `require`d and
+ * throw [[IllegalArgumentException]]. Everything OpenCV itself rejects arrives as a `CvException` from
+ * native code and is rethrown as [[CvError.NativeCall]] naming the operation — see [[Cv]]. In that case the
+ * half-built destination Mat is released before the throw propagates, so a failed op leaks nothing.
+ */
 
 /** The destination depth for the derivative operators.
   *

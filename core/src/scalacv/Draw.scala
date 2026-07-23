@@ -204,8 +204,8 @@ extension (mat: Mat)
       thickness: Thickness.Stroke = Thickness.Default,
       lineType: LineType = LineType.Connected8
   ): Unit =
+    DrawOps.requireDrawable(mat, "drawPolyline")
     if points.nonEmpty then
-      DrawOps.requireDrawable(mat, "drawPolyline")
       DrawOps.withPolygons(Seq(points)): polys =>
         Cv.orThrow("polylines")(
           Imgproc.polylines(mat, polys, closed, color.toCv, thickness.cvValue, lineType.cvValue)
@@ -220,8 +220,8 @@ extension (mat: Mat)
       color: Scalar = Scalar.White,
       lineType: LineType = LineType.Connected8
   ): Unit =
+    DrawOps.requireDrawable(mat, "fillPolygon")
     if points.nonEmpty then
-      DrawOps.requireDrawable(mat, "fillPolygon")
       DrawOps.withPolygons(Seq(points)): polys =>
         Cv.orThrow("fillPoly")(Imgproc.fillPoly(mat, polys, color.toCv, lineType.cvValue))
 
@@ -236,9 +236,9 @@ extension (mat: Mat)
       thickness: Thickness = Thickness.Default,
       lineType: LineType = LineType.Connected8
   ): Unit =
+    DrawOps.requireDrawable(mat, "drawContours")
     val outlines = contours.map(_.points).filter(_.nonEmpty)
     if outlines.nonEmpty then
-      DrawOps.requireDrawable(mat, "drawContours")
       DrawOps.withPolygons(outlines): polys =>
         // -1 draws all of them; there is no per-contour call to make in a loop.
         Cv.orThrow("drawContours")(
@@ -255,9 +255,8 @@ extension (mat: Mat)
       thickness: Thickness.Stroke = Thickness.Default,
       lineType: LineType = LineType.Connected8
   ): Unit =
-    if segments.nonEmpty then
-      DrawOps.requireDrawable(mat, "drawSegments")
-      segments.foreach(s => mat.drawLine(s.start, s.end, color, thickness, lineType))
+    DrawOps.requireDrawable(mat, "drawSegments")
+    if segments.nonEmpty then segments.foreach(s => mat.drawLine(s.start, s.end, color, thickness, lineType))
 
 /** File-private helpers. Wrapped in an object rather than left top-level so their names cannot collide with
   * another file's package-private definitions.
@@ -272,13 +271,23 @@ private object DrawOps:
     require(!mat.empty(), s"$op needs an image with data; this Mat is empty")
 
   /** Materialises Scala point lists as the `java.util.List[MatOfPoint]` OpenCV's polygon calls demand, and
-    * frees every one of them afterwards.
+    * frees the ones it allocated.
     *
-    * Each `MatOfPoint` is a native allocation that the drawing call does not take ownership of — the leak
-    * this hides is small per call and unbounded per frame in a video loop. `finally`, not a trailing
-    * statement: a `CvException` from the draw is exactly when the cleanup is most likely to be skipped.
+    * Each `MatOfPoint` is a native allocation the drawing call does not take ownership of, so releasing them
+    * is ours to do. `finally`, not a trailing statement: a `CvException` from the draw is exactly when the
+    * cleanup is most likely to be skipped. The list is built incrementally inside the `try` so that a failure
+    * partway through still releases what was already allocated.
+    *
+    * **This does not make the call leak-free, and it would be dishonest to claim otherwise.** The generated
+    * Java binding for `polylines`, `fillPoly` and `drawContours` runs the input through
+    * `Converters.vector_vector_Point_to_Mat`, which allocates one `Mat` per polygon plus one more for the
+    * outer vector and releases none of them. That residue is upstream in the official Java API and cannot be
+    * fixed from here without reimplementing the converter. It is bounded per call but, like everything else
+    * in this class of bug, unbounded across a video loop.
     */
   def withPolygons[A](polygons: Seq[Seq[Point]])(f: java.util.List[MatOfPoint] => A): A =
-    val mats = polygons.map(points => MatOfPoint(points.map(_.toCv)*))
-    try f(mats.asJava)
+    val mats = scala.collection.mutable.ListBuffer.empty[MatOfPoint]
+    try
+      polygons.foreach(points => mats += MatOfPoint(points.map(_.toCv)*))
+      f(mats.toList.asJava)
     finally mats.foreach(_.release())

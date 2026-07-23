@@ -32,7 +32,7 @@ final case class Contour(points: Seq[Point]):
     *
     * An empty contour yields a zero rect instead of reaching native code, which would throw.
     */
-  def boundingRect: Rect =
+  lazy val boundingRect: Rect =
     if isEmpty then Rect(0, 0, 0, 0)
     else withPointMat(m => Rect.from(Cv.orThrow("boundingRect")(Imgproc.boundingRect(m))))
 
@@ -43,7 +43,7 @@ final case class Contour(points: Seq[Point]):
     * Mat reports 99 x 49 = 4851. Always non-negative — the signed variant is deliberately not exposed, since
     * its sign reports point ordering rather than anything about the shape.
     */
-  def area: Double =
+  lazy val area: Double =
     if isEmpty then 0.0
     else withPointMat(m => Cv.orThrow("contourArea")(Imgproc.contourArea(m)))
 
@@ -52,7 +52,7 @@ final case class Contour(points: Seq[Point]):
     * Closed is the only sensible default for something `findContours` produced: those are always closed
     * curves, and asking for the open length of one silently drops the final edge.
     */
-  def perimeter: Double =
+  lazy val perimeter: Double =
     if isEmpty then 0.0
     else
       // arcLength takes MatOfPoint2f specifically, not the MatOfPoint the other two accept.
