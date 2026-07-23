@@ -353,7 +353,7 @@ Two smaller corrections that change task definitions.
 - [x] A6 · OpenCV deps — **three coordinates per platform** (§3.9), `$plat` from `Loader.getPlatform()`. Classifier deps go **only** on non-`PublishModule`s and test modules; **never** in `core.runMvnDeps` (it propagates into the POM classifier-stripped)
 - [x] A6b · `core`'s POM depends on the classifier-less `org.bytedeco:opencv:4.13.0-1.5.13` alone. **Gate:** inspect the generated POM, not the build classpath
 - [x] A7 · `.gitignore` rewritten for Mill (`out/`, `.bloop/`, `.bsp/`, `.metals/`, `.scala-build/`)
-- [ ] A8 · `.scalafmt.conf` (`version = 3.11.4`, `runner.dialect = scala3`) + scalafix via `//| mvnDeps: ["com.goyeau::mill-scalafix::0.6.2"]`, mixing `ScalafixModule` into every `ScalaModule`. Task is `fix`; CI gate is `./mill __.fix --check`
+- [x] A8 · `.scalafmt.conf` (`version = 3.11.4`, `runner.dialect = scala3`) + `.scalafix.conf` (`OrganizeImports`, `targetDialect = Scala3`) via `//| mvnDeps: ["com.goyeau::mill-scalafix::0.6.2"]`, mixing `ScalafixModule` into `ScalacvModule`. **Verified gate commands:** `./mill __.fix --check` and `./mill mill.scalalib.scalafmt.ScalafmtModule/checkFormatAll` — both exit non-zero on drift. *(Not `__.checkFormat`, which does not resolve; not the bare `mill.javalib.scalafmt/…` path, which tries to parse the `mill` bootstrap script as a build file.)*
 - [ ] A9 · Smoke main that **crosses JNI**: `OpenCv.load()`, then `new Mat(8, 8, CV_8UC3).rows == 8`. `Core.VERSION` is a constant and proves nothing (§3.10)
 - [ ] A10 · Delete `src/main/scala-2.11/` once Track B lands
 
@@ -424,7 +424,7 @@ Two smaller corrections that change task definitions.
 ### Track G — CI/CD 🔁
 
 - [ ] G1 · CI matrix: JDK 17 + 21 + 25 × ubuntu, plus **macos-14 (arm64) and windows-latest** smoke legs. Per-rung JVM via `def jvmId` driven by an env var — `setup-java` cannot steer Mill (§2). Each leg asserts its own `java.version`
-- [ ] G2 · compile / test / `./mill __.fix --check` / scalafmt-check / **`./mill docs.mdocCheck`** · [ ] G3 · coursier cache action
+- [ ] G2 · compile / test / `./mill __.fix --check` / `./mill mill.scalalib.scalafmt.ScalafmtModule/checkFormatAll` / **`./mill docs.mdocCheck`** · [ ] G3 · coursier cache action
 - [ ] G4 · Headless-safe: no HighGUI, no JavaFX in CI-built modules; `Hardware`/`Gui` tags auto-skip
 - [ ] G5 · Tag-driven Sonatype Central release scaffold (secrets as marked TODOs); register the `com.worxbend` namespace and add its TXT record to the `worxbend.com` zone
 - [ ] G6 · Scala Steward (`mill-plugin` 0.19.1) · Dependabot (github-actions only); note manual `mill-scalafix`/`mill-mima` bumps in CONTRIBUTING

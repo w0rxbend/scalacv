@@ -5,19 +5,18 @@ import org.w3c.dom.Element
 
 /** Guards the published dependency set.
   *
-  * This exists because the failure it catches is invisible from inside the build. Mill 1.1.7's
-  * publish model has no classifier field at all, so a `;classifier=` dependency is silently
-  * dropped from the generated POM. Our own CI compiles from source, where the classifier *does*
-  * apply, so everything stays green while consumers resolve an artifact with no natives and die
-  * at their first `OpenCv.load()`.
+  * This exists because the failure it catches is invisible from inside the build. Mill 1.1.7's publish model
+  * has no classifier field at all, so a `;classifier=` dependency is silently dropped from the generated POM.
+  * Our own CI compiles from source, where the classifier *does* apply, so everything stays green while
+  * consumers resolve an artifact with no natives and die at their first `OpenCv.load()`.
   *
-  * The assertions are therefore about what `core`'s POM says, not about whether the build works.
-  * Note what is deliberately NOT asserted: "the POM contains no <classifier>". `Pom.scala`
-  * cannot emit one, so that assertion would pass forever without testing anything.
+  * The assertions are therefore about what `core`'s POM says, not about whether the build works. Note what is
+  * deliberately NOT asserted: "the POM contains no <classifier>". `Pom.scala` cannot emit one, so that
+  * assertion would pass forever without testing anything.
   *
-  * Parsed with the JDK's own parser rather than scala-xml on purpose: scala-xml 2.4.0 for
-  * Scala 3 drags scala3-library 3.7.4 onto the classpath, and a library whose whole version
-  * argument (D2) is about not mixing TASTy versions should not do that in its own test suite.
+  * Parsed with the JDK's own parser rather than scala-xml on purpose: scala-xml 2.4.0 for Scala 3 drags
+  * scala3-library 3.7.4 onto the classpath, and a library whose whole version argument (D2) is about not
+  * mixing TASTy versions should not do that in its own test suite.
   *
   * See ROADMAP §3.7 and §3.9.
   */
@@ -26,7 +25,7 @@ class PublishedPomTest extends munit.FunSuite:
   private def pom: java.io.File =
     sys.props.get("scalacv.pom").map(java.io.File(_)).filter(_.isFile) match
       case Some(f) => f
-      case None    => fail("core.pom was not generated; run this via `./mill core.test`")
+      case None => fail("core.pom was not generated; run this via `./mill core.test`")
 
   private lazy val doc =
     val f = DocumentBuilderFactory.newInstance()

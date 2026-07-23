@@ -1,11 +1,13 @@
 //| mill-version: 1.1.7
 //| mill-jvm-version: zulu:25
+//| mvnDeps: ["com.goyeau::mill-scalafix::0.6.2"]
 
 package build
 
 import mill.*, scalalib.*
 import mill.javalib.publish.*
 import mill.util.VcsVersion
+import com.goyeau.mill.scalafix.ScalafixModule
 
 object Deps {
   val opencv   = "4.13.0-1.5.13"
@@ -66,7 +68,7 @@ object Deps {
   * both `JAVA_HOME` and `MILL_JVM_VERSION` when it runs modules, so the header is the only
   * thing that actually selects a JDK — `actions/setup-java` cannot. See ROADMAP §2.
   */
-trait ScalacvModule extends ScalaModule {
+trait ScalacvModule extends ScalaModule with ScalafixModule {
   def scalaVersion = "3.3.8"
 
   def scalacOptions = Seq(
