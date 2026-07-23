@@ -1,0 +1,48 @@
+scalacv
+Copyright 2026 w0rxbend
+
+This product includes software developed at https://github.com/w0rxbend/scalacv
+and is licensed under the Apache License, Version 2.0. See LICENSE.
+
+--------------------------------------------------------------------------------
+Lineage
+--------------------------------------------------------------------------------
+
+scalacv began in 2015 as `mcallisto/scalacv` by Mario Càllisto
+(https://github.com/mcallisto), a Scala 2.11 wrapper over the OpenCV 3.0 Java
+API. That repository carried no license file, and neither did this fork before
+2026 — so the original work remained all rights reserved.
+
+The present library is therefore a clean-room rewrite. It shares no code with
+the 2015 sources: the effect model, the module layout and the underlying Java
+API all changed, and every call site was rewritten. The lineage is recorded here
+because it is a fact about where the project came from, and because the original
+author's work is why it exists at all — not because any code survives.
+
+Two of the 2015 example programs descended in turn from:
+
+  * rladstaetter/isight-java  — https://github.com/rladstaetter/isight-java
+  * chimpler/blog-scala-javacv — https://github.com/chimpler/blog-scala-javacv
+
+Both are likewise unlicensed. No code from either is present here.
+
+--------------------------------------------------------------------------------
+Third-party components
+--------------------------------------------------------------------------------
+
+This product depends on, but does not redistribute, the following. Their
+licenses and provenance are recorded in THIRD-PARTY.md.
+
+  * OpenCV — https://opencv.org
+    Apache License 2.0 (from OpenCV 4.5.0 onward; 3-clause BSD before that).
+    Copyright (C) 2000-2024, Intel Corporation, all rights reserved.
+    Copyright (C) 2009-2011, Willow Garage Inc., all rights reserved.
+
+  * JavaCPP Presets for OpenCV — https://github.com/bytedeco/javacpp-presets
+    Apache License 2.0. Copyright (C) 2013-2026 Samuel Audet.
+
+  * OpenBLAS — https://www.openblas.net
+    3-clause BSD. Copyright (c) 2011-2014, The OpenBLAS Project.
+
+Haar and LBP cascade classifier data, when resolved at runtime from the OpenCV
+distribution, carries its own notice requirements. See THIRD-PARTY.md.

@@ -413,8 +413,8 @@ Two smaller corrections that change task definitions.
 
 - [ ] F1a · **Send the relicense request** (named sender, 21-day window). Does *not* block Track B — clean-room is the working assumption per D11 (§3.4)
 - [ ] F1b · Transcribe any grant received into `NOTICE`
-- [ ] F2 · `LICENSE` (Apache-2.0) · [ ] F3 · `NOTICE` (mcallisto lineage, Intel/Willow Garage and Shiqi Yu cascade notices kept distinct, isight-java + chimpler credits)
-- [ ] F4 · `THIRD-PARTY.md` — per-asset provenance: URL, branch, SHA-256, fetch date, **SPDX id, notice-required?**
+- [x] F2 · `LICENSE` (Apache-2.0) · [x] F3 · `NOTICE` (mcallisto lineage, Intel/Willow Garage and Shiqi Yu cascade notices kept distinct, isight-java + chimpler credits)
+- [x] F4 · `THIRD-PARTY.md` — per-asset provenance: URL, branch, SHA-256, fetch date, **SPDX id, notice-required?**
 - [ ] F5 · SVG logo, light/dark `<picture>` variants
 - [ ] F6 · README: logo → badges → ✨ Features → 🚀 Quick start (**including the natives line**) → 🧠 Why → 📚 Docs → 🗺️ Roadmap → 🤝 Contributing → ⚖️ License. Coordinates are `com.worxbend::scalacv`. **The three heritage credit links survive verbatim.**
 - [ ] F7 · CONTRIBUTING, CoC, issue templates
