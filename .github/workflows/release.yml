@@ -28,7 +28,7 @@ jobs:
 
       - name: Guard — exactly two modules may publish
         run: |
-          n=$(./mill resolve "__:PublishModule.publishArtifacts" | grep -c publishArtifacts)
+          n=$(./mill resolve "__:PublishModule.publishArtifacts" | grep -cE "^[a-z][a-zA-Z0-9-]*\.publishArtifacts$")
           echo "publishable modules: $n"
           test "$n" -eq 2
 

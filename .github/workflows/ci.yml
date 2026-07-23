@@ -101,7 +101,7 @@ jobs:
         # examples and examples-gui must never reach Central; examples-gui's OpenJFX
         # resolves per-host and would be wrong for everyone who downloaded it.
         run: |
-          modules=$(./mill resolve "__:PublishModule.publishArtifacts" | grep -c publishArtifacts)
+          modules=$(./mill resolve "__:PublishModule.publishArtifacts" | grep -cE "^[a-z][a-zA-Z0-9-]*\.publishArtifacts$")
           echo "publishable modules: $modules"
           test "$modules" -eq 2
 
