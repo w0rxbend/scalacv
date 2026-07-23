@@ -361,11 +361,11 @@ Two smaller corrections that change task definitions.
 
 ### Track B — Core API 🧠 (TDD, long pole)
 
-- [ ] B0 · **Error policy, written before any signature** (§3.10): `Either` for data-dependent failures, guards for preconditions, documented `CvException` propagation, one `Cv.attempt` hatch
+- [x] B0 · **Error policy, written before any signature** (§3.10): `Either` for data-dependent failures, guards for preconditions, documented `CvException` propagation, one `Cv.attempt` hatch
 - [x] B1 · `OpenCv.load()` — idempotent, thread-safe, §3.2 recipe incl. per-OS prefix and highgui-tolerance. `CvError.NativesMissing` names the exact dependency line for the detected OS (§3.7). **Failing test first:** `objdetect` reachable with `DISPLAY` unset
 - [ ] B2 · `CvError` ADT + `imread → Either[CvError, Mat]`. `imread` returns an *empty Mat*, never throws; `imwrite` returns `false` for an unwritable path but **throws** `CvException` for an unknown extension — handle all three shapes
-- [ ] B3 · Mat lifecycle: `Mat.use`, `Using.Manager`, `Releasable`. **No reliance on GC-driven reclamation** (finalizer *or* `Cleaner`) — §3.6. Atomic CAS release flag; release is idempotent; post-release use throws
-- [ ] B3b · The other 185 native types (§3.8) — two regimes per D14: `close()` + `Cleaner` by default, `delete(long)` bridge as a gated opt-in that fails loudly when it cannot open. Regime named per class in B10–B13. **Failing test first:** a released `CascadeClassifier` throws rather than SIGSEGVs
+- [x] B3 · Mat lifecycle: `Mat.use`, `Using.Manager`, `Releasable`. **No reliance on GC-driven reclamation** (finalizer *or* `Cleaner`) — §3.6. Atomic CAS release flag; release is idempotent; post-release use throws
+- [x] B3b · The other 185 native types (§3.8) — two regimes per D14: `close()` + `Cleaner` by default, `delete(long)` bridge as a gated opt-in that fails loudly when it cannot open. Regime named per class in B10–B13. **Failing test first:** a released `CascadeClassifier` throws rather than SIGSEGVs
 - [ ] B4a · Six true enums with `cvValue: Int` — `ColorConversion`, `InterpolationFlag`, `LineType`, `HersheyFont`, `ContourRetrieval`, `ContourApproximation`
 - [ ] B4b · The three that are **bitmask sets, not enums**: `ImreadFlag` and `ThresholdType` as mode + modifier constructors (`enum X(cvValue: Int)` cannot express `THRESH_BINARY | THRESH_OTSU`); `BorderType` plain with `ISOLATED` deferred; `THRESH_MASK` never exposed
 - [ ] B5 · Geometry value types — `Rect`, `Point`, `Size`, `Scalar` copied out at the native boundary; plus `Depth`/`MatType` delegating to `CvType.makeType`, and the submat/ROI aliasing contract
@@ -496,4 +496,4 @@ Recorded rather than deleted, so they are not re-added by someone reading an old
 | Track B: "API surface dump **reviewed by you**" | Not a command; cannot fail in CI. Replaced with B17's committed golden dump + `git diff --exit-code`. |
 | Track F: "renders correctly in both GitHub themes" | No task can execute or fail on it. Demoted to a review note. |
 | Track G: "`publishLocal` dry-run succeeds" | Name- and content-blind; passes against the exact broken POM of §3.7. Replaced with the POM golden diff + module-count assertion + consumer smoke test. |
-| B3: "allocate/release 10k Mats, assert stable RSS" | Measures glibc arena behaviour; has a demonstrated false negative *and* false positive. Replace with a live-handle counter + `dataAddr() == 0` as the primary assertion, and a forked relative-delta check as a secondary, non-gating, linux-glibc-only signal. |
+| B3: "allocate/release 10k Mats, assert stable RSS" | Measures glibc arena behaviour; has a demonstrated false negative *and* false positive. **Replaced** (B3) with `dataAddr() == 0` after release as the primary assertion. A forked relative-delta check remains available as a secondary, non-gating, linux-glibc-only signal. |
