@@ -63,21 +63,21 @@ jobs:
         run: ./mill core.fix --check zio.fix --check examples.fix --check
 
   natives:
-    name: Natives · ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-14, windows-latest]
+    name: Natives · macos-14
+    runs-on: macos-14
+    # macOS only. The headless loader is verified on linux-x86_64 by the build job; this leg
+    # verifies the @rpath-resolved macOS path. Windows is deliberately absent: the `./mill`
+    # bootstrap is a Unix-only launcher (it prints "supports only Linux and macOS" and exits),
+    # and Mill 1.1.7 ships no Windows launcher, so a windows-latest leg would fail at the
+    # launcher without exercising anything. The Windows loader path (a bulk-load fallback,
+    # since the linker error names no library) is implemented but can only be verified on a
+    # Windows host -- ROADMAP §7 item 15. Adding the leg back is a one-line change once a
+    # working Windows Mill invocation exists.
     steps:
       - uses: actions/checkout@v7
       - uses: coursier/cache-action@v8
-      # The headless loader is verified on linux-x86_64 only. macOS resolves the module
-      # libraries through @rpath and Windows names them without a `lib` prefix, so both
-      # are genuinely untested until this job runs. ROADMAP §7 item 6.
       - name: Smoke
         run: ./mill examples.runMain scalacv.smoke
-        shell: bash
 
   publish-shape:
     name: Published artifact shape
