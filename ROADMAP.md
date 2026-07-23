@@ -399,7 +399,7 @@ Two smaller corrections that change task definitions.
 
 ### Track C — ZIO module ⚡
 
-- [ ] C1 · `acquireRelease` Mats · [ ] C2 · `ZStream` camera frames (inherit B9's non-memoizing contract) · [ ] C3 · zio-test suite
+- [x] C1 · `acquireRelease` Mats · [x] C2 · `ZStream` camera frames (inherit B9's non-memoizing contract) · [x] C3 · zio-test suite
 
 **Gate:** `./mill zio.test`.
 

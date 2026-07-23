@@ -179,10 +179,17 @@ object core extends ScalacvPublishModule {
 object zio extends ScalacvPublishModule {
   def artifactName = "scalacv-zio"
   def moduleDeps   = Seq(core)
-  def mvnDeps    = Seq(mvn"dev.zio::zio:2.1.26", mvn"dev.zio::zio-streams:2.1.26")
+  def mvnDeps      = Seq(mvn"dev.zio::zio:2.1.26", mvn"dev.zio::zio-streams:2.1.26")
 
-  object test extends ScalaTests with ScalacvTests {
-    def mvnDeps = super.mvnDeps() ++ Deps.opencvNatives
+  /* zio-test rather than munit here (D6): the module under test is ZIO, so its own effects are
+   * the natural thing to write assertions in. Natives are still needed at run time. */
+  object test extends ScalaTests {
+    def testFramework = "zio.test.sbt.ZTestFramework"
+    def mvnDeps = Seq(
+      mvn"dev.zio::zio-test:2.1.26",
+      mvn"dev.zio::zio-test-sbt:2.1.26"
+    ) ++ Deps.opencvNatives
+    def forkArgs = Task { Deps.runtimeJvmArgs(jvmMajor()) :+ "-Djava.awt.headless=true" }
   }
 }
 
