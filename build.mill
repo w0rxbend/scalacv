@@ -51,14 +51,21 @@ object Deps {
     * with zero `org/opencv/` classes. And `libopencv_core` has a NEEDED on `libopenblas.so.0`,
     * which ships only in openblas's own classifier jar. See ROADMAP §3.9.
     */
-  /** JVM flags every module that touches natives needs.
+  /** JVM flags for modules that touch natives, gated on the JDK that will actually run them.
     *
-    * `--enable-native-access` silences the JEP 472 warning that System.load now emits.
-    * `--sun-misc-unsafe-memory-access=allow` silences four lines that scala3-library 3.3.8's
-    * LazyVals$ provokes on JDK 24+ — a direct consequence of pairing D2 (publish on the LTS)
-    * with D10 (build on 25). Cosmetic, but it would otherwise preface every example run.
+    * Both flags are noise suppression, and both are **younger than our JDK 17 floor** — passing
+    * either to a 17 or 21 JVM is not a warning, it is `Unrecognized option` and the process does
+    * not start. That is a real failure mode: it was caught by CI's per-rung JDK assertion, not by
+    * a local build, because locally everything runs on 25.
+    *
+    *   - `--enable-native-access` silences the JEP 472 warning `System.load` emits (JDK 24+).
+    *   - `--sun-misc-unsafe-memory-access=allow` silences four lines that scala3-library 3.3.8's
+    *     `LazyVals$` provokes — a direct consequence of pairing D2 (publish on the LTS) with D10
+    *     (build on 25), and cosmetic, but otherwise a preface to every example run.
     */
-  val runtimeJvmArgs = Seq("--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow")
+  def runtimeJvmArgs(jvmMajor: Int): Seq[String] =
+    if (jvmMajor >= 24) Seq("--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow")
+    else Seq.empty
 
   val opencvNatives = Seq(
     opencvApi,
@@ -80,6 +87,21 @@ object Deps {
 trait ScalacvModule extends ScalaModule with ScalafixModule {
   def scalaVersion = "3.3.8"
 
+  /** The JDK modules compile and run on.
+    *
+    * The `//| mill-jvm-version:` header selects the JVM *Mill itself* runs on; this selects the
+    * one modules are compiled and forked with. They are separate on purpose: CI needs to vary
+    * the module JDK per matrix rung, and the header cannot vary — it would freeze every rung to
+    * a single JDK and make the matrix decorative. `actions/setup-java` cannot steer Mill either,
+    * since Mill 1.1.7 ignores JAVA_HOME and MILL_JVM_VERSION for module execution. ROADMAP §2.
+    */
+  def jvmId = Task.Input { Task.env.getOrElse("MILL_JVM_ID", "zulu:25") }
+
+  /** The major version behind [[jvmId]], for flags that do not exist on older JDKs. */
+  def jvmMajor = Task { jvmId().split(":").last.split("[.+-]").head.toIntOption.getOrElse(25) }
+
+  def forkArgs = Task { Deps.runtimeJvmArgs(jvmMajor()) }
+
   def scalacOptions = Seq(
     "-deprecation",
     "-feature",
@@ -97,11 +119,16 @@ trait ScalacvModule extends ScalaModule with ScalafixModule {
 trait ScalacvTests extends TestModule.Munit {
   def mvnDeps = Seq(mvn"org.scalameta::munit:1.3.4")
 
+  /* Test modules pick their own JVM, so they need the same override and the same
+   * version-gating as ScalacvModule -- see the comments there. */
+  def jvmId = Task.Input { Task.env.getOrElse("MILL_JVM_ID", "zulu:25") }
+  def jvmMajor = Task { jvmId().split(":").last.split("[.+-]").head.toIntOption.getOrElse(25) }
+
   /* Natives are loaded by dlopen from the caller's classloader, and OpenCV's own error
    * reporting is chatty on stderr. Forking keeps a crashed native call from taking the
    * whole test run with it, and headless=true makes a GUI-toolkit regression fail loudly
    * rather than silently opening a window on a developer machine. */
-  def forkArgs = Deps.runtimeJvmArgs :+ "-Djava.awt.headless=true"
+  def forkArgs = Task { Deps.runtimeJvmArgs(jvmMajor()) :+ "-Djava.awt.headless=true" }
 }
 
 /** Everything that ships to Maven Central.
@@ -163,7 +190,7 @@ object zio extends ScalacvPublishModule {
 object examples extends ScalacvModule {
   def moduleDeps = Seq(core, zio)
   def mvnDeps    = Deps.opencvNatives
-  def forkArgs   = Deps.runtimeJvmArgs :+ "-Djava.awt.headless=true"
+  def forkArgs   = Task { Deps.runtimeJvmArgs(jvmMajor()) :+ "-Djava.awt.headless=true" }
 }
 
 /** JavaFX examples. Deliberately excluded from CI and never published: OpenJFX resolves
@@ -177,5 +204,5 @@ object `examples-gui` extends ScalacvModule {
     mvn"org.openjfx:javafx-graphics:26.0.2",
     mvn"org.openjfx:javafx-controls:26.0.2"
   )
-  def forkArgs = Deps.runtimeJvmArgs
+  def forkArgs = Task { Deps.runtimeJvmArgs(jvmMajor()) }
 }

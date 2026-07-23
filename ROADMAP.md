@@ -50,7 +50,7 @@ Defaults come from `PLAN.md` §3. Research/review amendments are marked and just
 |---|---|---|
 | Scala (publish) | `3.3.8` | LTS, 2026-06-10. Re-verified 2026-07-23: still the newest 3.3.x on Central (no 3.3.9). **3.9.0 is still RC only** (3.9.0-RC3, 2026-07-11); 3.9 is the confirmed next LTS line and its final is overdue-imminent. Move to 3.9.x once final ships, not before. |
 | Mill | `1.1.7` | 2026-06-21. `1.2.0-RC1` exists — do not pin. |
-| JDK (build) | `25`, **explicitly pinned** | `//| mill-jvm-version: zulu:25` in the build header. Mill 1.1.7's `defaultJvmVersion=zulu:21`; it **ignores `JAVA_HOME` and `MILL_JVM_VERSION`** for module execution, so `actions/setup-java` cannot steer it. Bytecode target stays 17. |
+| JDK (build) | `25`, **explicitly pinned** | Two separate pins: `//| mill-jvm-version: zulu:25` selects the JVM *Mill* runs on; `def jvmId` (overridable per CI rung via `MILL_JVM_ID`) selects the one *modules* compile and fork with. They must be separate — the header cannot vary, so on its own it would freeze every matrix rung to one JDK. Mill 1.1.7's `defaultJvmVersion=zulu:21` and it **ignores `JAVA_HOME`/`MILL_JVM_VERSION`**, so `actions/setup-java` cannot steer it. Bytecode target stays 17; **verified: the smoke test loads natives headless on zulu 17.0.18.** |
 | `org.bytedeco:opencv` | `4.13.0-1.5.13` | Version string is `<opencv>-<presets>`; there is no bare `4.13.0`. The classifier-less jar is where `org.opencv.*` lives (354 `org/opencv/` classes); the classifier jars are natives-only. |
 | `org.bytedeco:openblas` | `0.3.31-1.5.13` | **Mandatory — but transitive only for the classifier-less jar.** `libopenblas.so.0` (a `NEEDED` of `libopencv_core.so.413`) ships *only* in the per-platform classifier jar, which must be declared explicitly. **`0.3.30-1.5.13` does not exist.** |
 | `org.bytedeco:javacpp` | `1.5.13` | Classifier **not** required — a 3-coordinate set loads with a wiped cache. |
@@ -423,8 +423,8 @@ Two smaller corrections that change task definitions.
 
 ### Track G — CI/CD 🔁
 
-- [ ] G1 · CI matrix: JDK 17 + 21 + 25 × ubuntu, plus **macos-14 (arm64) and windows-latest** smoke legs. Per-rung JVM via `def jvmId` driven by an env var — `setup-java` cannot steer Mill (§2). Each leg asserts its own `java.version`
-- [ ] G2 · compile / test / `./mill __.fix --check` / `./mill mill.scalalib.scalafmt.ScalafmtModule/checkFormatAll` / **`./mill docs.mdocCheck`** · [ ] G3 · coursier cache action
+- [x] G1 · CI matrix: JDK 17 + 21 + 25 × ubuntu, plus **macos-14 (arm64) and windows-latest** smoke legs. Per-rung JVM via `def jvmId` driven by an env var — `setup-java` cannot steer Mill (§2). Each leg asserts its own `java.version`
+- [x] G2 · compile / test / `./mill __.fix --check` / `./mill mill.scalalib.scalafmt.ScalafmtModule/checkFormatAll` / **`./mill docs.mdocCheck`** · [ ] G3 · coursier cache action
 - [ ] G4 · Headless-safe: no HighGUI, no JavaFX in CI-built modules; `Hardware`/`Gui` tags auto-skip
 - [ ] G5 · Tag-driven Sonatype Central release scaffold (secrets as marked TODOs); register the `com.worxbend` namespace and add its TXT record to the `worxbend.com` zone
 - [ ] G6 · Scala Steward (`mill-plugin` 0.19.1) · Dependabot (github-actions only); note manual `mill-scalafix`/`mill-mima` bumps in CONTRIBUTING

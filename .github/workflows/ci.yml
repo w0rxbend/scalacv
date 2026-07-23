@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+# Mill 1.1.7 ignores JAVA_HOME and MILL_JVM_VERSION when it runs modules, and the
+# //| mill-jvm-version: header in build.mill would otherwise freeze every rung of the
+# matrix to one JDK. MILL_JVM_ID is read by build.mill to override it per rung, so
+# actions/setup-java is deliberately absent from the JDK matrix below — it cannot
+# steer Mill. See ROADMAP §2 and §4 G1.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: JDK ${{ matrix.jdk }} · ubuntu
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        jdk: ["17", "21", "25"]
+    env:
+      MILL_JVM_ID: zulu:${{ matrix.jdk }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: coursier/cache-action@v8
+
+      - name: Compile
+        run: ./mill __.compile
+
+      - name: Assert the build really ran on JDK ${{ matrix.jdk }}
+        # Without this the matrix is decorative: if the jvmId override ever stops being
+        # honoured, all three rungs silently run the same JDK and still go green.
+        run: ./mill examples.runMain scalacv.jvmReport | tee /dev/stderr | grep -q "java.version=${{ matrix.jdk }}"
+
+      - name: Test
+        run: ./mill __.test
+
+      - name: Smoke — natives load with no GUI toolkit present
+        # ubuntu-latest has no libgtk-x11-2.0. That is the point: this must pass anyway.
+        run: ./mill examples.runMain scalacv.smoke
+
+  style:
+    name: Format and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: coursier/cache-action@v8
+      - name: scalafmt
+        run: ./mill mill.scalalib.scalafmt.ScalafmtModule/checkFormatAll
+      - name: scalafix
+        run: ./mill __.fix --check
+
+  natives:
+    name: Natives · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: coursier/cache-action@v8
+      # The headless loader is verified on linux-x86_64 only. macOS resolves the module
+      # libraries through @rpath and Windows names them without a `lib` prefix, so both
+      # are genuinely untested until this job runs. ROADMAP §7 item 6.
+      - name: Smoke
+        run: ./mill examples.runMain scalacv.smoke
+        shell: bash
+
+  publish-shape:
+    name: Published artifact shape
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: coursier/cache-action@v8
+
+      - name: Only core and zio may publish
+        # examples and examples-gui must never reach Central; examples-gui's OpenJFX
+        # resolves per-host and would be wrong for everyone who downloaded it.
+        run: |
+          modules=$(./mill resolve "__:PublishModule.publishArtifacts" | grep -c publishArtifacts)
+          echo "publishable modules: $modules"
+          test "$modules" -eq 2
+
+      - name: POM dependency set
+        # The failure this catches is invisible from inside the build: a classifier is
+        # silently stripped from the POM, CI stays green because it compiles from source,
+        # and every consumer resolves an artifact with no natives. ROADMAP §3.7.
+        run: ./mill core.test.testOnly scalacv.PublishedPomTest
+
+      - name: publishLocal
+        run: ./mill __.publishLocal
