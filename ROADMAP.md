@@ -66,7 +66,7 @@ Defaults come from `PLAN.md` §3. Research/review amendments are marked and just
 | MiMa / mill-mima | `1.1.6` / `com.github.lolgab::mill-mima::0.2.2` | Do not mix in before `0.2.0`. |
 | VitePress / Node | `1.6.4` / `24` | base path `/scalacv/` |
 | Actions | `checkout@v7`, `setup-java@v5`, `setup-node@v7`, `cache@v6`, `coursier/cache-action@v8`, `configure-pages@v6`, `upload-pages-artifact@v5`, `deploy-pages@v5`, `scala-steward-action@v2` | **`setup-java@v6` does not exist** despite its README |
-| YuNet model | `face_detection_yunet_2023mar.onnx`, 232,589 B, MIT | sha256 `8f2383e4…52fa4` — download at build time, do not vendor |
+| YuNet model | `face_detection_yunet_2023mar.onnx`, 232,589 B, MIT | sha256 `8f2383e4…52fa4` — download at build time, do not vendor. **Live-verified 2026-07-23:** the pinned-commit URL returns HTTP 200, content-length 232,589, and the downloaded bytes hash to the pinned sha256 exactly; `FaceDetect.downloadModel` → `create` → `detect` runs green end-to-end (13/13, 0 skipped). |
 
 **Not upgradable:** OpenCV 4.14.0 and 5.0.0 exist upstream but bytedeco has no binding. Do not call 4.13.0 "the latest OpenCV" in docs.
 
