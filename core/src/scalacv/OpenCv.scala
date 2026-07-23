@@ -71,15 +71,23 @@ object OpenCv:
     * that crosses between the two ABIs dies in `cv::Mat::release()` with no Java stack trace. Reproduced
     * exactly that way.
     *
-    * So: never speculatively load a library. Try the JNI shim, read the soname out of the
+    * So on Linux and macOS: never speculatively load a library. Try the JNI shim, read the soname out of the
     * `UnsatisfiedLinkError`, load *that* library from the payload, and try again. The shim asks only for what
     * it actually needs, which on Linux excludes highgui entirely and on macOS includes it — correct on both
     * without a platform conditional. And a dependency we cannot satisfy from the payload is a real error
     * rather than something the linker quietly resolves against whatever the host has lying around.
+    *
+    * Windows is the exception. Its `UnsatisfiedLinkError` is `Can't find dependent libraries` and names no
+    * library, so the soname cannot be extracted and demand-driven loading has nothing to act on. There a bulk
+    * retry-load is used instead — and it is *safe* there for the reason it is not on Linux: the Windows DLL
+    * names embed the version (`opencv_core4130.dll`, not `opencv_core.dll`), so a bulk load cannot silently
+    * bind a different major version's DLL from the system, and `opencv_highgui` links only the OS-provided
+    * USER32/GDI32, which are always present.
     */
   private def satisfy(target: File, payload: Map[String, File]): Unit =
     val loaded = scala.collection.mutable.Set.empty[String]
     var lastMissing = ""
+    var bulkTried = false
 
     def attempt(load: () => Unit, what: String): Unit =
       var settled = false
@@ -89,34 +97,59 @@ object OpenCv:
           settled = true
         catch
           case e: UnsatisfiedLinkError =>
-            val missing = missingSoname(e.getMessage).getOrElse(throw e)
-            if missing == lastMissing then
-              // Asking for the same library twice means loading it did not help.
-              throw CvError.NativesMissing(
-                s"$what needs $missing, which is in the payload but does not satisfy it"
-              )
-            lastMissing = missing
-            val dep = payload
-              .get(missing)
-              .orElse(payload.get(baseName(missing)))
-              .getOrElse:
-                throw CvError.NativesMissing(
-                  s"""$what needs $missing, which is not in the extracted OpenCV payload.
-                   |
-                   |This is a dependency of OpenCV itself rather than of scalacv. It usually means
-                   |the platform-classifier jar is incomplete or was extracted only partially; try
-                   |clearing the javacpp cache (~/.javacpp) and running again.""".stripMargin
-                )
-            if !loaded.add(dep.getName) then throw e
-            attempt(() => Loader.loadGlobal(dep.getAbsolutePath), dep.getName)
+            missingSoname(e.getMessage) match
+              case Some(missing) =>
+                if missing == lastMissing then
+                  // Asking for the same library twice means loading it did not help.
+                  throw CvError.NativesMissing(
+                    s"$what needs $missing, which is in the payload but does not satisfy it"
+                  )
+                lastMissing = missing
+                val dep = payload
+                  .get(missing)
+                  .orElse(payload.get(baseName(missing)))
+                  .getOrElse:
+                    throw CvError.NativesMissing(
+                      s"""$what needs $missing, which is not in the extracted OpenCV payload.
+                       |
+                       |This is a dependency of OpenCV itself rather than of scalacv. It usually means
+                       |the platform-classifier jar is incomplete or was extracted only partially; try
+                       |clearing the javacpp cache (~/.javacpp) and running again.""".stripMargin
+                    )
+                if !loaded.add(dep.getName) then throw e
+                attempt(() => Loader.loadGlobal(dep.getAbsolutePath), dep.getName)
+              case None =>
+                // The error named no library (Windows). Bulk-load the payload once, then retry.
+                // If we have already bulk-loaded and still cannot satisfy the shim, it is a real error.
+                if bulkTried then throw e
+                bulkTried = true
+                bulkLoad(payload.values)
 
     attempt(() => System.load(target.getAbsolutePath), target.getName)
+
+  /** Loads every library in `libs`, retrying until a whole pass makes no progress.
+    *
+    * Only used on Windows, where the linker error is uninformative. Failures are tolerated: link order is a
+    * DAG we do not know, so a library that fails on one pass may succeed on the next once its dependencies
+    * are in, and `highgui` failing is not fatal.
+    */
+  private def bulkLoad(libs: Iterable[File]): Unit =
+    var remaining = libs.toList
+    var progress = true
+    while remaining.nonEmpty && progress do
+      val before = remaining.size
+      remaining = remaining.filter: f =>
+        try
+          Loader.loadGlobal(f.getAbsolutePath)
+          false
+        catch case _: Throwable => true
+      progress = remaining.size < before
 
   /** Pulls the missing library's name out of a linker error, on any of the three platforms.
     *
     * Linux: `libopencv_xphoto.so.413: cannot open shared object file: No such file or directory` macOS:
     * `Library not loaded: @rpath/libopencv_highgui.413.dylib` Windows: `Can't find dependent libraries` — no
-    * name, so demand-driven loading cannot work there and the caller falls through to the error path.
+    * name, so this returns None and [[satisfy]] falls back to a bulk load (safe there; see its comment).
     */
   private def missingSoname(message: String | Null): Option[String] =
     Option(message).flatMap: m =>

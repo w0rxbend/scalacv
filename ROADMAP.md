@@ -498,7 +498,7 @@ Settle before the dependent work, not before the roadmap.
 12. **NEW:** does `delete(long)` survive future bytedeco bumps? It is private API with no compatibility promise. A test must assert its presence per upgrade. → gates B3b
 13. **NEW:** does the reflective bridge open when OpenCV's classes are on the **module path**? `--add-opens` is consumer-controlled. → gates B3b
 14. **NEW:** Scala Steward's handling of Mill's `//| mvnDeps:` header scheme. → gates G6
-15. **NEW:** Windows demand-driven loading. Its linker error is `Can't find dependent libraries` and names no library, so the soname cannot be extracted and the retry loop cannot proceed. Windows may need an explicit dependency order or a `SetDllDirectory` call. → gates G1's windows-latest leg
+15. **NEW (addressed, unverified):** Windows demand-driven loading. Its linker error names no library, so `missingSoname` returns None and `OpenCv.load()` falls back to a **bulk retry-load** of the payload — safe on Windows because the DLL names embed the version (`opencv_core4130.dll`), so a bulk load cannot bind a different major version, and highgui links only OS-provided USER32/GDI32. Implemented; **verified only by the windows-latest CI leg**, which is the one place it can run. → gates G1's windows-latest leg
 
 ---
 
