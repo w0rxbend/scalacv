@@ -443,8 +443,9 @@ Two smaller corrections that change task definitions.
 - [x] G6 · Scala Steward (`mill-plugin` 0.19.1) · Dependabot (github-actions only); note manual `mill-scalafix`/`mill-mima` bumps in CONTRIBUTING
 - [x] G7 · MiMa armed from `0.2.0` — do not mix in `Mima` before then
 - [x] G8 · `CHANGELOG.md` + `RELEASING.md` (USER_MANAGED deploy → inspect VALIDATED → publish or DELETE)
+- [x] G9 · **Consumer smoke test** (§3.7's highest-value item): a `consumer-smoke` CI job publishes locally, then from a **fresh `COURSIER_CACHE`** resolves `com.worxbend:scalacv_3` + the two documented natives coordinates and runs a plain-Java `ci/consumer-smoke/ConsumerSmoke.java` that calls `OpenCv.load()` and allocates a Mat across JNI. Gates on the `CONSUMER-OK` line. Catches the "green build, zero natives shipped" POM defect the old `publishLocal` dry-run waved through
 
-**Gate:** CI green on PR; **and** the publish gate — golden-file diff of the generated POM's dependency set, no duplicate `groupId:artifactId`, `./mill resolve "__:PublishModule.publishArtifacts"` lists **exactly two** modules, `versionScheme` present, **and a consumer smoke test** resolving the `publishLocal`'d artifact from a throwaway project on a clean coursier cache and calling `OpenCv.load()`.
+**Gate:** CI green on PR; **and** the publish gate — golden-file diff of the generated POM's dependency set, no duplicate `groupId:artifactId`, `./mill resolve "__:PublishModule.publishArtifacts"` lists **exactly two** modules, `versionScheme` present, **and a consumer smoke test** (G9) resolving the `publishLocal`'d artifact from a throwaway project on a clean coursier cache and calling `OpenCv.load()`.
 
 ---
 

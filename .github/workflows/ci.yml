@@ -113,3 +113,37 @@ jobs:
 
       - name: publishLocal
         run: ./mill __.publishLocal
+
+  consumer-smoke:
+    name: Consumer resolves the published artifact
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: coursier/cache-action@v8
+      - uses: coursier/setup-action@v1
+        with:
+          jvm: zulu:17
+
+      - name: Publish core and zio to the local ivy repo
+        run: ./mill __.publishLocal
+
+      - name: A from-scratch consumer resolves it on a clean cache and loads natives
+        # The single highest-value gate in the review (ROADMAP §3.7): the published core POM carries
+        # only the classifier-less opencv (Mill cannot emit a <classifier>), so a real consumer adds
+        # the two documented natives coordinates. A fresh COURSIER_CACHE makes this a true from-nothing
+        # resolve -- it would catch the "green build, zero natives shipped" failure the old
+        # publishLocal-dry-run gate waved through. Gate on the CONSUMER-OK line, not the exit code:
+        # native teardown at JVM shutdown occasionally exits non-zero after a fully successful run.
+        run: |
+          set -euo pipefail
+          VER=$(./mill show core.publishVersion | tr -d '"')
+          echo "resolving com.worxbend:scalacv_3:$VER from a clean cache"
+          export COURSIER_CACHE=$(mktemp -d)
+          CP=$(cs fetch --classpath -r ivy2Local \
+            "com.worxbend:scalacv_3:$VER" \
+            "org.bytedeco:opencv:4.13.0-1.5.13,classifier=linux-x86_64" \
+            "org.bytedeco:openblas:0.3.31-1.5.13,classifier=linux-x86_64")
+          javac -cp "$CP" -d /tmp/consumer ci/consumer-smoke/ConsumerSmoke.java
+          out=$(java -cp "/tmp/consumer:$CP" ConsumerSmoke 2>&1) || true
+          echo "$out"
+          echo "$out" | grep -q '^CONSUMER-OK'
