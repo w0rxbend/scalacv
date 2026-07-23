@@ -66,7 +66,11 @@ extension (self: Mat)
     */
   def gaussianBlur(
       kernel: Size,
-      sigmaX: Double,
+      // 0 means "derive the deviation from the kernel size", which is OpenCV's own default and
+      // the overwhelmingly common call. Requiring it explicitly made the commonest use of the
+      // commonest filter needlessly verbose; the require below still rejects the one combination
+      // that is meaningless, a zero kernel with no sigma to derive from.
+      sigmaX: Double = 0,
       sigmaY: Double = 0,
       border: BorderType = BorderType.Reflect101
   ): Managed[Mat] =
