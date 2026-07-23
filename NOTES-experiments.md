@@ -256,3 +256,50 @@ report. Hard requirements for B3, now evidence-backed rather than stylistic:
 2. The scoped API (`Mat.use`, `Using.Manager`) must be the only ergonomic path, and any
    post-release call must throw `IllegalStateException` in Scala **before** crossing into JNI.
 3. Add a `Hardware`-free regression test that asserts a released handle throws rather than crashes.
+
+## E-12 — Does ROADMAP A6's dependency set actually compile? → **NO. Confirms review blocker B1.**
+
+A6 specified only the classifier coordinate. A classifier dependency **replaces** the
+classifier-less artifact in coursier resolution rather than adding to it:
+
+```
+$ ./mill show core.runClasspath      # deps = [ mvn"org.bytedeco:opencv:4.13.0-1.5.13;classifier=linux-x86_64" ]
+opencv-4.13.0-1.5.13-linux-x86_64.jar
+openblas-0.3.31-1.5.13.jar
+javacpp-1.5.13.jar
+
+$ for j in <each jar on that classpath>; do unzip -l $j | grep -q org/opencv/core/Mat.class && echo FOUND; done
+(no output)
+```
+
+**Zero `org/opencv/` classes on the classpath** — `./mill __.compile` fails on the first
+`import org.opencv.*`. The classifier jar is natives-only; the classes live in the
+classifier-less jar. Second defect: `libopencv_core.so.413` has `NEEDED libopenblas.so.0`,
+which ships only in the openblas *classifier* jar, so the transitively-resolved
+classifier-less openblas is Java classes with no `.so`.
+
+Verified working set — three coordinates, no javacpp classifier, green headless end to end:
+
+```scala
+mvn"org.bytedeco:opencv:4.13.0-1.5.13"
+mvn"org.bytedeco:opencv:4.13.0-1.5.13;classifier=linux-x86_64"
+mvn"org.bytedeco:openblas:0.3.31-1.5.13;classifier=linux-x86_64"
+```
+```
+Core.VERSION = 4.13.0   objdetect = true   aruco = true   qrcode = true   dnn = true
+```
+
+## E-13 — Does `Core.VERSION` prove the natives loaded? → **NO. Track A's gate was a no-op.**
+
+```
+$ javac -cp opencv-4.13.0-1.5.13.jar S4.java     # classes-only jar, no natives anywhere
+$ java  -cp opencv-4.13.0-1.5.13.jar:. S4
+Core.VERSION = 4.13.0   (no native library loaded at all)
+
+$ javap -c S4 | grep getstatic
+3: getstatic  #13  // Field org/opencv/core/Core.VERSION:Ljava/lang/String;
+```
+
+A plain static `String` resolved at class-init from constants — no JNI. The old Track A gate
+("smoke main prints `Core.VERSION == 4.13.0`") passes on any platform with zero natives, which
+is precisely the failure §3.7 says consumers will hit. The gate must allocate a real Mat.
