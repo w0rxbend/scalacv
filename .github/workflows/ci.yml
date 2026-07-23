@@ -30,7 +30,9 @@ jobs:
       - uses: coursier/cache-action@v8
 
       - name: Compile
-        run: ./mill __.compile
+        # Explicit module list, not __: examples-gui pulls a per-host OpenJFX and must never be
+        # built in CI (ROADMAP G4). __ would drag it in.
+        run: ./mill core.compile zio.compile examples.compile
 
       - name: Assert the build really ran on JDK ${{ matrix.jdk }}
         # Without this the matrix is decorative: if the jvmId override ever stops being
@@ -38,7 +40,7 @@ jobs:
         run: ./mill examples.runMain scalacv.jvmReport | tee /dev/stderr | grep -q "java.version=${{ matrix.jdk }}"
 
       - name: Test
-        run: ./mill __.test
+        run: ./mill core.test zio.test examples.test
 
       - name: Smoke — natives load with no GUI toolkit present
         # ubuntu-latest has no libgtk-x11-2.0. That is the point: this must pass anyway.
@@ -53,7 +55,8 @@ jobs:
       - name: scalafmt
         run: ./mill mill.scalalib.scalafmt.ScalafmtModule/checkFormatAll
       - name: scalafix
-        run: ./mill __.fix --check
+        # Scoped like the build job: examples-gui stays out of CI (ROADMAP G4).
+        run: ./mill core.fix --check zio.fix --check examples.fix --check
 
   natives:
     name: Natives · ${{ matrix.os }}

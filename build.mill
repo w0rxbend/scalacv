@@ -198,6 +198,13 @@ object examples extends ScalacvModule {
   def moduleDeps = Seq(core, zio)
   def mvnDeps    = Deps.opencvNatives
   def forkArgs   = Task { Deps.runtimeJvmArgs(jvmMajor()) :+ "-Djava.awt.headless=true" }
+
+  /* The Track D gate is "CannyEdges + QrDecode produce asserted file output in CI". That means
+   * the examples need real assertions, not just successful compilation, so each example is a
+   * pure function returning its result and this suite drives them. */
+  object test extends ScalaTests with ScalacvTests {
+    def mvnDeps = super.mvnDeps() ++ Deps.opencvNatives
+  }
 }
 
 /** JavaFX examples. Deliberately excluded from CI and never published: OpenJFX resolves

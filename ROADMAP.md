@@ -405,8 +405,8 @@ Two smaller corrections that change task definitions.
 
 ### Track D — Examples 🎨
 
-- [ ] D1 · `CannyEdges` (headless, CI-asserted output) · [ ] D2 · `FaceDetectHaar` (heritage) · [ ] D3 · `FaceDetectYN` (modern)
-- [ ] D4 · `QrDecode` (headless, CI-asserted) · [ ] D5 · `ArucoMarkers` · [ ] D6 · `CamFaceDetect` → `examples-gui`, tagged `Gui` + `Hardware`
+- [x] D1 · `CannyEdges` (headless, CI-asserted output) · [x] D2 · `FaceDetectHaar` (heritage) · [~] D3 · `FaceDetectYN` (modern — wired via B11; example folded into FaceDetectHaar's pattern)
+- [x] D4 · `QrDecode` (headless, CI-asserted) · [x] D5 · `ArucoMarkers` · [x] D6 · `CamFaceDetect` → `examples-gui`, run-only (needs camera + display)
 
 **Gate:** all compile; `CannyEdges` + `QrDecode` produce asserted file output in CI.
 
