@@ -36,7 +36,13 @@ object Releasable:
     * looks like success.
     */
   def handle[A <: AnyRef](getNativeAddr: A => Long): Releasable[A] =
-    a => NativeDelete.of(a.getClass).invokeExact(getNativeAddr(a)): Unit
+    a =>
+      val addr = getNativeAddr(a)
+      if addr != 0L then
+        // Disarm BEFORE deleting, never after: between the two there is a window in which the
+        // finalizer could run against a pointer we have already freed.
+        NativeFinalizer.disarm(a)
+        NativeDelete.of(a.getClass).invokeExact(addr): Unit
 
 /** Opens and caches the private `delete(long)` of a generated OpenCV binding class. */
 private object NativeDelete:
@@ -69,4 +75,69 @@ private object NativeDelete:
              |
              |scalacv fails here rather than falling back to the garbage collector, because that
              |fallback does not reclaim native memory in any useful timeframe.""".stripMargin
+        )
+
+/** Stops a generated OpenCV binding from freeing a pointer we have already freed.
+  *
+  * Every one of the 185 handle classes carries this, verbatim:
+  *
+  * {{{
+  * protected void finalize() throws Throwable { delete(this.nativeObj); }
+  * }}}
+  *
+  * It is unconditional. So releasing through [[Releasable.handle]] and then dropping the Java object means
+  * `delete` runs twice on the same address — the first time from us, the second from the finalizer thread
+  * whenever the collector gets round to it. That is heap corruption, and it surfaces as a SIGSEGV somewhere
+  * else entirely, at an unpredictable later moment. `Managed`'s compare-and-set cannot help: it makes *our*
+  * release idempotent and knows nothing about a finalizer running on another thread.
+  *
+  * The fix is to zero `nativeObj` first, so the finalizer's `delete(0)` becomes `delete nullptr`, which C++
+  * defines as a no-op.
+  *
+  * If the field cannot be written — a future JDK tightening final-field reflection, or OpenCV loaded from a
+  * named module — this **throws instead of deleting**. Deleting anyway would reintroduce exactly the double
+  * free this exists to prevent, and a leak is recoverable where a corrupted heap is not.
+  */
+private object NativeFinalizer:
+
+  private val fields = java.util.concurrent.ConcurrentHashMap[Class[?], java.lang.reflect.Field]()
+
+  def disarm(target: AnyRef): Unit =
+    val f = fields.computeIfAbsent(target.getClass, findNativeObj)
+    try f.setLong(target, 0L)
+    catch
+      case e: IllegalAccessException =>
+        throw CvError.NativesMissing(
+          s"cannot disarm ${target.getClass.getName}.nativeObj (${e.getMessage}); refusing to " +
+            "free it, because the binding's finalizer would then free it a second time"
+        )
+
+  private def findNativeObj(cls: Class[?]): java.lang.reflect.Field =
+    var c: Class[?] | Null = cls
+    var found: Option[java.lang.reflect.Field] = None
+    while c != null && found.isEmpty do
+      val here = c.nn.getDeclaredFields.find(f => f.getName == "nativeObj" && f.getType == classOf[Long])
+      found = here
+      c = c.nn.getSuperclass
+    found match
+      case Some(f) =>
+        try
+          f.setAccessible(true)
+          f
+        catch
+          case e: RuntimeException =>
+            throw CvError.NativesMissing(
+              s"""cannot make ${cls.getName}.nativeObj writable (${e.getClass.getSimpleName}).
+                 |
+                 |scalacv must zero this field before freeing the object, because the binding's
+                 |finalizer calls delete(nativeObj) unconditionally and would otherwise free the
+                 |same pointer twice. Add:
+                 |
+                 |  --add-opens java.base/java.lang=ALL-UNNAMED
+                 |
+                 |scalacv refuses to free the object rather than risk corrupting the heap.""".stripMargin
+            )
+      case None =>
+        throw CvError.NativesMissing(
+          s"${cls.getName} has no nativeObj field; scalacv cannot safely free this type"
         )

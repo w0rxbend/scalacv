@@ -385,15 +385,15 @@ Two smaller corrections that change task definitions.
 - [x] B6 · Extension syntax — **verified Java names**: `Imgproc.cvtColor`, `GaussianBlur`, `blur`, `Canny`, `Sobel`, `Laplacian`, `equalizeHist`, `threshold`, `resize`, `Core.convertScaleAbs`, `Core.addWeighted`. Four are capitalized in Java and lower-cased in Scala. `threshold` has one 5-arg overload, no defaults, and returns the computed `Double` — surface it as `ThresholdResult` (needed for OTSU/TRIANGLE). **Write the Mat-ownership contract first:** who owns the returned Mat, that the receiver is never released or aliased, and that in-place ops look visibly different; add a scoped chaining combinator so `mat.gaussianBlur(..).canny(..)` cannot strand its intermediate
 - [x] B7 · Typed Hough — `HoughLines → Seq[PolarLine(rho: Float, theta: Float)]` from `Nx1 CV_32FC2`; `HoughLinesP → Seq[Segment(x1: Int, y1: Int, x2: Int, y2: Int)]` from `Nx1 CV_32SC4` (**int32** — a float read throws); `HoughLinesWithAccumulator → Seq[PolarLineWithVotes]` from `Nx1 CV_32FC3`. Decode via `Mat.get(i, 0): double[]`
 - [x] B8 · Contours: `findContours → Seq[Contour]` (kills the `JavaConversions` dependency outright)
-- [ ] B9 · `VideoCapture.use` + a **scoped non-memoizing iterator** owning one frame Mat — `LazyList` memoizes and is structurally incompatible with per-frame `release()`. `read()` has no timeout overload: use `setExceptionMode(true)` + best-effort `CAP_PROP_*_TIMEOUT_MSEC` + a bounded read loop, with the backend caveat. Propagate to C2
+- [x] B9 · `VideoCapture.use` + a **scoped non-memoizing iterator** owning one frame Mat — `LazyList` memoizes and is structurally incompatible with per-frame `release()`. `read()` has no timeout overload: use `setExceptionMode(true)` + best-effort `CAP_PROP_*_TIMEOUT_MSEC` + a bounded read loop, with the backend caveat. Propagate to C2
 - [x] B10 · `CascadeClassifier` wrapper that **fails loudly on a bad path**. Cascades come from `Loader.cacheResource(classOf[opencv_java], s"/org/bytedeco/opencv/${Loader.getPlatform}/share/opencv4/haarcascades/$name.xml")` — no native load needed. **Windows ships none** (its `share/` is empty): vendor the 17 XMLs pinned to upstream tag `4.13.0` as a fallback, or document Windows as unsupported for Haar. Expose a typed `CascadeName`, not raw filenames. Format compatibility is a non-issue — the vendored XMLs are byte-identical to 4.13's own
-- [ ] B11 · `FaceDetectorYN` — mandatory `Size` at construction, **throws** on frame-size mismatch, returns a 0×0 Mat for no-face, its `int` return is a status flag, 15-column decode, `MatOfByte` create. YuNet model **downloaded at build time**, not vendored
+- [x] B11 · `FaceDetectorYN` — mandatory `Size` at construction, **throws** on frame-size mismatch, returns a 0×0 Mat for no-face, its `int` return is a status flag, 15-column decode, `MatOfByte` create. YuNet model **downloaded at build time**, not vendored
 - [x] B12 · `QRCodeDetector` + `ArucoDetector` wrappers
-- [ ] B13 · `Net.fromOnnx` + `blobFromImage`
-- [ ] B14 · Synthetic test fixtures generated programmatically (no `Lena.png`, no licensing surface)
+- [x] B13 · `Net.fromOnnx` + `blobFromImage`
+- [x] B14 · Synthetic test fixtures generated programmatically (no `Lena.png`, no licensing surface)
 - [x] B15 · Encode/decode boundary: `encode(mat, ".png"): Array[Byte]` via `imencode` + `MatOfByte.toArray`; `imdecode` on garbage returns an empty Mat, `imencode` on an unknown extension throws. **Zero GUI types in core**
 - [x] B16 · Headless drawing ops in `core` — `rectangle`, `circle`, `line`, `putText`, `polylines`. Without them `LineType`/`HersheyFont` have no consumer and B7/B8's outputs cannot be rendered. In `core`, not a `draw` module
-- [ ] B17 · Golden public-API signature dump committed to the repo
+- [x] B17 · Golden public-API signature dump committed to the repo
 
 **Gate:** `./mill core.test` green **and** `git diff --exit-code` on the B17 signature dump.
 
@@ -475,6 +475,7 @@ Full command output in [`NOTES-experiments.md`](NOTES-experiments.md).
 | E-11 | What if the release guard is wrong? | **SIGSEGV** from native code — no stack trace, no catch. Makes the atomic guard a correctness requirement. |
 | E-12 | Does A6's dependency set compile? | **No.** Zero `org/opencv/` classes on the classpath. Three coordinates required (§3.9). |
 | E-13 | Does `Core.VERSION` prove natives loaded? | **No.** Prints `4.13.0` with zero natives. Track A's old gate was a no-op (§3.10). |
+| E-15 | Why did releasing a handle type crash later, elsewhere? | Every one of the 185 handle classes has `protected void finalize() { delete(this.nativeObj); }` — **unconditional**. Freeing through `Releasable.handle` and dropping the object frees the same pointer twice. `Managed`'s CAS cannot see the finalizer thread. Fixed by zeroing `nativeObj` before deleting; refuses to delete if it cannot. |
 | E-14 | Why did `detectAndDecodeMulti` SIGSEGV? | Speculative `loadGlobal` of `highgui` pulled **six system OpenCV 5.0.0 libraries** into the global namespace via unversioned `NEEDED` entries. Loader rewritten demand-driven; §3.2 Correction #5. |
 
 ---
