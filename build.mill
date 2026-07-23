@@ -5,6 +5,55 @@ package build
 
 import mill.*, scalalib.*
 
+object Deps {
+  val opencv   = "4.13.0-1.5.13"
+  val openblas = "0.3.31-1.5.13"
+
+  /** The bytedeco classifier for the machine running the build.
+    *
+    * Derived from the JVM's own os/arch rather than hand-rolled, and kept in the same
+    * vocabulary javacpp's `Loader.getPlatform()` uses at runtime — if the two ever disagree,
+    * the natives on the classpath are not the ones the loader looks for.
+    */
+  lazy val platform: String = {
+    val os = System.getProperty("os.name").toLowerCase
+    val arch = System.getProperty("os.arch").toLowerCase match {
+      case "amd64" | "x86_64"  => "x86_64"
+      case "aarch64" | "arm64" => "arm64"
+      case other               => other
+    }
+    val name =
+      if (os.startsWith("linux")) "linux"
+      else if (os.startsWith("mac") || os.startsWith("darwin")) "macosx"
+      else if (os.startsWith("windows")) "windows"
+      else sys.error(s"scalacv: no bytedeco OpenCV natives are published for os.name='$os'")
+    val p = s"$name-$arch"
+    // bytedeco publishes no windows-arm64 build of opencv (it does for javacpp).
+    if (p == "windows-arm64")
+      sys.error("scalacv: bytedeco publishes no opencv natives for windows-arm64")
+    p
+  }
+
+  /** The OpenCV Java API. Classifier-less, and the ONLY OpenCV coordinate that may reach a
+    * published POM — Mill 1.1.7 cannot express a classifier in a POM at all, so anything
+    * classified here would be silently stripped and consumers would resolve nothing.
+    */
+  val opencvApi = mvn"org.bytedeco:opencv:$opencv"
+
+  /** The natives, for local builds and tests only.
+    *
+    * Three coordinates, not one. A classifier dependency *replaces* the classifier-less
+    * artifact rather than adding to it, so declaring only the classifier yields a classpath
+    * with zero `org/opencv/` classes. And `libopencv_core` has a NEEDED on `libopenblas.so.0`,
+    * which ships only in openblas's own classifier jar. See ROADMAP §3.9.
+    */
+  val opencvNatives = Seq(
+    opencvApi,
+    mvn"org.bytedeco:opencv:$opencv;classifier=$platform",
+    mvn"org.bytedeco:openblas:$openblas;classifier=$platform"
+  )
+}
+
 /** Shared settings for every Scala module in the build.
   *
   * Scala 3.3.8 (LTS) rather than the newest release: TASTy is not forward-compatible, so a
@@ -43,17 +92,30 @@ trait ScalacvTests extends TestModule.Munit {
 }
 
 object core extends ScalacvModule {
-  object test extends ScalaTests with ScalacvTests
+  /* Classifier-less only. The natives are a *test* and *example* concern here; putting them
+   * on core would either do nothing for consumers (POM strips the classifier) or, via
+   * runMvnDeps, publish a classifier-stripped runtime dep that resolves to no natives at all.
+   * Consumers add one line for their own platform -- see README / docs. ROADMAP §3.7. */
+  def mvnDeps = Seq(Deps.opencvApi)
+
+  object test extends ScalaTests with ScalacvTests {
+    def mvnDeps = super.mvnDeps() ++ Deps.opencvNatives
+  }
 }
 
 object zio extends ScalacvModule {
   def moduleDeps = Seq(core)
-  object test extends ScalaTests with ScalacvTests
+  def mvnDeps    = Seq(mvn"dev.zio::zio:2.1.26", mvn"dev.zio::zio-streams:2.1.26")
+
+  object test extends ScalaTests with ScalacvTests {
+    def mvnDeps = super.mvnDeps() ++ Deps.opencvNatives
+  }
 }
 
 /** Headless examples. Built in CI, so nothing here may touch a GUI toolkit. */
 object examples extends ScalacvModule {
   def moduleDeps = Seq(core, zio)
+  def mvnDeps    = Deps.opencvNatives
   def forkArgs   = Seq("--enable-native-access=ALL-UNNAMED", "-Djava.awt.headless=true")
 }
 
@@ -63,5 +125,10 @@ object examples extends ScalacvModule {
   */
 object `examples-gui` extends ScalacvModule {
   def moduleDeps = Seq(core)
-  def forkArgs   = Seq("--enable-native-access=ALL-UNNAMED")
+  def mvnDeps = Deps.opencvNatives ++ Seq(
+    mvn"org.openjfx:javafx-base:26.0.2",
+    mvn"org.openjfx:javafx-graphics:26.0.2",
+    mvn"org.openjfx:javafx-controls:26.0.2"
+  )
+  def forkArgs = Seq("--enable-native-access=ALL-UNNAMED")
 }
