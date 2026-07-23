@@ -2,7 +2,7 @@
 
 Scala 2.11 / sbt 0.13 / vendored OpenCV 3.0.0-rc1 → **Scala 3 / Mill / OpenCV 4.13.0**.
 
-**Phase:** R (research) complete · V (review) complete & applied · **I (implementation) in progress** — acked 2026-07-23
+**Phase:** R complete · V complete & applied · **I complete** except two owner-action licensing items (F1a/F1b) — acked 2026-07-23
 **Sources:** [`NOTES-audit.md`](NOTES-audit.md) (legacy archaeology) · [`NOTES-upstream.md`](NOTES-upstream.md) (upstream/ecosystem) · [`NOTES-experiments.md`](NOTES-experiments.md) (orchestrator experiments E-3…E-11) · [`REVIEW.md`](REVIEW.md) (adversarial review — 2 blockers, 20 should-fix, 19 nits)
 **Supersedes:** `PLAN.md` (four of its "ground truth" claims are corrected below — see §3)
 
@@ -424,8 +424,8 @@ Two smaller corrections that change task definitions.
 
 ### Track F — README, logo & licensing ✨
 
-- [ ] F1a · **Send the relicense request** (named sender, 21-day window). Does *not* block Track B — clean-room is the working assumption per D11 (§3.4)
-- [ ] F1b · Transcribe any grant received into `NOTICE`
+- [⏳] F1a · **(OWNER ACTION)** Send the relicense request (named sender, 21-day window). Does *not* block Track B — clean-room is the working assumption per D11 (§3.4)
+- [⏳] F1b · **(OWNER ACTION, depends on F1a)** Transcribe any grant received into `NOTICE`
 - [x] F2 · `LICENSE` (Apache-2.0) · [x] F3 · `NOTICE` (mcallisto lineage, Intel/Willow Garage and Shiqi Yu cascade notices kept distinct, isight-java + chimpler credits)
 - [x] F4 · `THIRD-PARTY.md` — per-asset provenance: URL, branch, SHA-256, fetch date, **SPDX id, notice-required?**
 - [x] F5 · SVG logo, light/dark `<picture>` variants
