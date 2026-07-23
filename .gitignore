@@ -1,18 +1,21 @@
+# Mill
+out/
+.mill-daemon/
+
+# Build servers / IDE tooling
+.bsp/
+.bloop/
+.metals/
+.scala-build/
+.idea/
+*.iml
+.vscode/
+
+# JVM
 *.class
-*.log
+hs_err_pid*.log
+replay_pid*.log
 
-# sbt specific
-.cache
-.history
-.lib/
-dist/*
-target/
-lib_managed/
-src_managed/
-project/boot/
-project/plugins/project/
-
-# Scala-IDE specific
-.scala_dependencies
-.worksheet
-/bin/
+# OS
+.DS_Store
+Thumbs.db

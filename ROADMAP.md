@@ -344,7 +344,7 @@ Two smaller corrections that change task definitions.
 
 ### Track A — Build resurrection 🏗️
 
-- [ ] A1 · Delete sbt scaffolding: `build.sbt`, `project/build.properties`, `project/site.sbt`, `project/`
+- [x] A1 · Delete sbt scaffolding: `build.sbt`, `project/build.properties`, `project/site.sbt`, `project/`
 - [ ] A2 · Delete `lib/opencv-300.jar` + `lib/` (292 KB of OpenCV 3.0.0-rc1 JNI stubs, zero natives, BSD notice stripped)
 - [ ] A3 · Delete `.github/unicorns` (byte-identical dupe of `.mergify.yml`), `.mergify.yml`, `.whitesource`
 - [ ] A4 · `./mill` bootstrap script + `.mill-version` = `1.1.7`
@@ -352,7 +352,7 @@ Two smaller corrections that change task definitions.
 - [ ] A5b · Publishing config: **only `core` and `zio` extend `PublishModule`**; `artifactName` = `scalacv` / `scalacv-zio`; `pomSettings` with organization `com.worxbend`, `` License.`Apache-2.0` ``, filled-in `Developer`; `versionScheme = "early-semver"`; `publishVersion` from Mill's built-in `mill.util.VcsVersionModule`
 - [ ] A6 · OpenCV deps — **three coordinates per platform** (§3.9), `$plat` from `Loader.getPlatform()`. Classifier deps go **only** on non-`PublishModule`s and test modules; **never** in `core.runMvnDeps` (it propagates into the POM classifier-stripped)
 - [ ] A6b · `core`'s POM depends on the classifier-less `org.bytedeco:opencv:4.13.0-1.5.13` alone. **Gate:** inspect the generated POM, not the build classpath
-- [ ] A7 · `.gitignore` rewritten for Mill (`out/`, `.bloop/`, `.bsp/`, `.metals/`, `.scala-build/`)
+- [x] A7 · `.gitignore` rewritten for Mill (`out/`, `.bloop/`, `.bsp/`, `.metals/`, `.scala-build/`)
 - [ ] A8 · `.scalafmt.conf` (`version = 3.11.4`, `runner.dialect = scala3`) + scalafix via `//| mvnDeps: ["com.goyeau::mill-scalafix::0.6.2"]`, mixing `ScalafixModule` into every `ScalaModule`. Task is `fix`; CI gate is `./mill __.fix --check`
 - [ ] A9 · Smoke main that **crosses JNI**: `OpenCv.load()`, then `new Mat(8, 8, CV_8UC3).rows == 8`. `Core.VERSION` is a constant and proves nothing (§3.10)
 - [ ] A10 · Delete `src/main/scala-2.11/` once Track B lands
