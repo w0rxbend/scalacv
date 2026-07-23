@@ -1,0 +1,67 @@
+//| mill-version: 1.1.7
+//| mill-jvm-version: zulu:25
+
+package build
+
+import mill.*, scalalib.*
+
+/** Shared settings for every Scala module in the build.
+  *
+  * Scala 3.3.8 (LTS) rather than the newest release: TASTy is not forward-compatible, so a
+  * library published from the Next line cannot be read by anyone on 3.3.x, and no
+  * `-Yscala-release`-style escape hatch has ever existed in Scala 3. See ROADMAP §3.1.
+  *
+  * The JVM is pinned in the build header above. Mill 1.1.7 defaults to `zulu:21` and ignores
+  * both `JAVA_HOME` and `MILL_JVM_VERSION` when it runs modules, so the header is the only
+  * thing that actually selects a JDK — `actions/setup-java` cannot. See ROADMAP §2.
+  */
+trait ScalacvModule extends ScalaModule {
+  def scalaVersion = "3.3.8"
+
+  def scalacOptions = Seq(
+    "-deprecation",
+    "-feature",
+    "-unchecked",
+    // scalafix's OrganizeImports.removeUnused hard-errors without this.
+    "-Wunused:all",
+    // Consumers only need JDK 17, even though we build on 25.
+    "-java-output-version", "17"
+  )
+}
+
+/** Test settings. Kept separate from ScalacvModule so `-Wunused:all` stays off test sources,
+  * where deliberately-unused bindings are common.
+  */
+trait ScalacvTests extends TestModule.Munit {
+  def mvnDeps = Seq(mvn"org.scalameta::munit:1.3.4")
+
+  /* Natives are loaded by dlopen from the caller's classloader, and OpenCV's own error
+   * reporting is chatty on stderr. Forking keeps a crashed native call from taking the
+   * whole test run with it, and headless=true makes a GUI-toolkit regression fail loudly
+   * rather than silently opening a window on a developer machine. */
+  def forkArgs = Seq("--enable-native-access=ALL-UNNAMED", "-Djava.awt.headless=true")
+}
+
+object core extends ScalacvModule {
+  object test extends ScalaTests with ScalacvTests
+}
+
+object zio extends ScalacvModule {
+  def moduleDeps = Seq(core)
+  object test extends ScalaTests with ScalacvTests
+}
+
+/** Headless examples. Built in CI, so nothing here may touch a GUI toolkit. */
+object examples extends ScalacvModule {
+  def moduleDeps = Seq(core, zio)
+  def forkArgs   = Seq("--enable-native-access=ALL-UNNAMED", "-Djava.awt.headless=true")
+}
+
+/** JavaFX examples. Deliberately excluded from CI and never published: OpenJFX resolves
+  * per-host through the `<os>` profile in its parent POM, so this module only ever builds
+  * for the machine it is built on.
+  */
+object `examples-gui` extends ScalacvModule {
+  def moduleDeps = Seq(core)
+  def forkArgs   = Seq("--enable-native-access=ALL-UNNAMED")
+}
