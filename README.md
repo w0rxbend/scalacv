@@ -7,7 +7,7 @@
 
 # scalacv
 
-**A Scala 3 wrapper for the OpenCV 4.13 Java API — typed, headless, and honest about native memory.**
+**An eloquent Scala 3 API for OpenCV 4.13 — a high-level image toolkit over the complete Java bindings. Typed, headless, and honest about native memory.**
 
 [![CI](https://github.com/w0rxbend/scalacv/actions/workflows/ci.yml/badge.svg)](https://github.com/w0rxbend/scalacv/actions/workflows/ci.yml)
 [![Scala 3.3 LTS](https://img.shields.io/badge/scala-3.3%20LTS-DC322F.svg)](https://www.scala-lang.org)
@@ -25,7 +25,7 @@
 - **Resource-safe by construction.** `Managed[A]` releases exactly once and throws on use-after-release, in Scala, before anything reaches JNI — where the same mistake is a SIGSEGV with no stack trace.
 - **Genuinely headless.** `OpenCv.load()` needs no GUI toolkit and no `apt-get` on any runner.
 - **Errors as values where they belong.** `Either[CvError, A]` for the failures you can expect; exceptions for the bugs you cannot.
-- **Modern OpenCV.** ArUco, QR, YuNet face detection, ONNX inference — not just the 2015 surface.
+- **Two levels, one library.** A high-level `Image` pipeline for the common cases, and the full typed `org.opencv.*` surface underneath — ArUco, QR, YuNet face detection, ONNX inference, and everything else — never hidden.
 
 ## 🚀 Quick start
 
@@ -92,7 +92,7 @@ That is the library. The typed API is the pleasant part; the lifetime handling i
 
 ## 📚 Documentation
 
-Full docs, cookbook and migration notes: **[w0rxbend.github.io/scalacv](https://w0rxbend.github.io/scalacv)** *(published by Track E — see the roadmap)*
+Full guide, API reference and cookbook: **[w0rxbend.github.io/scalacv](https://w0rxbend.github.io/scalacv)**
 
 ## 🗺️ Roadmap
 
@@ -106,6 +106,4 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md). Briefly: `./mill __.compile`, `./mill 
 
 [Apache-2.0](LICENSE). See [`NOTICE`](NOTICE) and [`THIRD-PARTY.md`](THIRD-PARTY.md).
 
-**Heritage.** scalacv began in 2015 as [`mcallisto/scalacv`](https://github.com/mcallisto/scalacv) by Mario Càllisto, a Scala 2.11 wrapper over the OpenCV 3.0 Java API. Two of its examples descended in turn from [`rladstaetter/isight-java`](https://github.com/rladstaetter/isight-java) and [`chimpler/blog-scala-javacv`](https://github.com/chimpler/blog-scala-javacv).
-
-None of those repositories ever carried a license, so the present library is a clean-room rewrite and shares no code with them. The lineage is recorded because it is where the project came from, and because the original author's work is why it exists at all.
+**Credits.** The scalacv name and original spark come from [`mcallisto/scalacv`](https://github.com/mcallisto/scalacv) by Mario Càllisto; two example ideas trace to [`rladstaetter/isight-java`](https://github.com/rladstaetter/isight-java) and [`chimpler/blog-scala-javacv`](https://github.com/chimpler/blog-scala-javacv). None of those repositories carried a license, so this is a clean-room library that shares no code with them — the credit is for the inspiration, recorded here and in [`NOTICE`](NOTICE).

@@ -37,8 +37,7 @@ export default defineConfig({
       ]},
       { text: 'Guides', items: [
         { text: 'Cookbook', link: '/cookbook' },
-        { text: 'ZIO', link: '/zio' },
-        { text: 'Migrating from 3.x', link: '/migration' }
+        { text: 'ZIO', link: '/zio' }
       ]}
     ],
     socialLinks: [{ icon: 'github', link: 'https://github.com/w0rxbend/scalacv' }],
