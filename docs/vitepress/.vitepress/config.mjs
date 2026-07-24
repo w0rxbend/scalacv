@@ -33,6 +33,7 @@ export default defineConfig({
       ]},
       { text: 'The high-level API', items: [
         { text: 'The Image API', link: '/image-api' },
+        { text: '2D graphics & creative coding', link: '/graphics' },
         { text: 'Cookbook', link: '/cookbook' }
       ]},
       { text: 'The OpenCV surface', items: [
