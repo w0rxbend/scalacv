@@ -84,6 +84,10 @@ abstract class scalacv.Interpolation
   implements scala.Product, scala.reflect.Enum
   def <init>(int): void
   def cvValue(): int
+abstract class scalacv.KeypointLayout
+  extends java.lang.Object
+  implements scala.Product, scala.reflect.Enum
+  def <init>(): void
 abstract class scalacv.LineType
   extends java.lang.Object
   implements scala.Product, scala.reflect.Enum
@@ -341,6 +345,28 @@ final class scalacv.Face
   def rightMouthCorner(): scalacv.Point
   def score(): float
   def toString(): java.lang.String
+final class scalacv.HeadPose
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(double, double, double): void
+  def _1(): double
+  def _2(): double
+  def _3(): double
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): double
+  def copy$default$2(): double
+  def copy$default$3(): double
+  def copy(double, double, double): scalacv.HeadPose
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def pitch(): double
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def roll(): double
+  def toString(): java.lang.String
+  def yaw(): double
 final class scalacv.Image
   extends java.lang.Object
   implements java.lang.AutoCloseable
@@ -399,6 +425,10 @@ final class scalacv.Image
   def drawRects$default$2(): scalacv.Scalar
   def drawRects$default$3(): scalacv.Thickness
   def drawRects(scala.collection.immutable.Seq<scalacv.Rect>, scalacv.Scalar, scalacv.Thickness): scalacv.Image
+  def drawSkeleton$default$2(): float
+  def drawSkeleton$default$3(): scalacv.Scalar
+  def drawSkeleton$default$4(): scalacv.Scalar
+  def drawSkeleton(scalacv.Pose, float, scalacv.Scalar, scalacv.Scalar): scalacv.Image
   def drawText$default$3(): scalacv.Scalar
   def drawText$default$4(): double
   def drawText(java.lang.String, scalacv.Point, scalacv.Scalar, double): scalacv.Image
@@ -468,6 +498,28 @@ final class scalacv.ImreadFlags
   def productElement(int): java.lang.Object
   def productElementName(int): java.lang.String
   def productPrefix(): java.lang.String
+  def toString(): java.lang.String
+final class scalacv.Keypoint
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(java.lang.String, scalacv.Point, float): void
+  def _1(): java.lang.String
+  def _2(): scalacv.Point
+  def _3(): float
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): java.lang.String
+  def copy$default$2(): scalacv.Point
+  def copy$default$3(): float
+  def copy(java.lang.String, scalacv.Point, float): scalacv.Keypoint
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def name(): java.lang.String
+  def point(): scalacv.Point
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def score(): float
   def toString(): java.lang.String
 final class scalacv.Managed<A>
   extends java.lang.Object
@@ -580,6 +632,51 @@ final class scalacv.PolarLineWithVotes
   def theta(): float
   def toString(): java.lang.String
   def votes(): int
+final class scalacv.Pose
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(scala.collection.immutable.Seq<scalacv.Keypoint>, scalacv.PoseTopology): void
+  def _1(): scala.collection.immutable.Seq<scalacv.Keypoint>
+  def _2(): scalacv.PoseTopology
+  def apply(java.lang.String): scala.Option<scalacv.Keypoint>
+  def bones$default$1(): float
+  def bones(float): scala.collection.immutable.Seq<scala.Tuple2<scalacv.Point, scalacv.Point>>
+  def canEqual(java.lang.Object): boolean
+  def confident$default$1(): float
+  def confident(float): scala.collection.immutable.Seq<scalacv.Keypoint>
+  def copy$default$1(): scala.collection.immutable.Seq<scalacv.Keypoint>
+  def copy$default$2(): scalacv.PoseTopology
+  def copy(scala.collection.immutable.Seq<scalacv.Keypoint>, scalacv.PoseTopology): scalacv.Pose
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def keypoints(): scala.collection.immutable.Seq<scalacv.Keypoint>
+  def meanScore(): float
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def toString(): java.lang.String
+  def topology(): scalacv.PoseTopology
+final class scalacv.PoseTopology
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(scala.collection.immutable.Seq<java.lang.String>, scala.collection.immutable.Seq<scala.Tuple2<java.lang.Object, java.lang.Object>>): void
+  def _1(): scala.collection.immutable.Seq<java.lang.String>
+  def _2(): scala.collection.immutable.Seq<scala.Tuple2<java.lang.Object, java.lang.Object>>
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): scala.collection.immutable.Seq<java.lang.String>
+  def copy$default$2(): scala.collection.immutable.Seq<scala.Tuple2<java.lang.Object, java.lang.Object>>
+  def copy(scala.collection.immutable.Seq<java.lang.String>, scala.collection.immutable.Seq<scala.Tuple2<java.lang.Object, java.lang.Object>>): scalacv.PoseTopology
+  def edges(): scala.collection.immutable.Seq<scala.Tuple2<java.lang.Object, java.lang.Object>>
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def names(): scala.collection.immutable.Seq<java.lang.String>
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def size(): int
+  def toString(): java.lang.String
 final class scalacv.QrCode
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -1173,6 +1270,13 @@ object scalacv.Font
   static val Script: scalacv.Font
   static val Simplex: scalacv.Font
   static val Triplex: scalacv.Font
+object scalacv.HeadPose
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def apply(double, double, double): scalacv.HeadPose
+  def estimate(scalacv.Face, scalacv.Size): scala.Option<scalacv.HeadPose>
+  def fromProduct(scala.Product): scalacv.HeadPose
+  def unapply(scalacv.HeadPose): scalacv.HeadPose
 object scalacv.Hough
   extends java.lang.Object
   implements java.io.Serializable
@@ -1272,6 +1376,22 @@ object scalacv.Interpolation
   static val Lanczos4: scalacv.Interpolation
   static val Linear: scalacv.Interpolation
   static val Nearest: scalacv.Interpolation
+object scalacv.Keypoint
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def apply(java.lang.String, scalacv.Point, float): scalacv.Keypoint
+  def fromProduct(scala.Product): scalacv.Keypoint
+  def toString(): java.lang.String
+  def unapply(scalacv.Keypoint): scalacv.Keypoint
+object scalacv.KeypointLayout
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Sum
+  def fromOrdinal(int): scalacv.KeypointLayout
+  def ordinal(scalacv.KeypointLayout): int
+  def valueOf(java.lang.String): scalacv.KeypointLayout
+  def values(): scalacv.KeypointLayout[]
+  static val Heatmap: scalacv.KeypointLayout
+  static val Regression: scalacv.KeypointLayout
 object scalacv.LineType
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Sum
@@ -1466,6 +1586,26 @@ object scalacv.PolarLineWithVotes
   def fromProduct(scala.Product): scalacv.PolarLineWithVotes
   def toString(): java.lang.String
   def unapply(scalacv.PolarLineWithVotes): scalacv.PolarLineWithVotes
+object scalacv.Pose
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def apply(scala.collection.immutable.Seq<scalacv.Keypoint>, scalacv.PoseTopology): scalacv.Pose
+  def fromProduct(scala.Product): scalacv.Pose
+  def toString(): java.lang.String
+  def unapply(scalacv.Pose): scalacv.Pose
+object scalacv.PoseEstimator
+  extends java.lang.Object
+  implements java.io.Serializable
+  def decode$default$4(): scalacv.PoseTopology
+  def decode(org.opencv.core.Mat, scalacv.Size, scalacv.KeypointLayout, scalacv.PoseTopology): scalacv.Pose
+object scalacv.PoseTopology
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def CocoBody17(): scalacv.PoseTopology
+  def Hand21(): scalacv.PoseTopology
+  def apply(scala.collection.immutable.Seq<java.lang.String>, scala.collection.immutable.Seq<scala.Tuple2<java.lang.Object, java.lang.Object>>): scalacv.PoseTopology
+  def fromProduct(scala.Product): scalacv.PoseTopology
+  def unapply(scalacv.PoseTopology): scalacv.PoseTopology
 object scalacv.Qr
   extends java.lang.Object
   implements java.io.Serializable

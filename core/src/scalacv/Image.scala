@@ -301,6 +301,17 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
         m.drawRect(f.box, color)
         f.landmarks.foreach(p => m.drawCircle(p, 2, color, Thickness.Filled))
 
+  /** Draws a [[Pose]] skeleton: a line per bone and a dot per confident keypoint. */
+  def drawSkeleton(
+      pose: Pose,
+      minScore: Float = 0.3f,
+      color: Scalar = Scalar.Green,
+      jointColor: Scalar = Scalar.Red
+  ): Image =
+    paint: m =>
+      pose.bones(minScore).foreach((a, b) => m.drawLine(a, b, color, Thickness.Stroke(2)))
+      pose.confident(minScore).foreach(kp => m.drawCircle(kp.point, 3, jointColor, Thickness.Filled))
+
   // -- Terminals: consume this Image and release ---------------------------------------------------
 
   /** Writes to `path`, choosing the encoder from its extension, then releases. */
