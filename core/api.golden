@@ -641,6 +641,37 @@ final class scalacv.Keypoint
   def productPrefix(): java.lang.String
   def score(): float
   def toString(): java.lang.String
+final class scalacv.LoopClosure
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(int, int, double): void
+  def _1(): int
+  def _2(): int
+  def _3(): double
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): int
+  def copy$default$2(): int
+  def copy$default$3(): double
+  def copy(int, int, double): scalacv.LoopClosure
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def keyframe(): int
+  def matches(): int
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def score(): double
+  def toString(): java.lang.String
+final class scalacv.LoopDetector
+  extends java.lang.Object
+  implements java.lang.AutoCloseable
+  def <init>(int, int, int): void
+  def addKeyframe(scalacv.Image): int
+  def close(): void
+  def detect(scalacv.Image): scala.Option<scalacv.LoopClosure>
+  def keyframeCount(): int
+  def process(scalacv.Image): scala.Option<scalacv.LoopClosure>
 final class scalacv.Managed<A>
   extends java.lang.Object
   implements java.lang.AutoCloseable
@@ -709,6 +740,20 @@ final class scalacv.Obstacle
   def productPrefix(): java.lang.String
   def region(): scalacv.Rect
   def toString(): java.lang.String
+final class scalacv.OccupancyGrid
+  extends java.lang.Object
+  def <init>(int, int, double): void
+  def cellOf(double, double): scala.Tuple2<java.lang.Object, java.lang.Object>
+  def cols(): int
+  def hit(double, double): void
+  def isOccupied$default$3(): double
+  def isOccupied(double, double, double): boolean
+  def miss(double, double): void
+  def observe(double, double, double, double): void
+  def probability(double, double): double
+  def resolution(): double
+  def rows(): int
+  def toImage(): scalacv.Image
 final class scalacv.OcrResult
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -1698,6 +1743,20 @@ object scalacv.Localizer
   extends java.lang.Object
   implements java.io.Serializable
   def locate(scala.collection.immutable.Seq<scala.Tuple3<java.lang.Object, java.lang.Object, java.lang.Object>>, scala.collection.immutable.Seq<scalacv.Point>, double, scalacv.Point): scala.Option<scalacv.CameraPose>
+object scalacv.LoopClosure
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def apply(int, int, double): scalacv.LoopClosure
+  def fromProduct(scala.Product): scalacv.LoopClosure
+  def toString(): java.lang.String
+  def unapply(scalacv.LoopClosure): scalacv.LoopClosure
+object scalacv.LoopDetector
+  extends java.lang.Object
+  implements java.io.Serializable
+  def apply$default$1(): int
+  def apply$default$2(): int
+  def apply$default$3(): int
+  def apply(int, int, int): scalacv.LoopDetector
 object scalacv.Managed
   extends java.lang.Object
   implements java.io.Serializable
@@ -1782,6 +1841,11 @@ object scalacv.Obstacles
   def fromDisparity$default$2(): double
   def fromDisparity$default$3(): int
   def fromDisparity(scalacv.Image, double, int): scala.collection.immutable.Seq<scalacv.Obstacle>
+object scalacv.OccupancyGrid
+  extends java.lang.Object
+  implements java.io.Serializable
+  def apply$default$3(): double
+  def apply(int, int, double): scalacv.OccupancyGrid
 object scalacv.Ocr
   extends java.lang.Object
   implements java.io.Serializable
