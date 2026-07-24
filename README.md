@@ -26,7 +26,7 @@
 - **Genuinely headless.** `OpenCv.load()` needs no GUI toolkit and no `apt-get` on any runner.
 - **Errors as values where they belong.** `Either[CvError, A]` for the failures you can expect; exceptions for the bugs you cannot.
 - **Two levels, one library.** A high-level `Image` pipeline for the common cases, and the full typed `org.opencv.*` surface underneath — never hidden.
-- **Batteries included.** Filters and morphology, geometric transforms, drawing, contours and Hough, colour segmentation; Haar/YuNet faces, QR, ArUco, ONNX inference; a high-level `Camera`/`Recorder`; **motion detection** for a static/MJPEG cam; **pose estimation** (skeletons, hands, head pose); **gesture recognition**; **video-conferencing** background blur & virtual backgrounds; **screen analysis** (template matching, change detection); and **OCR** preprocessing (deskew + a pluggable engine).
+- **Batteries included.** Filters and morphology, geometric transforms, drawing, contours and Hough, colour segmentation; Haar/YuNet faces, QR, ArUco, ONNX inference; a high-level `Camera`/`Recorder`; **motion detection** for a static/MJPEG cam; **pose estimation** (skeletons, hands, head pose); **gesture recognition**; **video-conferencing** background blur & virtual backgrounds; **screen analysis** (template matching, change detection); **OCR** preprocessing (deskew + a pluggable engine); and a **visual-navigation front end** — optical flow, ORB features, stereo depth & obstacles, and visual odometry.
 
 ## 🚀 Quick start
 

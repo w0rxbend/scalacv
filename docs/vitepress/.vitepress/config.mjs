@@ -57,6 +57,9 @@ export default defineConfig({
         { text: 'Screen analysis', link: '/screen-analysis' },
         { text: 'OCR', link: '/ocr' }
       ]},
+      { text: 'Robotics & 3D vision', items: [
+        { text: 'Visual navigation & SLAM', link: '/navigation' }
+      ]},
       { text: 'Video & runtime', items: [
         { text: 'Video & the camera', link: '/video' },
         { text: 'The native cache', link: '/native-cache' }
