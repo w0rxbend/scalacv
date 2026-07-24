@@ -116,7 +116,7 @@ val bad: Either[CvError, Unit] =
 bad.left.map(_.getMessage)
 ```
 
-## The escape hatch: `Cv.attempt`
+## The escape hatch: `Cv.attempt` {#the-escape-hatch-cv-attempt}
 
 Every built-in like `Images.read` already returns an `Either`. When you go *off the beaten path* — a raw
 `org.opencv.*` call scalacv does not wrap — `Cv.attempt` is the single tool that lifts it into the same

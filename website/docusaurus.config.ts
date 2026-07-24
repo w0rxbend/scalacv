@@ -31,6 +31,11 @@ const config: Config = {
   onBrokenLinks: 'throw',
   onBrokenAnchors: 'throw',
   markdown: {
+    // `detect`: .md files parse as CommonMark, .mdx as MDX. The guide pages are generated from
+    // mdoc as .md and are prose + fenced Scala — CommonMark renders bare `<:`, `=>`, `?=>`, `{ }`
+    // literally, so the MDX-3 JSX-in-prose hazard never applies to them. Pages that need React
+    // (Tabs) opt in explicitly by being authored as .mdx.
+    format: 'detect',
     // Moved under markdown.hooks in 3.x (top-level is deprecated, removed in v4).
     hooks: {onBrokenMarkdownLinks: 'throw'},
   },

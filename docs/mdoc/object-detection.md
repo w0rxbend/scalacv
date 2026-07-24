@@ -135,7 +135,7 @@ Cascades.load(CascadeName.FrontalFaceAlt).map { classifier =>
 }
 ```
 
-## YuNet — the modern face detector
+## YuNet — the modern face detector {#yunet-the-modern-face-detector}
 
 For faces specifically, reach for **YuNet** instead. It is a small CNN (232 kB) exposed through OpenCV's
 `FaceDetectorYN`, and it beats the Haar cascades on every axis that matters:
@@ -244,7 +244,7 @@ caller. Knowing them explains why the API looks the way it does:
 with a message about layer shapes that says nothing about the real mistake, so convert first with
 `image.convert(ColorConversion.GrayToBgr)`.
 
-### High level: `Image.faces` and `Image.markFaces`
+### High level: `Image.faces` and `Image.markFaces` {#faces}
 
 On an `Image`, `faces(detector)` is a borrowing query and `markFaces` is the one-call "show me what YuNet
 found" — a box per face and a dot per landmark:

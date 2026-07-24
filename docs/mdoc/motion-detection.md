@@ -37,7 +37,7 @@ about the scene, not the API.
 A detector is **stateful** (it retains the previous frame, or the background model) and **not
 thread-safe** — feed frames in order, and give each thread its own.
 
-## Frame difference — the default
+## Frame difference — the default {#frame-difference-the-default}
 
 Each frame is compared to the one before it. The very first frame has nothing to compare against, so it
 reports [`Motion.still`](#the-motion-result) and becomes the baseline. An identical frame reports no

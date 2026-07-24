@@ -10,8 +10,8 @@ scope. Knowing where that line falls is half the battle:
 |---|---|---|
 | **Tracking** | [`OpticalFlow`](#optical-flow) — follow points frame to frame | — |
 | **Visual odometry** | [`VisualOdometry`](#visual-odometry) per pair; [`Odometry`](#the-odometry-pipeline) — the running loop | scale, drift correction |
-| **Localization** | [`Localizer`](#localization-against-a-map) — absolute pose via `solvePnP`; [`Features`](#features--matching) to match a map | a map to localize against |
-| **Obstacle detection** | [`StereoDepth`](#stereo-depth--obstacles) + `Obstacles` | — |
+| **Localization** | [`Localizer`](#absolute-localization) — absolute pose via `solvePnP`; [`Features`](#features--matching) to match a map | a map to localize against |
+| **Obstacle detection** | [`StereoDepth`](#stereo-depth-obstacles) + `Obstacles` | — |
 | **Navigation** | [`Navigator`](#reactive-navigation) — reactive obstacle-avoidance steering | a map, a goal, a planner |
 | **Mapping** | [`LoopDetector`](#mapping-loop-closure--occupancy) — revisit detection; [`OccupancyGrid`](#mapping-loop-closure--occupancy) | — |
 | **Full SLAM** | all of the above as the front end | pose-graph optimisation, bundle adjustment |
@@ -80,7 +80,7 @@ scale). Here the correspondences come from projecting known 3D points before and
 Chaining these per-frame motions is dead-reckoning odometry; it **drifts**, and correcting that drift is the
 back end's job.
 
-## Stereo depth & obstacles
+## Stereo depth & obstacles {#stereo-depth-obstacles}
 
 From a rectified stereo pair, `StereoDepth.disparity` produces a map where **brighter is nearer**, and
 `Obstacles.fromDisparity` reads the near-field blobs off it — the obstacle detector for a robot or drone:
@@ -98,7 +98,7 @@ From a rectified stereo pair, `StereoDepth.disparity` produces a map where **bri
 Rectifying the pair first (`stereoRectify`, from a one-time stereo calibration) is assumed — it is off the hot
 path and not wrapped here.
 
-## Localization against a map
+## Localization against a map {#absolute-localization}
 
 `Localizer` gives the camera's **absolute** pose from correspondences between a map's known 3D points and their
 matches in this frame, via `solvePnP` (the same routine [head pose](/pose-estimation) uses, at map scale).

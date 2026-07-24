@@ -130,7 +130,7 @@ Dnn.fromOnnx("models/hand_landmark.onnx").flatMap { managedNet =>
 > exported to ONNX. The format is the bring-your-own part, not the API — the same constraint every skeleton
 > on the [pose-estimation](/pose-estimation) page lives with.
 
-## Sign language — the honest framing
+## Sign language — the honest framing {#sign-language-the-honest-framing}
 
 "Sign recognition" spans two genuinely different problems, and scalacv sits at a different distance from each.
 Being clear about which is which is the point of this section.
