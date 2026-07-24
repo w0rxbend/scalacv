@@ -166,6 +166,98 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
     try Image(Managed(out))
     finally handle.release()
 
+  /** Mirrors the image — see [[Flip]]. */
+  def flip(how: Flip): Image = transform(_.flip(how))
+
+  /** A lossless quarter-turn rotation — see [[Rotation]]. */
+  def rotate(rotation: Rotation): Image = transform(_.rotate(rotation))
+
+  /** Rotates by an arbitrary angle (degrees, counter-clockwise), expanding the canvas so no corner is
+    * clipped. `scale` zooms at the same time.
+    */
+  def rotate(degrees: Double, scale: Double = 1.0): Image = transform(_.rotated(degrees, scale))
+
+  /** Adds a uniform border of `size` pixels on every side. */
+  def pad(size: Int, borderType: BorderType = BorderType.Constant, color: Scalar = Scalar.Black): Image =
+    transform(_.border(size, size, size, size, borderType, color))
+
+  /** Adds a border of independent widths per side. */
+  def border(
+      top: Int,
+      bottom: Int,
+      left: Int,
+      right: Int,
+      borderType: BorderType = BorderType.Constant,
+      color: Scalar = Scalar.Black
+  ): Image = transform(_.border(top, bottom, left, right, borderType, color))
+
+  /** Median blur (`radius` 1 = 3×3) — the standard cure for salt-and-pepper noise. */
+  def medianBlur(radius: Int): Image =
+    require(radius >= 1, s"medianBlur radius must be ≥ 1, got $radius")
+    transform(_.medianBlur(radius * 2 + 1))
+
+  /** Edge-preserving bilateral filter — smooths while keeping edges crisp (slower than a Gaussian). */
+  def bilateralFilter(diameter: Int = 9, sigmaColor: Double = 75, sigmaSpace: Double = 75): Image =
+    transform(_.bilateralFilter(diameter, sigmaColor, sigmaSpace))
+
+  /** Adaptive threshold — a per-neighbourhood threshold that holds up under uneven lighting (document scans,
+    * OCR prep). `CV_8UC1` only, so usually after [[gray]].
+    */
+  def adaptiveThreshold(
+      blockSize: Int = 11,
+      c: Double = 2.0,
+      method: AdaptiveMethod = AdaptiveMethod.Gaussian,
+      inverse: Boolean = false
+  ): Image = transform(_.adaptiveThreshold(255, method, blockSize, c, inverse))
+
+  /** Morphological erosion — shrinks bright regions, clears small bright specks. */
+  def erode(radius: Int = 1, shape: MorphShape = MorphShape.Rect): Image = transform(_.erode(radius, shape))
+
+  /** Morphological dilation — grows bright regions, fills small dark gaps. */
+  def dilate(radius: Int = 1, shape: MorphShape = MorphShape.Rect): Image = transform(_.dilate(radius, shape))
+
+  /** A compound morphological operation — opening, closing, gradient, top-hat, black-hat. See [[MorphOp]].
+    * (There is no bare `close` method because `close()` already releases the image.)
+    */
+  def morphology(op: MorphOp, radius: Int = 1, shape: MorphShape = MorphShape.Rect): Image =
+    transform(_.morphology(op, radius, shape))
+
+  /** Inverts the image (`255 - v`). */
+  def invert: Image = transform(_.bitwiseNot())
+
+  /** Brightness/contrast in one step: `contrast` scales (1.0 = unchanged), `brightness` shifts (0 =
+    * unchanged).
+    */
+  def adjust(brightness: Double = 0, contrast: Double = 1.0): Image =
+    transform(_.convertScaleAbs(contrast, brightness))
+
+  /** Converts BGR → HSV — the space to threshold in for colour segmentation (see [[inRange]]). */
+  def toHsv: Image = convert(ColorConversion.BgrToHsv)
+
+  /** Unsharp-mask sharpening; `amount` ~1 is a firm sharpen, higher haloes the edges. */
+  def sharpen(amount: Double = 1.0): Image = transform(_.sharpen(amount))
+
+  /** Min-max normalises values into `[min, max]` — a quick contrast stretch. */
+  def normalize(min: Double = 0, max: Double = 255): Image = transform(_.normalize(min, max))
+
+  /** Extracts a single channel as its own single-channel image. */
+  def channel(index: Int): Image = transform(_.extractChannel(index))
+
+  /** A binary mask of the pixels whose channels all fall within `[lo, hi]` — the core of colour segmentation.
+    * Consumes this image and returns the mask; usually run after [[toHsv]].
+    */
+  def inRange(lo: Scalar, hi: Scalar): Image = transform(_.inRange(lo, hi))
+
+  /** Keeps this image only where `mask` is non-zero (elsewhere black). `mask` is borrowed, not consumed. */
+  def applyMask(mask: Image): Image = transform(_.masked(mask.mat))
+
+  /** Alpha-blends `other` over this image: `this * weight + other * (1 - weight)`. Both must match in size
+    * and type; `other` is borrowed.
+    */
+  def blend(other: Image, weight: Double = 0.5): Image =
+    require(weight >= 0 && weight <= 1, s"blend weight must be in [0, 1], got $weight")
+    transform(_.addWeighted(weight, other.mat, 1 - weight))
+
   // -- Drawing: mutate in place (we own the Mat), consume this Image -------------------------------
 
   /** Draws an axis-aligned rectangle. Pass [[Thickness.Filled]] for a solid block. */

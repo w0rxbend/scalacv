@@ -11,6 +11,11 @@
 # This is the JVM-visible surface: Scala's `private[scalacv]` compiles to ACC_PUBLIC and
 # so appears below. See the scaladoc on PublicApi for the full set of exclusions.
 
+abstract class scalacv.AdaptiveMethod
+  extends java.lang.Object
+  implements scala.Product, scala.reflect.Enum
+  def <init>(int): void
+  def cvValue(): int
 abstract class scalacv.ArucoDictionary
   extends java.lang.Object
   implements scala.Product, scala.reflect.Enum
@@ -49,6 +54,11 @@ abstract class scalacv.ContourRetrieval
 abstract class scalacv.CvError
   extends java.lang.RuntimeException
   def <init>(java.lang.String, java.lang.Throwable): void
+abstract class scalacv.Flip
+  extends java.lang.Object
+  implements scala.Product, scala.reflect.Enum
+  def <init>(int): void
+  def cvValue(): int
 abstract class scalacv.Font
   extends java.lang.Object
   implements scala.Product, scala.reflect.Enum
@@ -74,7 +84,22 @@ abstract class scalacv.LineType
   implements scala.Product, scala.reflect.Enum
   def <init>(int): void
   def cvValue(): int
+abstract class scalacv.MorphOp
+  extends java.lang.Object
+  implements scala.Product, scala.reflect.Enum
+  def <init>(int): void
+  def cvValue(): int
+abstract class scalacv.MorphShape
+  extends java.lang.Object
+  implements scala.Product, scala.reflect.Enum
+  def <init>(int): void
+  def cvValue(): int
 abstract class scalacv.OutputDepth
+  extends java.lang.Object
+  implements scala.Product, scala.reflect.Enum
+  def <init>(int): void
+  def cvValue(): int
+abstract class scalacv.Rotation
   extends java.lang.Object
   implements scala.Product, scala.reflect.Enum
   def <init>(int): void
@@ -297,14 +322,33 @@ final class scalacv.Image
   extends java.lang.Object
   implements java.lang.AutoCloseable
   def <init>(scalacv.Managed<org.opencv.core.Mat>): void
+  def adaptiveThreshold$default$1(): int
+  def adaptiveThreshold$default$2(): double
+  def adaptiveThreshold$default$3(): scalacv.AdaptiveMethod
+  def adaptiveThreshold$default$4(): boolean
+  def adaptiveThreshold(int, double, scalacv.AdaptiveMethod, boolean): scalacv.Image
+  def adjust$default$1(): double
+  def adjust$default$2(): double
+  def adjust(double, double): scalacv.Image
+  def applyMask(scalacv.Image): scalacv.Image
   def arucoMarkers$default$1(): scalacv.ArucoDictionary
   def arucoMarkers(scalacv.ArucoDictionary): scala.collection.immutable.Seq<scalacv.ArucoMarker>
+  def bilateralFilter$default$1(): int
+  def bilateralFilter$default$2(): double
+  def bilateralFilter$default$3(): double
+  def bilateralFilter(int, double, double): scalacv.Image
+  def blend$default$2(): double
+  def blend(scalacv.Image, double): scalacv.Image
   def blur(int): scalacv.Image
+  def border$default$5(): scalacv.BorderType
+  def border$default$6(): scalacv.Scalar
+  def border(int, int, int, int, scalacv.BorderType, scalacv.Scalar): scalacv.Image
   def bytes$default$1(): java.lang.String
   def bytes(java.lang.String): scala.util.Either<scalacv.CvError, byte[]>
   def canny$default$3(): int
   def canny$default$4(): boolean
   def canny(double, double, int, boolean): scalacv.Image
+  def channel(int): scalacv.Image
   def channels(): int
   def close(): void
   def contours$default$1(): scalacv.ContourRetrieval
@@ -317,6 +361,9 @@ final class scalacv.Image
   def detectHaar$default$3(): int
   def detectHaar$default$4(): scala.Option<scalacv.Size>
   def detectHaar(org.opencv.objdetect.CascadeClassifier, double, int, scala.Option<scalacv.Size>): scala.collection.immutable.Seq<scalacv.Rect>
+  def dilate$default$1(): int
+  def dilate$default$2(): scalacv.MorphShape
+  def dilate(int, scalacv.MorphShape): scalacv.Image
   def drawCircle$default$3(): scalacv.Scalar
   def drawCircle$default$4(): scalacv.Thickness
   def drawCircle(scalacv.Point, int, scalacv.Scalar, scalacv.Thickness): scalacv.Image
@@ -330,27 +377,49 @@ final class scalacv.Image
   def drawText$default$4(): double
   def drawText(java.lang.String, scalacv.Point, scalacv.Scalar, double): scalacv.Image
   def equalizeHist(): scalacv.Image
+  def erode$default$1(): int
+  def erode$default$2(): scalacv.MorphShape
+  def erode(int, scalacv.MorphShape): scalacv.Image
   def faces(org.opencv.objdetect.FaceDetectorYN): scala.collection.immutable.Seq<scalacv.Face>
+  def flip(scalacv.Flip): scalacv.Image
   def gaussianBlur$default$2(): double
   def gaussianBlur$default$3(): double
   def gaussianBlur(scalacv.Size, double, double): scalacv.Image
   def gray(): scalacv.Image
   def height(): int
+  def inRange(scalacv.Scalar, scalacv.Scalar): scalacv.Image
+  def invert(): scalacv.Image
   def isEmpty(): boolean
   def managed(): scalacv.Managed<org.opencv.core.Mat>
   def markFaces$default$2(): scalacv.Scalar
   def markFaces(scala.collection.immutable.Seq<scalacv.Face>, scalacv.Scalar): scalacv.Image
   def mat(): org.opencv.core.Mat
+  def medianBlur(int): scalacv.Image
+  def morphology$default$2(): int
+  def morphology$default$3(): scalacv.MorphShape
+  def morphology(scalacv.MorphOp, int, scalacv.MorphShape): scalacv.Image
+  def normalize$default$1(): double
+  def normalize$default$2(): double
+  def normalize(double, double): scalacv.Image
+  def pad$default$2(): scalacv.BorderType
+  def pad$default$3(): scalacv.Scalar
+  def pad(int, scalacv.BorderType, scalacv.Scalar): scalacv.Image
   def qrCodes(): scala.collection.immutable.Seq<scalacv.QrCode>
   def resize(int, int): scalacv.Image
   def resizeTo$default$2(): scalacv.Interpolation
   def resizeTo(scalacv.Size, scalacv.Interpolation): scalacv.Image
+  def rotate$default$2(): double
+  def rotate(double, double): scalacv.Image
+  def rotate(scalacv.Rotation): scalacv.Image
   def scale$default$2(): scalacv.Interpolation
   def scale(double, scalacv.Interpolation): scalacv.Image
+  def sharpen$default$1(): double
+  def sharpen(double): scalacv.Image
   def size(): scalacv.Size
   def threshold$default$2(): double
   def threshold$default$3(): scalacv.Threshold
   def threshold(double, double, scalacv.Threshold): scalacv.Image
+  def toHsv(): scalacv.Image
   def toString(): java.lang.String
   def width(): int
   def write(java.lang.String): scala.util.Either<scalacv.CvError, scala.runtime.BoxedUnit>
@@ -649,6 +718,15 @@ final class scalacv.Video.FrameIterator
   def hasNext(): boolean
   def next(): org.opencv.core.Mat
   def retire(): void
+object scalacv.AdaptiveMethod
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Sum
+  def fromOrdinal(int): scalacv.AdaptiveMethod
+  def ordinal(scalacv.AdaptiveMethod): int
+  def valueOf(java.lang.String): scalacv.AdaptiveMethod
+  def values(): scalacv.AdaptiveMethod[]
+  static val Gaussian: scalacv.AdaptiveMethod
+  static val Mean: scalacv.AdaptiveMethod
 object scalacv.Aruco
   extends java.lang.Object
   implements java.io.Serializable
@@ -977,6 +1055,16 @@ object scalacv.FaceDetect
   def detect(org.opencv.objdetect.FaceDetectorYN, org.opencv.core.Mat): scala.collection.immutable.Seq<scalacv.Face>
   def downloadModel(java.nio.file.Path): scala.util.Either<scalacv.CvError, java.nio.file.Path>
   def given_Releasable_FaceDetectorYN(): scalacv.Releasable<org.opencv.objdetect.FaceDetectorYN>
+object scalacv.Flip
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Sum
+  def fromOrdinal(int): scalacv.Flip
+  def ordinal(scalacv.Flip): int
+  def valueOf(java.lang.String): scalacv.Flip
+  def values(): scalacv.Flip[]
+  static val Both: scalacv.Flip
+  static val Horizontal: scalacv.Flip
+  static val Vertical: scalacv.Flip
 object scalacv.Font
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Sum
@@ -1110,6 +1198,28 @@ object scalacv.Mats
   def chain(org.opencv.core.Mat, scala.collection.immutable.Seq<scala.Function1<org.opencv.core.Mat, scalacv.Managed<org.opencv.core.Mat>>>): scalacv.Managed<org.opencv.core.Mat>
   def produce(java.lang.String, scala.Function1<org.opencv.core.Mat, scala.runtime.BoxedUnit>): scalacv.Managed<org.opencv.core.Mat>
   def requireKernel(java.lang.String, scalacv.Size, boolean): void
+object scalacv.MorphOp
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Sum
+  def fromOrdinal(int): scalacv.MorphOp
+  def ordinal(scalacv.MorphOp): int
+  def valueOf(java.lang.String): scalacv.MorphOp
+  def values(): scalacv.MorphOp[]
+  static val BlackHat: scalacv.MorphOp
+  static val Close: scalacv.MorphOp
+  static val Gradient: scalacv.MorphOp
+  static val Open: scalacv.MorphOp
+  static val TopHat: scalacv.MorphOp
+object scalacv.MorphShape
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Sum
+  def fromOrdinal(int): scalacv.MorphShape
+  def ordinal(scalacv.MorphShape): int
+  def valueOf(java.lang.String): scalacv.MorphShape
+  def values(): scalacv.MorphShape[]
+  static val Cross: scalacv.MorphShape
+  static val Ellipse: scalacv.MorphShape
+  static val Rect: scalacv.MorphShape
 object scalacv.NativeDelete
   extends java.lang.Object
   implements java.io.Serializable
@@ -1126,11 +1236,22 @@ object scalacv.OpenCv
 object scalacv.Ops.package
   extends java.lang.Object
   implements java.io.Serializable
+  def adaptiveThreshold$default$2(org.opencv.core.Mat): double
+  def adaptiveThreshold$default$3(org.opencv.core.Mat): scalacv.AdaptiveMethod
+  def adaptiveThreshold$default$4(org.opencv.core.Mat): int
+  def adaptiveThreshold$default$5(org.opencv.core.Mat): double
+  def adaptiveThreshold$default$6(org.opencv.core.Mat): boolean
+  def adaptiveThreshold(org.opencv.core.Mat, double, scalacv.AdaptiveMethod, int, double, boolean): scalacv.Managed<org.opencv.core.Mat>
   def addWeighted$default$5(org.opencv.core.Mat): double
   def addWeighted(org.opencv.core.Mat, double, org.opencv.core.Mat, double, double): scalacv.Managed<org.opencv.core.Mat>
+  def bilateralFilter(org.opencv.core.Mat, int, double, double): scalacv.Managed<org.opencv.core.Mat>
+  def bitwiseNot(org.opencv.core.Mat): scalacv.Managed<org.opencv.core.Mat>
   def blur$default$3(org.opencv.core.Mat): scalacv.Point
   def blur$default$4(org.opencv.core.Mat): scalacv.BorderType
   def blur(org.opencv.core.Mat, scalacv.Size, scalacv.Point, scalacv.BorderType): scalacv.Managed<org.opencv.core.Mat>
+  def border$default$6(org.opencv.core.Mat): scalacv.BorderType
+  def border$default$7(org.opencv.core.Mat): scalacv.Scalar
+  def border(org.opencv.core.Mat, int, int, int, int, scalacv.BorderType, scalacv.Scalar): scalacv.Managed<org.opencv.core.Mat>
   def canny$default$4(org.opencv.core.Mat): int
   def canny$default$5(org.opencv.core.Mat): boolean
   def canny(org.opencv.core.Mat, double, double, int, boolean): scalacv.Managed<org.opencv.core.Mat>
@@ -1138,22 +1259,50 @@ object scalacv.Ops.package
   def convertScaleAbs$default$3(org.opencv.core.Mat): double
   def convertScaleAbs(org.opencv.core.Mat, double, double): scalacv.Managed<org.opencv.core.Mat>
   def cvtColor(org.opencv.core.Mat, scalacv.ColorConversion): scalacv.Managed<org.opencv.core.Mat>
+  def dilate$default$2(org.opencv.core.Mat): int
+  def dilate$default$3(org.opencv.core.Mat): scalacv.MorphShape
+  def dilate$default$4(org.opencv.core.Mat): int
+  def dilate(org.opencv.core.Mat, int, scalacv.MorphShape, int): scalacv.Managed<org.opencv.core.Mat>
   def equalizeHist(org.opencv.core.Mat): scalacv.Managed<org.opencv.core.Mat>
+  def erode$default$2(org.opencv.core.Mat): int
+  def erode$default$3(org.opencv.core.Mat): scalacv.MorphShape
+  def erode$default$4(org.opencv.core.Mat): int
+  def erode(org.opencv.core.Mat, int, scalacv.MorphShape, int): scalacv.Managed<org.opencv.core.Mat>
+  def extractChannel(org.opencv.core.Mat, int): scalacv.Managed<org.opencv.core.Mat>
+  def flip(org.opencv.core.Mat, scalacv.Flip): scalacv.Managed<org.opencv.core.Mat>
   def gaussianBlur$default$3(org.opencv.core.Mat): double
   def gaussianBlur$default$4(org.opencv.core.Mat): double
   def gaussianBlur$default$5(org.opencv.core.Mat): scalacv.BorderType
   def gaussianBlur(org.opencv.core.Mat, scalacv.Size, double, double, scalacv.BorderType): scalacv.Managed<org.opencv.core.Mat>
+  def inRange(org.opencv.core.Mat, scalacv.Scalar, scalacv.Scalar): scalacv.Managed<org.opencv.core.Mat>
   def laplacian$default$2(org.opencv.core.Mat): int
   def laplacian$default$3(org.opencv.core.Mat): scalacv.OutputDepth
   def laplacian$default$4(org.opencv.core.Mat): double
   def laplacian$default$5(org.opencv.core.Mat): double
   def laplacian$default$6(org.opencv.core.Mat): scalacv.BorderType
   def laplacian(org.opencv.core.Mat, int, scalacv.OutputDepth, double, double, scalacv.BorderType): scalacv.Managed<org.opencv.core.Mat>
+  def masked(org.opencv.core.Mat, org.opencv.core.Mat): scalacv.Managed<org.opencv.core.Mat>
+  def medianBlur(org.opencv.core.Mat, int): scalacv.Managed<org.opencv.core.Mat>
+  def morphology$default$3(org.opencv.core.Mat): int
+  def morphology$default$4(org.opencv.core.Mat): scalacv.MorphShape
+  def morphology$default$5(org.opencv.core.Mat): int
+  def morphology(org.opencv.core.Mat, scalacv.MorphOp, int, scalacv.MorphShape, int): scalacv.Managed<org.opencv.core.Mat>
+  def normalize$default$2(org.opencv.core.Mat): double
+  def normalize$default$3(org.opencv.core.Mat): double
+  def normalize(org.opencv.core.Mat, double, double): scalacv.Managed<org.opencv.core.Mat>
   def pipe(scalacv.Managed<org.opencv.core.Mat>, scala.Function1<org.opencv.core.Mat, scalacv.Managed<org.opencv.core.Mat>>): scalacv.Managed<org.opencv.core.Mat>
   def resize$default$3(org.opencv.core.Mat): scalacv.Interpolation
   def resize(org.opencv.core.Mat, scalacv.Size, scalacv.Interpolation): scalacv.Managed<org.opencv.core.Mat>
+  def rotate(org.opencv.core.Mat, scalacv.Rotation): scalacv.Managed<org.opencv.core.Mat>
+  def rotated$default$3(org.opencv.core.Mat): double
+  def rotated$default$4(org.opencv.core.Mat): scalacv.Interpolation
+  def rotated$default$5(org.opencv.core.Mat): scalacv.BorderType
+  def rotated$default$6(org.opencv.core.Mat): scalacv.Scalar
+  def rotated(org.opencv.core.Mat, double, double, scalacv.Interpolation, scalacv.BorderType, scalacv.Scalar): scalacv.Managed<org.opencv.core.Mat>
   def scaled$default$4(org.opencv.core.Mat): scalacv.Interpolation
   def scaled(org.opencv.core.Mat, double, double, scalacv.Interpolation): scalacv.Managed<org.opencv.core.Mat>
+  def sharpen$default$2(org.opencv.core.Mat): double
+  def sharpen(org.opencv.core.Mat, double): scalacv.Managed<org.opencv.core.Mat>
   def sobel$default$4(org.opencv.core.Mat): int
   def sobel$default$5(org.opencv.core.Mat): scalacv.OutputDepth
   def sobel$default$6(org.opencv.core.Mat): double
@@ -1163,6 +1312,7 @@ object scalacv.Ops.package
   def threshold$default$3(org.opencv.core.Mat): double
   def threshold$default$4(org.opencv.core.Mat): scalacv.Threshold
   def threshold(org.opencv.core.Mat, double, double, scalacv.Threshold): scala.Tuple2<scalacv.Managed<org.opencv.core.Mat>, scalacv.ThresholdResult>
+  def withStructuringElement(org.opencv.core.Mat, java.lang.String, int, scalacv.MorphShape, int, scala.Function2<org.opencv.core.Mat, java.lang.Object, scalacv.Managed<org.opencv.core.Mat>>): scalacv.Managed<org.opencv.core.Mat>
 object scalacv.OutputDepth
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Sum
@@ -1221,6 +1371,16 @@ object scalacv.Releasable
   def given_Releasable_VideoCapture(): scalacv.Releasable<org.opencv.videoio.VideoCapture>
   def given_Releasable_VideoWriter(): scalacv.Releasable<org.opencv.videoio.VideoWriter>
   def handle<A>(scala.Function1<A, java.lang.Object>): scalacv.Releasable<A>
+object scalacv.Rotation
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Sum
+  def fromOrdinal(int): scalacv.Rotation
+  def ordinal(scalacv.Rotation): int
+  def valueOf(java.lang.String): scalacv.Rotation
+  def values(): scalacv.Rotation[]
+  static val Clockwise: scalacv.Rotation
+  static val CounterClockwise: scalacv.Rotation
+  static val Half: scalacv.Rotation
 object scalacv.Scalar
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product

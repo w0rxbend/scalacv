@@ -75,6 +75,53 @@ enum BorderType(val cvValue: Int):
   case Reflect101 extends BorderType(Core.BORDER_REFLECT_101)
   case Wrap extends BorderType(Core.BORDER_WRAP)
 
+/** How to mirror an image. Named by the visible effect, not OpenCV's axis-centric flip code. */
+enum Flip(val cvValue: Int):
+
+  /** Mirror left↔right (flip about the vertical axis) — OpenCV flip code `1`. */
+  case Horizontal extends Flip(1)
+
+  /** Mirror top↔bottom (flip about the horizontal axis) — OpenCV flip code `0`. */
+  case Vertical extends Flip(0)
+
+  /** Both at once (a 180° point reflection) — OpenCV flip code `-1`. */
+  case Both extends Flip(-1)
+
+/** Lossless quarter-turn rotations — no interpolation, exact pixels. A true enumeration. */
+enum Rotation(val cvValue: Int):
+  case Clockwise extends Rotation(Core.ROTATE_90_CLOCKWISE)
+  case CounterClockwise extends Rotation(Core.ROTATE_90_COUNTERCLOCKWISE)
+  case Half extends Rotation(Core.ROTATE_180)
+
+/** The structuring-element shape for morphology. A true enumeration. */
+enum MorphShape(val cvValue: Int):
+  case Rect extends MorphShape(Imgproc.MORPH_RECT)
+  case Ellipse extends MorphShape(Imgproc.MORPH_ELLIPSE)
+  case Cross extends MorphShape(Imgproc.MORPH_CROSS)
+
+/** Compound morphological operations (`morphologyEx`). Erosion and dilation have their own methods. */
+enum MorphOp(val cvValue: Int):
+
+  /** Erode then dilate — removes small bright specks. */
+  case Open extends MorphOp(Imgproc.MORPH_OPEN)
+
+  /** Dilate then erode — fills small dark holes. */
+  case Close extends MorphOp(Imgproc.MORPH_CLOSE)
+
+  /** Dilation minus erosion — an outline of the shapes. */
+  case Gradient extends MorphOp(Imgproc.MORPH_GRADIENT)
+
+  /** Source minus its opening — the bright detail smaller than the kernel. */
+  case TopHat extends MorphOp(Imgproc.MORPH_TOPHAT)
+
+  /** Closing minus the source — the dark detail smaller than the kernel. */
+  case BlackHat extends MorphOp(Imgproc.MORPH_BLACKHAT)
+
+/** How adaptive thresholding weights each pixel's neighbourhood. A true enumeration. */
+enum AdaptiveMethod(val cvValue: Int):
+  case Mean extends AdaptiveMethod(Imgproc.ADAPTIVE_THRESH_MEAN_C)
+  case Gaussian extends AdaptiveMethod(Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C)
+
 /** Thresholding — **a bitmask, not an enumeration.**
   *
   * `Imgproc.threshold` takes a mode OR-ed with at most one automatic-threshold modifier. Modelled as `enum`

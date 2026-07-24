@@ -130,3 +130,70 @@ class ImageTest extends munit.FunSuite:
     val handed = img.managed
     intercept[IllegalStateException](img.width) // spent
     handed.use(m => assertEquals(m.rows, Height)) // still a live Mat
+
+  // -- the expanded operation set ------------------------------------------------------------------
+
+  private def dims(img: Image): (Int, Int, Int) =
+    try (img.width, img.height, img.channels)
+    finally img.close()
+
+  test("flip preserves the dimensions"):
+    assertEquals(dims(sample().flip(Flip.Horizontal)), (Width, Height, 3))
+
+  test("a quarter-turn rotation swaps width and height"):
+    assertEquals(dims(sample().rotate(Rotation.Clockwise)), (Height, Width, 3))
+
+  test("an arbitrary rotation expands the canvas so nothing is clipped"):
+    val r = sample().rotate(45.0)
+    try
+      assert(r.width > Width && r.height > Height, s"expected an expanded canvas, got ${r.width}x${r.height}")
+    finally r.close()
+
+  test("pad and border grow the image by the requested widths"):
+    assertEquals(dims(sample().pad(10)), (Width + 20, Height + 20, 3))
+    assertEquals(
+      dims(sample().border(top = 5, bottom = 10, left = 0, right = 20)),
+      (Width + 20, Height + 15, 3)
+    )
+
+  test("median and bilateral blur preserve shape"):
+    assertEquals(dims(sample().medianBlur(1)), (Width, Height, 3))
+    assertEquals(dims(sample().bilateralFilter()), (Width, Height, 3))
+
+  test("adaptive threshold yields a single-channel binary image"):
+    assertEquals(dims(sample().gray.adaptiveThreshold()), (Width, Height, 1))
+
+  test("morphology preserves shape"):
+    assertEquals(dims(sample().erode()), (Width, Height, 3))
+    assertEquals(dims(sample().dilate(radius = 2)), (Width, Height, 3))
+    assertEquals(dims(sample().morphology(MorphOp.Open)), (Width, Height, 3))
+    assertEquals(
+      dims(sample().morphology(MorphOp.Close, radius = 2, shape = MorphShape.Ellipse)),
+      (Width, Height, 3)
+    )
+
+  test("invert, adjust, sharpen and normalize preserve shape"):
+    assertEquals(dims(sample().invert), (Width, Height, 3))
+    assertEquals(dims(sample().adjust(brightness = 40, contrast = 1.2)), (Width, Height, 3))
+    assertEquals(dims(sample().sharpen()), (Width, Height, 3))
+    assertEquals(dims(sample().normalize()), (Width, Height, 3))
+
+  test("toHsv keeps three channels; channel extracts one"):
+    assertEquals(dims(sample().toHsv), (Width, Height, 3))
+    assertEquals(dims(sample().channel(0)), (Width, Height, 1))
+
+  test("inRange produces a single-channel mask of the same size"):
+    assertEquals(dims(sample().toHsv.inRange(Scalar(0, 0, 0), Scalar(180, 255, 255))), (Width, Height, 1))
+
+  test("applyMask keeps the shape; blend combines two same-size images"):
+    val mask = sample().toHsv.inRange(Scalar(0, 0, 0), Scalar(180, 255, 255)) // all-pass mask
+    try assertEquals(dims(sample().applyMask(mask)), (Width, Height, 3))
+    finally mask.close()
+    val other = sample() // borrowed by blend, so this test owns and closes it
+    try assertEquals(dims(sample().blend(other, 0.5)), (Width, Height, 3))
+    finally other.close()
+
+  test("a full expanded pipeline chains and writes without leaking"):
+    val out =
+      sample().gray.medianBlur(1).adaptiveThreshold().morphology(MorphOp.Open).invert.bytes(".png")
+    assert(out.isRight, s"expected encoded bytes, got $out")
