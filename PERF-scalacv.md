@@ -298,10 +298,28 @@ destination/arena reuse was **measured and rejected** above, and the
 `Graphics.alpha` ROI blend was **done**, change #4. What is left is genuinely
 minor.)
 
-1. **`Picture.bounds` memoisation** — `beside`/`above`/`grid` recompute a full
-   tree traversal, so a wide row built by repeated `beside` is O(n²). Easy (a
-   `lazy val` per node), but only matters for large charts, which are cold (no
-   JNI, rendered once). Not worth it until a chart proves large enough.
+1. **`Picture` layout is O(n²)** — measured (`PictureBoundsBench`): folding a row
+   of N shapes with `beside` recomputes the growing accumulator's bounds each
+   step, and the time is clearly quadratic (n=200→400 quadruples: 1.27 ms →
+   5.01 ms), because each `beside` re-traverses the whole accumulated tree.
+
+   | N | build+bounds |
+   |---:|---:|
+   | 50 | 165 µs |
+   | 100 | 345 µs |
+   | 200 | 1266 µs |
+   | 400 | 5012 µs |
+
+   **Left as-is, deliberately.** It stays sub-millisecond below ~200 elements and
+   is a one-time, JNI-free, render-once cost — cold. And the clean fix is *not*
+   the obvious `lazy val bounds`: the quadratic lives in `Graphics.boundsOf`,
+   which threads a transform and style through the recursion and bypasses any
+   per-node memo, and a rotated node's bounds cannot be derived from its
+   identity-transform bounds (the AABB of transformed corners over-covers). A real
+   fix restructures bounds computation, with correctness risk across the whole
+   layout API, to shave a one-time multi-ms cost that only appears at 400+
+   elements. Not worth that trade; recorded here with numbers so the judgement is
+   measured, not asserted.
 2. **`Draw.withPolygons` converter leak** — needs an upstream fix or a
    private-API reimplementation; small per call but unbounded in a video loop.
 
