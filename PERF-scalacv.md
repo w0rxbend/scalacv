@@ -139,19 +139,32 @@ are below, left undone on purpose.
 This section is deliberately long, per the mandate — a rejected optimization with
 a reason is a result.
 
-- **Destination/`Mat` reuse across chained ops (the big one).** The prompt calls
-  this "usually the largest single win in per-frame pipelines," and it is real:
-  every `Ops` method allocates a fresh destination `Mat` (`Mats.produce`), so a
-  `gray → blur → canny` chain allocates and frees three off-heap `Mat`s per
-  frame. **Deferred to the owner, not done unilaterally.** The library's entire
-  contract is *"no in-place variants; every op returns a fresh caller-owned
-  `Mat`"* — documented at length in `Ops.scala` and enforced by the move-semantic
-  `Image`. Adding a `dst`-taking/in-place path is a design decision that reverses
-  that stance, and the correct owner is `w0rxbend`, not this pass. Flagged here
-  with the measured motivation (three per-frame off-heap allocations) so it can
-  be decided deliberately. If taken, the natural shape is an opt-in
-  `Pipeline`/scratch-arena that threads two ping-pong `Mat`s, leaving the pure
-  API untouched.
+- **Destination/`Mat` reuse across chained ops (the prompt's "biggest win") —
+  MEASURED, REJECTED.** The prompt calls this "usually the largest single win in
+  per-frame pipelines," and the theory is sound: every `Ops` method allocates a
+  fresh destination `Mat` (`Mats.produce`), so a `gray → blur → canny` chain
+  allocates and frees three off-heap `Mat`s per frame. I sized it before building
+  anything (`ArenaReuseBench`): the same chain with three preallocated,
+  reused destination `Mat`s versus fresh allocation each frame, bit-identical
+  output:
+
+  | size | chain (fresh alloc) | reuse (arena) | delta |
+  |---|---:|---:|---:|
+  | 640×480 | 145.3 ± 1.3 | 139.1 ± 1.3 | −4% |
+  | 1920×1080 | 574.2 ± 6.4 | 576.3 ± 6.6 | **+0.4% (reuse slower)** |
+  | 3840×2160 | 7556 ± 103 | 7493 ± 84 | −0.8% (within noise) |
+
+  **The win does not exist at realistic frame sizes.** OpenCV's own allocator
+  (`fastMalloc`, aligned, with internal reuse) plus G1's cheap collection of the
+  small `Mat` headers make per-frame destination allocation a sub-1% cost next to
+  the compute (`cvtColor`+`GaussianBlur`+`Canny`); at 1080p the reuse path is even
+  marginally *slower*. Only a ~4% edge survives at 640×480, where allocation is
+  the largest fraction, and it inverts by HD. **Not built.** An opt-in
+  `Pipeline`/scratch-arena would add significant API surface and reverse the
+  documented "no in-place variants" ownership contract to buy a delta inside the
+  noise band on every frame size a real pipeline runs at. This is precisely the
+  "report honestly if pooling loses to plain allocation" outcome the prompt asks
+  for — the intuition was wrong, and the measurement is the result.
 
 - **`Graphics.alpha` full-image clone → ROI blend.** Every translucent shape
   clones the *entire* `Mat` and `addWeighted`s the *entire* `Mat`, even for a
@@ -247,16 +260,18 @@ not discovered the hard way.
 
 ## Remaining headroom
 
-Ranked by likely value, honestly:
+Ranked by likely value, honestly. (Destination/arena reuse is **not** here — it
+was measured and rejected above; the intuition that it was "the biggest win" did
+not survive contact with `ArenaReuseBench`.)
 
-1. **Destination/arena reuse for per-frame pipelines** — the largest remaining
-   win, gated on an owner decision about the no-in-place contract (above). Would
-   remove ~one off-heap `Mat` alloc+free per op per frame.
-2. **`Graphics.alpha` ROI blend** — large for annotation-heavy pictures, gated on
-   a proven pixel bound to stay bit-identical.
-3. **`Picture.bounds` memoisation** — easy, but only matters for large charts,
+1. **`Graphics.alpha` ROI blend** — large for annotation-heavy pictures, gated on
+   a proven pixel bound to stay bit-identical. Unlike destination reuse, the
+   overhead here (a full-image clone + a full-image `addWeighted` per translucent
+   shape) *is* the dominant cost of the draw, not a sub-1% tax — so it is worth
+   the correctness work. See the alpha entry above for the bound problem.
+2. **`Picture.bounds` memoisation** — easy, but only matters for large charts,
    which are cold.
-4. **`Draw.withPolygons` converter leak** — needs an upstream fix or a
+3. **`Draw.withPolygons` converter leak** — needs an upstream fix or a
    private-API reimplementation; small per call but unbounded in a video loop.
 
 Cold-start (`OpenCv.load` native extraction) was not optimised: it is a one-time
