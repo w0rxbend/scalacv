@@ -49,7 +49,12 @@ export default defineConfig({
         { text: 'Object detection', link: '/object-detection' },
         { text: 'Motion detection', link: '/motion-detection' },
         { text: 'Pose estimation', link: '/pose-estimation' },
+        { text: 'Gesture & sign recognition', link: '/gestures' },
         { text: 'Deep learning (DNN)', link: '/dnn' }
+      ]},
+      { text: 'Applications', items: [
+        { text: 'Video conferencing', link: '/conferencing' },
+        { text: 'Screen analysis', link: '/screen-analysis' }
       ]},
       { text: 'Video & runtime', items: [
         { text: 'Video & the camera', link: '/video' },
