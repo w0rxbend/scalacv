@@ -41,6 +41,7 @@ export default defineConfig({
         { text: 'Image processing', link: '/image-processing' },
         { text: 'Geometric transforms & morphology', link: '/transforms' },
         { text: 'Colour, masking & compositing', link: '/color-masking' },
+        { text: 'Photo filters & colormaps', link: '/filters' },
         { text: 'Drawing & annotation', link: '/drawing' },
         { text: 'Geometry & typed values', link: '/geometry' },
         { text: 'Contours & shape analysis', link: '/contours' },
