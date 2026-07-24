@@ -31,8 +31,10 @@ final class Odometry private (focal: Double, principalPoint: Point) extends Auto
     frames += 1
     previous match
       case null =>
-        previous = frame.copy
-        previousPoints = OpticalFlow.goodFeatures(frame)
+        // Build both new fields before touching either, so a throw leaves the (empty) state consistent.
+        val (copy, points) = snapshot(frame)
+        previous = copy
+        previousPoints = points
         None
       case prev =>
         val tracked = OpticalFlow.track(prev, frame, previousPoints).filter(_.found)
@@ -40,10 +42,27 @@ final class Odometry private (focal: Double, principalPoint: Point) extends Auto
           if tracked.size >= 8 then
             VisualOdometry.estimate(tracked.map(_.from), tracked.map(_.to), focal, principalPoint)
           else None
+        // Compute the new baseline first (prev still valid, no field mutated); only then swap it in as a
+        // pair, so a throw in copy/goodFeatures cannot strand `previous` on a closed handle or leave
+        // `previousPoints` stale against a fresh frame.
+        val (copy, points) = snapshot(frame)
         prev.close()
-        previous = frame.copy
-        previousPoints = OpticalFlow.goodFeatures(frame)
+        previous = copy
+        previousPoints = points
         motion
+
+  /** A fresh baseline: an owned copy of `frame` and its good features. Releases the copy if feature detection
+    * throws, so a failure allocates nothing.
+    */
+  private def snapshot(frame: Image): (Image, Seq[Point]) =
+    val copy = frame.copy
+    val points =
+      try OpticalFlow.goodFeatures(frame)
+      catch
+        case e: Throwable =>
+          copy.close()
+          throw e
+    (copy, points)
 
   /** How many frames have been fed so far. */
   def framesProcessed: Int = frames

@@ -48,3 +48,19 @@ def brightnessOverTime(source: String): _root_.zio.ZIO[Any, Throwable, _root_.zi
 
 `framesCopied` is the safe-but-costlier counterpart when you genuinely need to keep frames: each
 element is its own clone, so the usual stream combinators behave.
+
+## Blocking work stays off the compute pool
+
+`VideoCapture.read`, `OpenCv.load()`, and the native model/image decodes all block **inside native
+code** with no JVM-interruptible timeout of their own. This module runs every one of them on ZIO's
+blocking executor — `attemptBlocking` for the acquire/load/decode paths, `attemptBlockingInterrupt`
+inside `frameStream` — never the CPU-sized default executor. That is the contract you can rely on:
+
+- A stalled source — an RTSP stream that stops delivering frames, a dead camera — pins a thread on
+  the **blocking** pool, not a compute thread, so it cannot starve the fibers doing your actual work.
+- `frameStream` is **interruptible**: because its read runs under `attemptBlockingInterrupt`, an
+  interrupted or scoped-closed stream unwinds instead of wedging on a source that will never return
+  a frame.
+
+Parking these on the compute executor — which a plain `ZIO.attempt` would do — would let one hung
+capture exhaust it; that is why the module never does.

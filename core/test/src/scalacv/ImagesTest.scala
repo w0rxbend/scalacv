@@ -5,9 +5,9 @@ import java.nio.file.{Files, Path}
 import org.opencv.core.{CvType, Mat, Point as CvPoint, Scalar as CvScalar}
 import org.opencv.imgproc.Imgproc
 
-/** The fixtures here are drawn, not loaded. The repository ships no test image and must not acquire one
-  * (ROADMAP §3.5), and a drawn Mat is a better fixture anyway: the assertions can name the exact pixel values
-  * a lossless round trip has to preserve.
+/** The fixtures here are drawn, not loaded. The repository ships no test image and must not acquire one by
+  * design, and a drawn Mat is a better fixture anyway: the assertions can name the exact pixel values a
+  * lossless round trip has to preserve.
   */
 class ImagesTest extends munit.FunSuite:
 

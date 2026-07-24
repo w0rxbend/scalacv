@@ -33,7 +33,10 @@
 ```scala
 // build.mill  (or the equivalent for your build tool)
 def mvnDeps = Seq(
-  mvn"com.worxbend::scalacv:0.1.0",
+  mvn"com.worxbend::scalacv:0.1.0",         // the OpenCV wrapping: Image, Managed, filters, contours…
+  // Optional layers, each depending only on the core — add the ones you use:
+  //   mvn"com.worxbend::scalacv-vision:0.1.0"  // detectors, DNN, pose/tracking, OCR, calibration, SLAM
+  //   mvn"com.worxbend::scalacv-graphs:0.1.0"  // the Picture scene graph, charts, GIF animation
 
   // Natives for YOUR platform. A build tool cannot express a per-platform classifier in a
   // published POM, so this line is yours to pick — see "Why two lines?" below.
@@ -42,14 +45,23 @@ def mvnDeps = Seq(
 )
 ```
 
-**High-level — the `Image` pipeline.** Read, transform, write, as one chain:
+**High-level — the `Image` pipeline.** `Image.reading` scopes the image for you and is the entry
+point that cannot leak: the block's image is released when it returns — on success, on failure, and
+on exception — so start here unless you have a reason not to.
 
 ```scala
 import scalacv.*
 
 OpenCv.load()
 
-// Every intermediate frees itself; the chain holds one live image at a time.
+// Every intermediate frees itself; `reading` guarantees the source is freed too, no matter what.
+Image.reading("photo.jpg") { img => img.gray.blur(2).canny(80, 160).write("edges.png") }
+```
+
+The `read`/`flatMap` form is there when you want to thread the `Either` yourself, and each terminal
+(`write`, `bytes`, `close`) still releases — but `reading` is the one that forgets nothing:
+
+```scala
 Image.read("photo.jpg").flatMap(_.gray.blur(2).canny(80, 160).write("edges.png"))
 ```
 
@@ -90,7 +102,9 @@ Image.reading("photo.jpg") { img =>
 
 Don't want to choose? `mvn"org.bytedeco:opencv-platform:4.13.0-1.5.13"` bundles every platform and works anywhere — for about **408 MB** instead of 36–80 MB.
 
-Get it wrong and `OpenCv.load()` tells you the exact line to add for the platform you are actually on. It does not fail with a link error.
+`scalacv` alone compiles fine without either native line, but nothing runs: the OpenCV symbols are absent until you add them. Get it wrong and `OpenCv.load()` does not fail with a link error — it prints a copy-pasteable fix naming the platform you are actually on.
+
+**Footprint, so nothing surprises you.** For `linux-x86_64` the `opencv` jar is ~31 MB and `openblas` ~20 MB; on the **first** `OpenCv.load()` these are extracted once into `~/.javacpp` (~196 MB on Linux), and every later run reuses that cache. Point it elsewhere with `-Dorg.bytedeco.javacpp.cachedir=…` for a read-only home or a thin container layer.
 
 > **Scala-first.** scalacv targets Scala 3 consumers: the API returns `Seq`/`Option`/`Either` and reaches you through extension methods brought in by `import scalacv.*`. It wraps a Java library but is not designed to be called _from_ Java.
 
@@ -114,10 +128,6 @@ That is the library. The typed API is the pleasant part; the lifetime handling i
 ## 📚 Documentation
 
 Full guide, API reference and cookbook: **[w0rxbend.github.io/scalacv](https://w0rxbend.github.io/scalacv)**
-
-## 🗺️ Roadmap
-
-Progress lives in [`ROADMAP.md`](ROADMAP.md), which records the decisions and — more usefully — the places where earlier versions of this plan were **wrong**, with the evidence that corrected them. Five so far, including a native-loading design that crashed the JVM while passing the smoke test.
 
 ## 🤝 Contributing
 

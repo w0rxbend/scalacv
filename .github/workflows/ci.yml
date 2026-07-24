@@ -10,7 +10,7 @@ on:
 # //| mill-jvm-version: header in build.mill would otherwise freeze every rung of the
 # matrix to one JDK. MILL_JVM_ID is read by build.mill to override it per rung, so
 # actions/setup-java is deliberately absent from the JDK matrix below — it cannot
-# steer Mill. See ROADMAP §2 and §4 G1.
+# steer Mill.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -31,8 +31,10 @@ jobs:
 
       - name: Compile
         # Explicit module list, not __: examples-gui pulls a per-host OpenJFX and must never be
-        # built in CI (ROADMAP G4). __ would drag it in.
-        run: ./mill core.compile zio.compile examples.compile
+        # built in CI. __ would drag it in. vision and graphs are named explicitly rather than left
+        # to examples to pull in transitively -- a refactor that drops the examples->vision/graphs
+        # edge must not silently stop compiling two published modules.
+        run: ./mill core.compile vision.compile graphs.compile zio.compile examples.compile
 
       - name: Assert the build really ran on JDK ${{ matrix.jdk }}
         # Without this the matrix is decorative: if the jvmId override ever stops being
@@ -57,6 +59,85 @@ jobs:
           echo "$out"
           echo "$out" | grep -q '^OK'
 
+  leak-check:
+    name: Native leak — RSS stays flat under load
+    runs-on: ubuntu-latest
+    # The one gate the test suite cannot be: an unreleased Mat frees its native buffer only when
+    # finalize eventually runs, so a leak shows up as *resident-memory growth*, not a failing
+    # assertion -- a green test run with a steadily climbing RSS. This is the leg that would have
+    # caught the H1/M3/L2/L3 leaks. It drives the high-level read->gray->canny->bytes pipeline 2000×
+    # in a single long-lived JVM and asserts RSS does not climb once the natives are warm. A
+    # per-iteration leak of a 240×240×3 Mat is ~170 KB, so ~1800 measured iterations would grow RSS
+    # by ~300 MB -- far past the ceiling below -- while a leak-free run stays flat.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: coursier/cache-action@v8
+      - uses: actions/setup-java@v4
+        # Unlike the build matrix (where setup-java is deliberately absent because it cannot steer
+        # Mill's module JVM), this leg needs a plain java/javac on PATH for the stress driver below.
+        # Mill still selects its own JVM via the build header; this only provides the JDK that runs
+        # the driver, so the two do not conflict.
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Stress native allocation and assert RSS stays bounded
+        run: |
+          set -euo pipefail
+          # The examples run classpath carries scalacv (core/vision/graphs), the synthetic Fixtures
+          # scenes and the natives jars -- exactly what the driver links. Strip Mill's ref: prefix
+          # down to the absolute path, then join the entries into one classpath.
+          CP=$(./mill show examples.runClasspath | jq -r '.[]' | grep -oE '/.*' | paste -sd: -)
+
+          # A minimal external driver (plain Java, like ci/consumer-smoke): loop the high-level
+          # pipeline in one JVM so an unreleased Mat accumulates, and read VmRSS from /proc after a
+          # warm-up baseline and again at the end. It gates on the *delta*, not an absolute footprint,
+          # so the large, platform-dependent OpenCV/OpenBLAS load cost is already in the baseline and
+          # only genuine growth trips it. No image asset ships, so Fixtures.shapes draws the input.
+          cat > LeakStress.java <<'EOF'
+          public class LeakStress {
+            static long rssKb() throws Exception {
+              for (String l : java.nio.file.Files.readAllLines(java.nio.file.Path.of("/proc/self/status")))
+                if (l.startsWith("VmRSS:")) return Long.parseLong(l.replaceAll("[^0-9]", ""));
+              throw new RuntimeException("VmRSS not found in /proc/self/status");
+            }
+            static void iter() {
+              scalacv.Image img = scalacv.Image$.MODULE$.wrap(scalacv.Fixtures$.MODULE$.shapes(240));
+              scala.util.Either<?, ?> r = img.gray().blur(1).canny(60.0, 160.0, 3, false).bytes(".png");
+              if (r.isLeft()) throw new RuntimeException("pipeline failed: " + r);
+            }
+            public static void main(String[] args) throws Exception {
+              scalacv.OpenCv$.MODULE$.load();
+              int warmup = 200, total = 2000;
+              for (int i = 0; i < warmup; i++) iter();
+              System.gc(); Thread.sleep(200);
+              long baseline = rssKb();
+              for (int i = warmup; i < total; i++) iter();
+              System.gc(); Thread.sleep(200);
+              long end = rssKb();
+              System.out.println("RSS-BASELINE-KB=" + baseline);
+              System.out.println("RSS-FINAL-KB=" + end);
+              System.out.println("RSS-GROWTH-KB=" + (end - baseline));
+              System.out.println("LEAK-OK");
+            }
+          }
+          EOF
+          javac -cp "$CP" -d . LeakStress.java
+
+          # -Xmx256m: an on-heap leak (a retained Image or byte[]) OOMs and fails here too; a *native*
+          # Mat leak instead escapes the heap and grows RSS, which the delta check below catches --
+          # that native path is the one the H1/M3/L2/L3 leaks took. Gate on the LEAK-OK line, not the
+          # exit code: OpenCV/OpenBLAS native teardown at JVM shutdown occasionally exits non-zero
+          # after a fully successful run (same as the smoke jobs).
+          out=$(java -Xmx256m -cp ".:$CP" LeakStress 2>&1) || true
+          echo "$out"
+          echo "$out" | grep -q '^LEAK-OK'
+          growth=$(echo "$out" | sed -n 's/^RSS-GROWTH-KB=//p')
+          ceiling=204800   # 200 MB: far below a real leak's ~300 MB, far above steady-state jitter
+          echo "RSS grew ${growth:-<none>} KB across the measured run (ceiling ${ceiling} KB)"
+          test -n "$growth"
+          test "$growth" -le "$ceiling"
+
   style:
     name: Format and lint
     runs-on: ubuntu-latest
@@ -66,8 +147,10 @@ jobs:
       - name: scalafmt
         run: ./mill mill.scalalib.scalafmt.ScalafmtModule/checkFormatAll
       - name: scalafix
-        # Scoped like the build job: examples-gui stays out of CI (ROADMAP G4).
-        run: ./mill core.fix --check zio.fix --check examples.fix --check
+        # Every publishable module (core, vision, graphs, zio) plus examples. Scoped like the build
+        # job: examples-gui stays out of CI. vision and graphs are named explicitly here rather than
+        # left unlinted -- they are published surface, so they get the same --check as the rest.
+        run: ./mill core.fix --check vision.fix --check graphs.fix --check zio.fix --check examples.fix --check
 
   natives:
     name: Natives · macos-14
@@ -78,7 +161,7 @@ jobs:
     # and Mill 1.1.7 ships no Windows launcher, so a windows-latest leg would fail at the
     # launcher without exercising anything. The Windows loader path (a bulk-load fallback,
     # since the linker error names no library) is implemented but can only be verified on a
-    # Windows host -- ROADMAP §7 item 15. Adding the leg back is a one-line change once a
+    # Windows host is not exercised here. Adding the leg back is a one-line change once a
     # working Windows Mill invocation exists.
     steps:
       - uses: actions/checkout@v7
@@ -97,18 +180,25 @@ jobs:
       - uses: actions/checkout@v7
       - uses: coursier/cache-action@v8
 
-      - name: Only core and zio may publish
+      - name: Only core, graphs, vision and zio may publish
         # examples and examples-gui must never reach Central; examples-gui's OpenJFX
         # resolves per-host and would be wrong for everyone who downloaded it.
+        # Assert the exact *set* of publishable module names, not just a count: a fifth
+        # publishable module must be a deliberate, failing-until-updated edit here rather
+        # than something that silently ships (or a rename that a count would wave through).
         run: |
-          modules=$(./mill resolve "__:PublishModule.publishArtifacts" | grep -cE "^[a-z][a-zA-Z0-9-]*\.publishArtifacts$")
-          echo "publishable modules: $modules"
-          test "$modules" -eq 2
+          got=$(./mill resolve "__:PublishModule.publishArtifacts" \
+            | grep -E "^[a-z][a-zA-Z0-9-]*\.publishArtifacts$" \
+            | sed -E 's/\.publishArtifacts$//' \
+            | sort | paste -sd' ' -)
+          want="core graphs vision zio"
+          echo "publishable modules: $got"
+          test "$got" = "$want"
 
       - name: POM dependency set
         # The failure this catches is invisible from inside the build: a classifier is
         # silently stripped from the POM, CI stays green because it compiles from source,
-        # and every consumer resolves an artifact with no natives. ROADMAP §3.7.
+        # and every consumer resolves an artifact with no natives.
         run: ./mill core.test.testOnly scalacv.PublishedPomTest
 
       - name: publishLocal
@@ -124,23 +214,29 @@ jobs:
         with:
           jvm: zulu:17
 
-      - name: Publish core and zio to the local ivy repo
+      - name: Publish all four modules to the local ivy repo
         run: ./mill __.publishLocal
 
-      - name: A from-scratch consumer resolves it on a clean cache and loads natives
-        # The single highest-value gate in the review (ROADMAP §3.7): the published core POM carries
-        # only the classifier-less opencv (Mill cannot emit a <classifier>), so a real consumer adds
-        # the two documented natives coordinates. A fresh COURSIER_CACHE makes this a true from-nothing
-        # resolve -- it would catch the "green build, zero natives shipped" failure the old
-        # publishLocal-dry-run gate waved through. Gate on the CONSUMER-OK line, not the exit code:
-        # native teardown at JVM shutdown occasionally exits non-zero after a fully successful run.
+      - name: A from-scratch consumer resolves all four artifacts on a clean cache and loads natives
+        # The single highest-value publishing gate: each published POM carries only the classifier-less
+        # opencv (Mill cannot emit a <classifier>), so a real consumer adds the two documented natives
+        # coordinates. Listing all four published coordinates makes cs fetch resolve every one -- and its
+        # full transitive set -- from a fresh COURSIER_CACHE, a true from-nothing resolve that would catch
+        # the "green build, zero natives shipped" failure the old publishLocal-dry-run gate waved through.
+        # The smoke program then links a symbol from core, vision and graphs (zio's public surface is a
+        # package object whose holder class Java cannot name, so its resolution is exercised by cs fetch
+        # alone). Gate on the CONSUMER-OK line, not the exit code: native teardown at JVM shutdown
+        # occasionally exits non-zero after a fully successful run.
         run: |
           set -euo pipefail
           VER=$(./mill show core.publishVersion | tr -d '"')
-          echo "resolving com.worxbend:scalacv_3:$VER from a clean cache"
+          echo "resolving the four com.worxbend scalacv artifacts :$VER from a clean cache"
           export COURSIER_CACHE=$(mktemp -d)
           CP=$(cs fetch --classpath -r ivy2Local \
             "com.worxbend:scalacv_3:$VER" \
+            "com.worxbend:scalacv-vision_3:$VER" \
+            "com.worxbend:scalacv-graphs_3:$VER" \
+            "com.worxbend:scalacv-zio_3:$VER" \
             "org.bytedeco:opencv:4.13.0-1.5.13,classifier=linux-x86_64" \
             "org.bytedeco:openblas:0.3.31-1.5.13,classifier=linux-x86_64")
           javac -cp "$CP" -d /tmp/consumer ci/consumer-smoke/ConsumerSmoke.java

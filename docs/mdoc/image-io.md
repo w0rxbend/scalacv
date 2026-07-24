@@ -120,29 +120,37 @@ Images.encode(source, ".not-a-format").isLeft
 
 ## `ImreadFlags`
 
-Both `read` and `decode` take an `ImreadFlags`, defaulting to `ImreadFlags.Color`. It is a typed
-bitmask, not a bare `int` — a `Mode` plus any number of `Modifier`s:
+Both `read` and `decode` take an `ImreadFlags`, defaulting to `ImreadFlags.Color`. It is a typed value,
+not a bare `int` — a decode `color`, an optional `scale`, and an `ignoreOrientation` flag:
 
 | Value | Meaning |
 |---|---|
 | `ImreadFlags.Color` | force 3-channel BGR (the default) |
 | `ImreadFlags.Grayscale` | force single-channel greyscale |
 | `ImreadFlags.Unchanged` | as stored, alpha channel and all |
-| `ImreadFlags.Mode.AnyDepth` | keep 16-bit / 32-bit depth instead of downcasting to 8-bit |
+| `ImreadColor.AnyDepth` | keep 16-bit / 32-bit depth instead of downcasting to 8-bit |
 
-Modifiers combine with a mode via `ImreadFlags(mode, modifiers)` — `IgnoreOrientation` to skip the EXIF
-rotation, `ReducedHalf` / `ReducedQuarter` to decode a downscaled image cheaply. The resolved OpenCV int
-is `cvValue`:
+Unlike a raw bitmask, the `color` and `scale` are *not* independent bits you OR together — OpenCV's
+`IMREAD_*` constants are not orthogonal, so the `(color, scale)` pair maps totally onto exactly one named
+constant. Pass `ignoreOrientation = true` to skip the EXIF rotation (the one genuinely independent flag),
+and an `ImreadScale` other than `Full` to decode a downscaled image cheaply. The resolved OpenCV int is
+`cvValue`:
 
 ```scala mdoc
 ImreadFlags.Grayscale.cvValue
 ```
 
 ```scala mdoc:silent
-import scalacv.ImreadFlags.{Mode, Modifier}
+// greyscale, decoded at half resolution
+val thumbnail = ImreadFlags(ImreadColor.Grayscale, ImreadScale.Half)
+```
 
-// 16-bit depth preserved, and decode at half resolution
-val hdrThumbnail = ImreadFlags(Mode.AnyDepth, Set(Modifier.ReducedHalf))
+Reduced-size decode exists only for `Grayscale` and `Color`, and `Unchanged` can carry no extra bit;
+combinations OpenCV has no constant for are rejected at construction, not silently decoded as something
+else:
+
+```scala mdoc:crash
+ImreadFlags(ImreadColor.AnyDepth, ImreadScale.Half) // require fails: no reduced-size AnyDepth decode
 ```
 
 ## Round-tripping through memory

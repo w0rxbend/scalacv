@@ -22,8 +22,8 @@ import java.awt.image.BufferedImage
   try println(s"back to Image: ${back.width}x${back.height}, ${back.channels} channels")
   finally back.close()
 
-  // The model registry knows where the detector/recogniser models live.
-  for spec <- Seq(Models.YuNet, Models.SFace) do
+  // The model specs live next to their detectors; Models.fetch downloads any of them.
+  for spec <- Seq(FaceDetect.modelSpec, FaceRecognizer.modelSpec) do
     println(s"${spec.fileName}: ${spec.urls.size} mirror(s), checksum ${
         if spec.sha256.isDefined then "pinned" else "none"
       }")

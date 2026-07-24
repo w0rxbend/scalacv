@@ -5,15 +5,19 @@ package scalacv
   * Modelled as an exception hierarchy rather than a pure ADT because it has to interoperate with a JNI
   * boundary that throws: `org.opencv.core.CvException` escapes from ordinary `Imgproc` calls, and no wrapper
   * can make the core total. The API returns `Either[CvError, A]` where failure is *data-dependent* and
-  * expected — a missing file, an undecodable image — and throws for programmer errors. See ROADMAP §3.10.
+  * expected — a missing file, an undecodable image — and throws for programmer errors.
   */
 sealed abstract class CvError(message: String, cause: Throwable | Null)
     extends RuntimeException(message, cause)
 
 object CvError:
 
-  /** The native libraries could not be loaded. Carries the exact dependency lines to add. */
-  final case class NativesMissing(details: String) extends CvError(details, null)
+  /** The native libraries could not be loaded. Carries the exact dependency lines to add. When a reflective
+    * access failed, `cause` preserves the underlying exception — its message names the module/package that
+    * actually could not be opened.
+    */
+  final case class NativesMissing(details: String, cause: Throwable | Null = null)
+      extends CvError(details, cause)
 
   /** An image could not be read or decoded. `imread` does not throw for this — it returns an empty Mat — so
     * the check has to be explicit.

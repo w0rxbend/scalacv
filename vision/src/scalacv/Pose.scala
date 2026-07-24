@@ -1,6 +1,7 @@
 package scalacv
 
 import org.opencv.core.{Mat, MatOfDouble, MatOfPoint2f, MatOfPoint3f, Point as CvPoint, Point3}
+import org.opencv.dnn.Net
 
 /** One named landmark of a [[Pose]] — a point in image pixels and the model's confidence in it. */
 final case class Keypoint(name: String, point: Point, score: Float)
@@ -257,6 +258,39 @@ object HeadPose:
   * than in the image class. `import scalacv.*` gives `image.drawSkeleton(pose)`.
   */
 extension (img: Image)
+
+  /** Runs a keypoint [[Net]] over this image and decodes a [[Pose]] — the one-call form of the blob → forward
+    * → decode dance, the pose counterpart to `image.faces(detector)`. The image is only read from (it stays
+    * alive), and the network is borrowed, not released.
+    *
+    * The blob knobs mirror [[Dnn.blobFromImage]] and are model-specific — the defaults suit a MoveNet-style
+    * export (RGB input, `[0, 1]` range); pass the values your model documents. For a network whose output
+    * layout or keypoint scheme differs, name the [[KeypointLayout]] and [[PoseTopology]]. When you need the
+    * intermediate blob or output tensor, drop to [[Dnn]] and [[PoseEstimator.decode]] directly.
+    *
+    * @param net
+    *   a caller-owned pose network (see [[Dnn.fromOnnx]]). Stateful — do not share one across threads.
+    * @param inputSize
+    *   the spatial size the network expects, e.g. `Size(192, 192)` for MoveNet Lightning.
+    * @param layout
+    *   how the output tensor encodes keypoints — see [[KeypointLayout]].
+    */
+  def estimatePose(
+      net: Net,
+      inputSize: Size,
+      layout: KeypointLayout,
+      topology: PoseTopology = PoseTopology.CocoBody17,
+      scaleFactor: Double = 1.0 / 255,
+      mean: Scalar = Scalar(0, 0, 0),
+      swapRB: Boolean = true
+  ): Pose =
+    Dnn
+      .blobFromImage(img.mat, scaleFactor, Some(inputSize), mean, swapRB)
+      .use: blob =>
+        Dnn
+          .forward(net, blob)
+          .use: out =>
+            PoseEstimator.decode(out, img.size, layout, topology)
 
   /** Draws a [[Pose]] skeleton: a line per bone and a dot per confident keypoint. */
   def drawSkeleton(

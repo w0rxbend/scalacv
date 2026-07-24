@@ -34,7 +34,7 @@ That jar was deleted in `9bbcc13`.
 scalacv **does not redistribute** any of these: cascades are read out of the
 dependency the consumer already resolved, and the YuNet model is fetched rather
 than committed. If that ever changes — for example if the Windows cascade gap
-(ROADMAP B10) is closed by vendoring the XML files — the corresponding notice
+is closed by vendoring the XML files — the corresponding notice
 must be reproduced in `NOTICE` at the same time.
 
 The Intel/Willow Garage copyright on the cascade data and Shiqi Yu's copyright

@@ -126,20 +126,28 @@ every case:
 ContourRetrieval.values.map(c => c.toString -> c.cvValue).toList
 ```
 
-### The bitmask types: `ImreadFlags` and `Threshold`
+### The structured types: `ImreadFlags` and `Threshold`
 
-Not every OpenCV flag family is a *choice*. Some are meant to be OR-ed together, and modelling those as a
-plain `enum` would make correct code unrepresentable. Two get a **mode-plus-modifiers** shape instead.
+Not every OpenCV flag family is a single *choice*, but the two that are not need different shapes — one is
+a genuine bitmask, the other only looks like one.
 
-**`ImreadFlags`** — a decode `Mode` (how many channels / what depth) optionally combined with a `Set` of
-independent `Modifier`s (ignore EXIF orientation, decode at reduced resolution). `cvValue` folds them
-together:
+**`ImreadFlags`** — a decode `color` (how many channels / what depth) with an optional `scale` (decode at
+reduced resolution) and an `ignoreOrientation` flag (skip the EXIF rotation). OpenCV's `IMREAD_*`
+constants *look* OR-able but are not: each `IMREAD_REDUCED_*` value already bakes in its colour bit and
+`IMREAD_UNCHANGED` is `-1`, so OR-ing a colour with a reduced-size flag silently decodes the wrong image.
+So the `(color, scale)` pair maps *totally* onto exactly one named constant rather than composing, and
+only `ignoreOrientation` (bit 128) is a real independent flag OR-ed on top:
 
 ```scala mdoc
-ImreadFlags(
-  ImreadFlags.Mode.Color,
-  Set(ImreadFlags.Modifier.IgnoreOrientation, ImreadFlags.Modifier.ReducedHalf)
-).cvValue
+ImreadFlags(ImreadColor.Color, ImreadScale.Half, ignoreOrientation = true).cvValue
+```
+
+Reduced-size decode exists only for `Grayscale` and `Color`, and `Unchanged` can carry no extra bit at
+all — the combinations OpenCV has no constant for are rejected at construction rather than quietly
+OR-ed into something else:
+
+```scala mdoc:crash
+ImreadFlags(ImreadColor.Unchanged, ImreadScale.Half) // require fails: -1 admits no reduction
 ```
 
 The common cases have ready-made constants:
@@ -166,7 +174,9 @@ itself and the value it returns (surfaced as `ThresholdResult`) actually means s
 echoing back the fixed number you supplied. See [image processing](/image-processing) for `threshold` in
 action.
 
-Neither of these is an `enum` on purpose: `THRESH_BINARY | THRESH_OTSU` and
-`IMREAD_COLOR | IMREAD_IGNORE_ORIENTATION` are *combinations*, not alternatives, and a single-choice enum
-could not express them without also admitting nonsense like a bare `THRESH_MASK` leaking into the public
-API.
+Neither of these is a single `enum` on purpose, for opposite reasons. `Threshold` is a real bitmask:
+`THRESH_BINARY | THRESH_OTSU` is a *combination*, not an alternative, and a single-choice enum could not
+express it without also admitting nonsense like a bare `THRESH_MASK` leaking into the public API.
+`ImreadFlags` is the reverse trap — its constants look OR-able but are not, so instead of exposing bits it
+maps a small structured value totally onto one named constant and rejects the combinations OpenCV cannot
+represent.

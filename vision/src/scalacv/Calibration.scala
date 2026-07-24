@@ -90,6 +90,11 @@ object Calibration:
     * `None` if the *whole* board is not visible — the detector is all-or-nothing, so a partially occluded or
     * cropped board finds nothing rather than a subset. The returned points are in image pixels, row-major
     * from the board's origin corner, and are plain immutable data safe to keep after `image` is freed.
+    *
+    * This returns `Option`, not `Either`, on purpose: "the board is not in this frame" is an ordinary query
+    * result, not a failure — the same reason [[Tracker.update]] and the detectors return `Option`/`Seq`. It
+    * is [[fromChessboard]], where too few boards or a non-converging solver *is* a failure, that returns
+    * `Either[`[[CvError.CalibrationFailed]]`, _]`.
     */
   def findCorners(image: Image, pattern: ChessboardPattern): Option[Seq[Point]] =
     gray(image).use: g =>
@@ -141,8 +146,10 @@ object Calibration:
       pattern: ChessboardPattern,
       imageSize: Size
   ): Either[CvError, Calibration] =
-    // One object-point Mat per view; every view sees the same rigid board, so they are identical copies.
-    val objectPoints = Seq.fill(imagePoints.size)(pattern.objectPoints)
+    // Every view sees the same rigid board, so one object-point Mat is shared across all views (OpenCV
+    // accepts the same Mat repeated) — and freed exactly once in the `finally`.
+    val obj = pattern.objectPoints
+    val objectPoints = Seq.fill(imagePoints.size)(obj)
     val cameraMatrix = Mat()
     val distCoeffs = Mat()
     val rvecs = java.util.ArrayList[Mat]()
@@ -160,7 +167,7 @@ object Calibration:
         )
         Calibration(readIntrinsics(cameraMatrix, distCoeffs), imageSize, rms)
     finally
-      objectPoints.foreach(_.release())
+      obj.release() // the single shared object-point Mat, freed once regardless of view count
       cameraMatrix.release()
       distCoeffs.release()
       rvecs.asScala.foreach(_.release())
@@ -170,7 +177,9 @@ object Calibration:
   private def readIntrinsics(camera: Mat, dist: Mat): Intrinsics =
     val n = dist.total().toInt
     val d = Array.ofDim[Double](n)
-    if n > 0 then dist.get(0, 0, d)
+    // reads the coeffs into `d`; the pixel count `get` returns is unused
+    if n > 0 then
+      val _ = dist.get(0, 0, d)
     Intrinsics(
       fx = camera.get(0, 0)(0),
       fy = camera.get(1, 1)(0),
@@ -195,3 +204,10 @@ object Calibration:
   private def gray(image: Image): Managed[Mat] =
     if image.mat.channels >= 3 then image.mat.cvtColor(ColorConversion.BgrToGray)
     else Managed(image.mat.clone())
+
+/** Undistort an [[Image]] straight from a [[Calibration]] — unwraps its [[Intrinsics]] and delegates to
+  * `Image.undistort(intrinsics)`. An extension method (in the vision layer) rather than a member of the core
+  * `Image`, so the core need not depend on this camera-calibration type. `import scalacv.*` gives
+  * `frame.undistort(calib)`.
+  */
+extension (img: Image) def undistort(calibration: Calibration): Image = img.undistort(calibration.intrinsics)

@@ -8,7 +8,7 @@ import org.opencv.imgproc.Imgproc
  * OpenCV returns lines as an `Nx1` multi-channel [[org.opencv.core.Mat]] whose element type differs per
  * transform, and whose channels have no names. Reading one correctly means knowing three separate facts that
  * nothing in the Java signature tells you — and getting any of them wrong either throws from JNI or, worse,
- * silently reinterprets bit patterns. Verified against 4.13.0 by execution (ROADMAP §2):
+ * silently reinterprets bit patterns. Verified against 4.13.0 by execution:
  *
  *   - `HoughLines` → `Nx1 CV_32FC2`, `(rho, theta)`. **Vec2f, never Vec3f**, and invariant under `srn`,
  *     `stn`, `min_theta` and `max_theta`.

@@ -66,19 +66,23 @@ import java.nio.file.Paths
 // Fetch the bundled specs into a cache directory:
 val cache = Paths.get(sys.props("user.home"), ".cache", "scalacv-models")
 for
-  yunet <- Models.fetch(Models.YuNet, cache)
-  sface <- Models.fetch(Models.SFace, cache)
+  yunet <- Models.fetch(FaceDetect.modelSpec, cache)
+  sface <- Models.fetch(FaceRecognizer.modelSpec, cache)
 yield (yunet, sface)
 ```
 
-`Models.YuNet` pins a checksum (the same one [`FaceDetect`](/object-detection) verifies); `Models.SFace` has
-none pinned and is downloaded as-is. For any other model, build your own [`ModelSpec`](/api/core/scalacv/ModelSpec.html)
-with a file name, mirror URLs (`http(s)://` or `file://`), and an optional SHA-256:
+Both `FaceDetect.modelSpec` and `FaceRecognizer.modelSpec` pin a checksum (`FaceDetect`'s is the same one
+[`FaceDetect`](/object-detection) verifies), checked on every download and cache hit. For any other model,
+build your own [`ModelSpec`](/api/core/scalacv/ModelSpec.html) with a file name, mirror URLs (`http(s)://`
+or `file://`), and its SHA-256 — verification is the default:
 
 ```scala mdoc:silent
 val custom = ModelSpec(
   fileName = "my_model.onnx",
   urls = Seq("https://example.com/my_model.onnx"),
-  sha256 = Some("…")
+  sha256 = "…"
 )
+
+// Only when a model has no published checksum, opt out explicitly:
+val trusted = ModelSpec.unverified("other.onnx", Seq("https://example.com/other.onnx"))
 ```

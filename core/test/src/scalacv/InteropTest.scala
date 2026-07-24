@@ -50,7 +50,7 @@ class InteropTest extends munit.FunSuite:
     val sha = MessageDigest.getInstance("SHA-256").digest(bytes).map(b => f"$b%02x").mkString
     val into = Files.createTempDirectory("scalacv-models")
     try
-      val spec = ModelSpec("model.bin", Seq(src.toUri.toString), Some(sha))
+      val spec = ModelSpec("model.bin", Seq(src.toUri.toString), sha)
       val first = Models.fetch(spec, into)
       assert(first.isRight, s"expected a downloaded path, got $first")
       assert(Files.isRegularFile(into.resolve("model.bin")))
@@ -65,14 +65,14 @@ class InteropTest extends munit.FunSuite:
     Files.write(src, "content".getBytes)
     val into = Files.createTempDirectory("scalacv-models-bad")
     try
-      val wrongHash = ModelSpec("m.bin", Seq(src.toUri.toString), Some("00" * 32))
+      val wrongHash = ModelSpec("m.bin", Seq(src.toUri.toString), "00" * 32)
       assert(Models.fetch(wrongHash, into).isLeft, "a checksum mismatch must fail")
-      val missing = ModelSpec("n.bin", Seq("file:///no/such/model.bin"), None)
+      val missing = ModelSpec.unverified("n.bin", Seq("file:///no/such/model.bin"))
       assert(Models.fetch(missing, into).isLeft, "an unreachable source must fail")
     finally
       Files.deleteIfExists(src)
       Files.walk(into).sorted(java.util.Comparator.reverseOrder()).forEach(Files.deleteIfExists(_))
 
-  test("the bundled YuNet spec carries the same file and checksum FaceDetect pins"):
-    assertEquals(Models.YuNet.fileName, FaceDetect.ModelFileName)
-    assertEquals(Models.YuNet.sha256, Some(FaceDetect.ModelSha256))
+  test("the YuNet spec carries the same file and checksum FaceDetect pins"):
+    assertEquals(FaceDetect.modelSpec.fileName, FaceDetect.ModelFileName)
+    assertEquals(FaceDetect.modelSpec.sha256, Some(FaceDetect.ModelSha256))

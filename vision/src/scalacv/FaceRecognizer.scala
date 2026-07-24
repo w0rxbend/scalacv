@@ -116,6 +116,18 @@ object FaceRecognizer:
 
   private given Releasable[FaceRecognizerSF] = Releasable.handle(_.getNativeObjAddr)
 
+  /** The SFace model as a [[ModelSpec]] for the generic [[Models.fetch]] downloader, with its SHA-256 pinned
+    * so the fetched bytes are verified before the model is handed to OpenCV.
+    */
+  val modelSpec: ModelSpec = ModelSpec(
+    "face_recognition_sface_2021dec.onnx",
+    Seq(
+      "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/" +
+        "face_recognition_sface_2021dec.onnx"
+    ),
+    "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79"
+  )
+
   /** Loads an SFace recognizer from an ONNX model file. `Left` if the path has no file or the model cannot be
     * read as an SFace network.
     */

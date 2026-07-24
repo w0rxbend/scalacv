@@ -66,7 +66,7 @@ tracks, and tracks unseen for `maxAge` frames retire. It never looks at the imag
 composes with whatever produced them.
 
 ```scala mdoc:silent
-val tracker = ObjectTracker(iouThreshold = 0.3, maxAge = 5)
+val tracker = ObjectTracker.create(iouThreshold = 0.3, maxAge = 5)
 
 // Two objects, each drifting a little between frames. In a real pipeline these boxes come from a detector.
 val frames = Seq(

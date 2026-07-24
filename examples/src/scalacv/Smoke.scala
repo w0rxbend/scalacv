@@ -7,7 +7,7 @@ import org.opencv.core.{CvType, Mat}
   * Deliberately allocates a real Mat instead of printing `Core.VERSION`. `Core.VERSION` is a plain static
   * String resolved from constants at class-init: a program with zero natives on the classpath prints `4.13.0`
   * and exits 0, so a gate built on it passes on any machine, on any platform, having proved nothing.
-  * Allocating a Mat crosses JNI, which is the thing under test. See ROADMAP §3.10.
+  * Allocating a Mat crosses JNI, which is the thing under test.
   *
   * Every native object it touches is released. Even so, the process can exit non-zero *after* a fully
   * successful run: OpenCV/OpenBLAS native teardown at JVM shutdown occasionally crashes, and that is outside

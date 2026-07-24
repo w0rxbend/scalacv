@@ -9,9 +9,8 @@ import org.opencv.core.Mat
   * Where [[FaceDetectHaar]] runs a 2001 Haar cascade, YuNet is a small CNN (232 kB): more accurate, faster,
   * and it returns five facial landmarks and a confidence per face rather than a bare rectangle. The model is
   * downloaded and checksum-verified at runtime ([[FaceDetect.downloadModel]]) rather than vendored — a
-  * licensing decision, not a size one (ROADMAP §3.5, `THIRD-PARTY.md`). `FaceDetectorYN` is one of the 185
-  * types with no public `release()`, so it is taken with [[Managed.use]] and freed through the `delete(long)`
-  * bridge.
+  * licensing decision, not a size one (see `THIRD-PARTY.md`). `FaceDetectorYN` is one of the 185 types with
+  * no public `release()`, so it is taken with [[Managed.use]] and freed through the `delete(long)` bridge.
   */
 object FaceDetectYN:
 

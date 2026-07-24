@@ -71,3 +71,24 @@ val edges: Either[CvError, Array[Byte]] =
 ```
 
 Each stage's output is released as the next stage consumes it. The original `src` is never modified.
+
+## GraalVM native-image is not supported today
+
+This is a known limitation, not yet worked around. The very mechanisms that let scalacv free the 185
+bindings without a public `release()` are the ones a static image forbids by default, and the natives
+are loaded in a way an image has no way to reproduce. Three concrete blockers:
+
+1. **The release layer reflects a private `delete(long)` per binding class.** Freeing a
+   `CascadeClassifier`, `Net`, `KalmanFilter` and the rest goes through a cached `MethodHandle` onto
+   that class's `private static native void delete(long)`. A native image sees no reflective use at
+   build time, so every binding class you free would need an entry in `reflect-config.json`.
+2. **The finalizer disarm writes a `final` field via reflection.** Before freeing, scalacv zeroes the
+   binding's `nativeObj` field so the generated `finalize()` cannot `delete` the same address a second
+   time. That is a reflective write to a final field — again invisible to the image's static analysis
+   and needing explicit configuration.
+3. **Natives are extracted from a jar at runtime and `System.load`ed by absolute path.**
+   `OpenCv.load()` unpacks the platform libraries out of the bytedeco jars into `~/.javacpp` and loads
+   them by absolute path. A static image has no jar on disk to read, so this last step has nowhere to
+   extract from.
+
+If you need native-image today, the honest answer is that scalacv does not run under it yet.

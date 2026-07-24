@@ -56,7 +56,7 @@ enum CascadeName(val fileName: String):
   *
   * `windows-x86_64` is the exception that has to be handled by name: its jar ships an empty `share/`
   * directory and no cascades at all, so [[resolve]] can only fail there. It says so in those words rather
-  * than surfacing a null or an opaque IO error. See ROADMAP §2 and §3.2.
+  * than surfacing a null or an opaque IO error.
   */
 object Cascades:
 
@@ -150,7 +150,7 @@ extension (mat: Mat)
     *
     * Best results come from a single-channel, histogram-equalised image; a colour Mat works but is slower. An
     * empty Mat makes OpenCV throw, and that throw is deliberately not caught: it is a programmer error, not a
-    * data-dependent failure. See ROADMAP §3.10.
+    * data-dependent failure.
     *
     * @param scaleFactor
     *   how much the detection window grows per pyramid level. Just above 1 is slower and finds more.

@@ -7,7 +7,6 @@ import java.util.concurrent.atomic.AtomicReference
   * Two guarantees, both of which exist because getting them wrong is a JVM crash rather than an exception.
   * Calling a method on a freed OpenCV object segfaults from native code — no stack trace, no catch, no test
   * report; a double `delete` is undefined behaviour that merely *often* happens to survive. Measured, both.
-  * See ROADMAP §3.8.
   *
   *   1. Release is a compare-and-set, so a second release is a no-op rather than a double free.
   *   1. Access after release throws [[IllegalStateException]] on the Scala side, before anything crosses JNI.

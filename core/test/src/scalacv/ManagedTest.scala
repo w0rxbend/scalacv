@@ -9,7 +9,7 @@ import org.opencv.objdetect.CascadeClassifier
   *
   * A double `delete` on an OpenCV handle is undefined behaviour, and calling any method on a freed one
   * segfaults from native code — no stack trace, no catch, no test report. Both reproduced on this machine
-  * before the guard existed. See ROADMAP §3.8.
+  * before the guard existed.
   */
 class ManagedTest extends munit.FunSuite:
 
@@ -27,6 +27,27 @@ class ManagedTest extends munit.FunSuite:
     m.release()
     m.release()
     assert(m.isReleased)
+
+  test("release is a single compare-and-set — a concurrent race frees exactly once"):
+    // The central safety claim, and the one race the AtomicReference CAS exists for: N threads all
+    // call release() at the same instant. A plain boolean flag would let two of them both read
+    // "not yet released" and both free the pointer — a double-free, undefined behaviour on a native
+    // handle. The CAS admits exactly one. Run enough rounds that a broken implementation is very
+    // unlikely to survive by luck.
+    val threads = 64
+    (1 to 50).foreach: _ =>
+      val frees = java.util.concurrent.atomic.AtomicInteger(0)
+      given Releasable[String] = _ => { frees.incrementAndGet(); () }
+      val m = Managed("payload")
+      val start = java.util.concurrent.CountDownLatch(1)
+      val workers = (1 to threads).map: _ =>
+        val t = Thread { () => start.await(); m.release() }
+        t.start()
+        t
+      start.countDown() // fire all threads as close to simultaneously as the scheduler allows
+      workers.foreach(_.join())
+      assertEquals(frees.get, 1, "the underlying free must run exactly once, however many threads raced")
+      assert(m.isReleased)
 
   test("access after release throws rather than crashing the JVM"):
     val m = Managed(Mat(8, 8, CvType.CV_8UC1))
@@ -85,7 +106,7 @@ class ManagedTest extends munit.FunSuite:
   test("after release the Mat owns no native memory (the primary leak assertion)"):
     // Deliberately not an RSS measurement. RSS after a release reflects glibc arena behaviour,
     // not whether the buffer was freed, and has both false negatives and false positives.
-    // dataAddr() is the pointer itself. ROADMAP §8.
+    // dataAddr() is the pointer itself.
     val raw = Mat(256, 256, CvType.CV_8UC3)
     val m = Managed(raw)
     assert(raw.dataAddr() != 0L)

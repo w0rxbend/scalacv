@@ -4,7 +4,7 @@ package scalacv
   *
   * CI greps the output. Without an assertion like this the three-JDK matrix is decorative: if the per-rung
   * `jvmId` override ever stops being honoured, every rung silently runs the same JDK and all three still go
-  * green. ROADMAP §4 G1.
+  * green.
   */
 @main def jvmReport(): Unit =
   val v = System.getProperty("java.version")

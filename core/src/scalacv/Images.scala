@@ -17,7 +17,7 @@ import org.opencv.imgcodecs.Imgcodecs
   *      permission.
   *   1. `imwrite` and `imencode` **throw `CvException`** when the extension names no known encoder.
   *
-  * Every function here returns `Either[CvError, ?]` covering all three. See ROADMAP §3.10 and §4/B2.
+  * Every function here returns `Either[CvError, ?]` covering all three.
   *
   * ==Ownership==
   * A returned [[Managed]]`[Mat]` is **caller-owned**: nothing else holds a reference and nothing else will

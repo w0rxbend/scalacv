@@ -93,13 +93,13 @@ object Kalman:
     val kf = KalmanFilter(4, 2, 0)
     // Constant-velocity transition: x += vx, y += vy each step (dt = 1).
     Managed.use(kf.get_transitionMatrix()): t =>
-      t.put(0, 0, 1.0, 0, 1.0, 0, 0, 1.0, 0, 1.0, 0, 0, 1.0, 0, 0, 0, 0, 1.0)
+      t.put(0, 0, 1.0, 0, 1.0, 0, 0, 1.0, 0, 1.0, 0, 0, 1.0, 0, 0, 0, 0, 1.0): Unit
     // Measurement observes position only: the 2×4 identity picks x and y out of the state.
     Managed.use(kf.get_measurementMatrix())(Core.setIdentity(_))
     Managed.use(kf.get_processNoiseCov())(Core.setIdentity(_, Scalar(processNoise).toCv))
     Managed.use(kf.get_measurementNoiseCov())(Core.setIdentity(_, Scalar(measurementNoise).toCv))
     Managed.use(kf.get_errorCovPost())(Core.setIdentity(_, Scalar(1.0).toCv))
-    Managed.use(kf.get_statePost())(_.put(0, 0, initial.x, initial.y, 0.0, 0.0))
+    Managed.use(kf.get_statePost())(_.put(0, 0, initial.x, initial.y, 0.0, 0.0): Unit)
     new Kalman(Managed(kf))
 
 /** One tracked object as reported by [[ObjectTracker.update]]: a stable [[id]] that persists across frames,
@@ -118,14 +118,15 @@ final case class ObjectTrack(id: Int, box: Rect, hits: Int, age: Int)
   *
   * It is detector-agnostic by design: it never looks at the image, only at the boxes, so it composes with
   * whatever produced them.
+  *
+  * Build one with [[ObjectTracker.create]] and [[close]] it when done, the same shape as [[Tracker.create]]
+  * and [[Kalman.point]].
   */
-final class ObjectTracker(
-    iouThreshold: Double = 0.3,
-    maxAge: Int = 5,
-    minHits: Int = 1
+final class ObjectTracker private (
+    iouThreshold: Double,
+    maxAge: Int,
+    minHits: Int
 ) extends AutoCloseable:
-  require(iouThreshold >= 0 && iouThreshold <= 1, s"iouThreshold must be in [0, 1], got $iouThreshold")
-  require(maxAge >= 0, s"maxAge cannot be negative, got $maxAge")
 
   private final class Trk(
       val id: Int,
@@ -162,7 +163,7 @@ final class ObjectTracker(
     // 3. Correct matched tracks toward their detection.
     matched.foreach: (ti, di) =>
       val det = detections(di)
-      tracks(ti).kalman.correct(ObjectTracker.center(det))
+      tracks(ti).kalman.correct(ObjectTracker.center(det)): Unit
       tracks(ti).size = (det.width, det.height)
       tracks(ti).box = det
       tracks(ti).hits += 1
@@ -214,6 +215,21 @@ final class ObjectTracker(
     tracks.clear()
 
 object ObjectTracker:
+
+  /** Builds a tracking-by-detection tracker. Free it with [[ObjectTracker.close]] (or `Using`) so the
+    * per-track [[Kalman]] filters are released.
+    *
+    * @param iouThreshold
+    *   the minimum bounding-box overlap for a detection to be associated with an existing track.
+    * @param maxAge
+    *   how many frames a track may go unseen before it is retired.
+    * @param minHits
+    *   how many times a track must be matched before it is reported as confirmed.
+    */
+  def create(iouThreshold: Double = 0.3, maxAge: Int = 5, minHits: Int = 1): ObjectTracker =
+    require(iouThreshold >= 0 && iouThreshold <= 1, s"iouThreshold must be in [0, 1], got $iouThreshold")
+    require(maxAge >= 0, s"maxAge cannot be negative, got $maxAge")
+    new ObjectTracker(iouThreshold, maxAge, minHits)
 
   private def center(r: Rect): Point = Point(r.x + r.width / 2.0, r.y + r.height / 2.0)
 

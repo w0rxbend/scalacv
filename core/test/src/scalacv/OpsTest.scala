@@ -10,8 +10,8 @@ import org.opencv.imgproc.Imgproc
   *
   * The dimension and type assertions are the cheap half. The half that matters is that every op leaves its
   * receiver alive (`dataAddr() != 0`), returns something that is not an alias of it, and that the chaining
-  * combinators really do free what they claim to. A stranded intermediate is invisible to the collector
-  * (ROADMAP §3.6), so nothing but an explicit assertion catches it.
+  * combinators really do free what they claim to. A stranded intermediate is invisible to the collector so
+  * nothing but an explicit assertion catches it.
   *
   * Fixtures are drawn programmatically: the repository ships no test image and none may be added (D12).
   */

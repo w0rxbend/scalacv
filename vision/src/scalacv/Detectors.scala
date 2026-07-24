@@ -9,7 +9,7 @@ import org.opencv.objdetect.{ArucoDetector, Dictionary, Objdetect, QRCodeDetecto
  *
  * Both OpenCV detectors report their geometry through `Mat`s that the caller then owns, and neither
  * `QRCodeDetector` nor `ArucoDetector` has a public `release()` — they are two of the 185 types that only
- * expose a private `delete(long)` (ROADMAP §3.8). So every one of them is created, used and freed inside a
+ * expose a private `delete(long)`. So every one of them is created, used and freed inside a
  * single call here, and the results cross the boundary as ordinary immutable Scala data ([[Point]] case
  * classes) rather than as live native handles. That is what makes these signatures return `Seq` instead of
  * `Managed[…]`: there is nothing left to own.

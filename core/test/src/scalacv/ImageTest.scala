@@ -44,6 +44,14 @@ class ImageTest extends munit.FunSuite:
     assertEquals(g.channels, 1)
     g.close()
 
+  test("blur spends the image for every non-negative radius, including the 0 identity"):
+    for r <- Seq(0, 2) do
+      val img = sample()
+      val blurred = img.blur(r)
+      intercept[IllegalStateException](img.width) // the source is spent even when r == 0
+      assertEquals((blurred.width, blurred.height), (Width, Height)) // the handle moved, not the pixels
+      blurred.close()
+
   test("a query borrows: the image is still usable afterwards"):
     val img = sample()
     assertEquals(img.qrCodes, Seq.empty) // there is no QR code in the scene

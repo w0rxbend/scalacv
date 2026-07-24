@@ -41,7 +41,9 @@ class DoubleFreeTest extends munit.FunSuite:
       i += 1
     System.gc()
     Thread.sleep(120)
-    assert(true, s"survived $name")
+    // No assertion here on purpose: this is a crash canary. Reaching this point without the JVM having
+    // SIGSEGV'd IS the pass — a double-free would have taken the whole run down. The disarm mechanism
+    // itself is asserted directly, structurally, in the test below.
 
   test("releasing 300 CascadeClassifiers does not double-free"):
     churn("CascadeClassifier", () => CascadeClassifier())

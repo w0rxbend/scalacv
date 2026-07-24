@@ -6,10 +6,13 @@ import org.opencv.imgproc.Imgproc
 
 /* Typed replacements for OpenCV's raw int constants.
  *
- * Six of these are genuine enumerations. Three are not, and modelling them as `enum` would make correct code
- * unrepresentable — `THRESH_BINARY | THRESH_OTSU` is the ordinary way to ask for Otsu's method, and
- * `IMREAD_COLOR | IMREAD_IGNORE_ORIENTATION` is likewise a combination, not a choice. Those three get a
- * mode-plus-modifiers shape instead. See ROADMAP §4 B4a/B4b.
+ * Most of these are genuine enumerations — a value is exactly one case and `cvValue` is a single named
+ * constant. Two are not. `Threshold` is a real bitmask: `THRESH_BINARY | THRESH_OTSU` is the ordinary way to
+ * ask for Otsu's method, a combination rather than a choice, so it carries a mode plus an optional modifier.
+ * `ImreadFlags` looks like one but is not — OpenCV's IMREAD constants are not orthogonal bits (each
+ * reduced-size flag bakes in its colour bit, and `IMREAD_UNCHANGED` is `-1`, which ORs every other bit away),
+ * so it is a structured value whose (colour, scale) pair maps totally onto exactly one named constant, with
+ * orientation the sole genuinely-independent flag.
  */
 
 /** Colour space conversions. A true enumeration. */
@@ -173,22 +176,62 @@ object Threshold:
   */
 final case class ThresholdResult(value: Double)
 
-/** Image reading flags — **a bitmask, not an enumeration.** */
-final case class ImreadFlags(mode: ImreadFlags.Mode, modifiers: Set[ImreadFlags.Modifier] = Set.empty):
-  def cvValue: Int = modifiers.foldLeft(mode.cvValue)(_ | _.cvValue)
+/** How `imread`/`imdecode` should decode a pixel's colour. */
+enum ImreadColor:
+  case Grayscale, Color, ColorRgb, Unchanged, AnyDepth
+
+/** The fraction of full resolution to decode at. OpenCV's reduced-size decode is cheaper than a full read
+  * followed by a resize, because the codec skips the discarded detail rather than producing it first.
+  */
+enum ImreadScale(val denom: Int):
+  case Full extends ImreadScale(1)
+  case Half extends ImreadScale(2)
+  case Quarter extends ImreadScale(4)
+  case Eighth extends ImreadScale(8)
+
+/** Image reading flags — **a total model, not a bitmask.**
+  *
+  * OpenCV's `IMREAD_*` constants look like OR-able bits but are not: each `IMREAD_REDUCED_*` value already
+  * bakes in its colour bit, and `IMREAD_UNCHANGED` is `-1`, whose bits swamp everything else. OR-ing a colour
+  * with a reduced-size flag therefore silently decodes the wrong image. So the (colour, scale) pair maps
+  * *totally* onto exactly one named constant instead of composing, and only [[ignoreOrientation]] (bit 128)
+  * is a genuinely independent flag that may be OR-ed on top.
+  *
+  * Reduced-size decode exists only for [[ImreadColor.Grayscale]] and [[ImreadColor.Color]], and
+  * [[ImreadColor.Unchanged]] (`-1`) can carry no extra bit at all; the two `require`s reject the combinations
+  * OpenCV has no constant for, rather than quietly OR-ing them into something else.
+  */
+final case class ImreadFlags(
+    color: ImreadColor,
+    scale: ImreadScale = ImreadScale.Full,
+    ignoreOrientation: Boolean = false
+):
+  require(
+    scale == ImreadScale.Full || color == ImreadColor.Grayscale || color == ImreadColor.Color,
+    s"$color has no reduced-size decode; only Grayscale and Color support $scale"
+  )
+  require(
+    !(color == ImreadColor.Unchanged && (scale != ImreadScale.Full || ignoreOrientation)),
+    "IMREAD_UNCHANGED (-1) cannot carry a reduction or an orientation flag"
+  )
+
+  def cvValue: Int =
+    val base = (color, scale) match
+      case (ImreadColor.Grayscale, ImreadScale.Full) => Imgcodecs.IMREAD_GRAYSCALE
+      case (ImreadColor.Grayscale, ImreadScale.Half) => Imgcodecs.IMREAD_REDUCED_GRAYSCALE_2
+      case (ImreadColor.Grayscale, ImreadScale.Quarter) => Imgcodecs.IMREAD_REDUCED_GRAYSCALE_4
+      case (ImreadColor.Grayscale, ImreadScale.Eighth) => Imgcodecs.IMREAD_REDUCED_GRAYSCALE_8
+      case (ImreadColor.Color, ImreadScale.Full) => Imgcodecs.IMREAD_COLOR
+      case (ImreadColor.Color, ImreadScale.Half) => Imgcodecs.IMREAD_REDUCED_COLOR_2
+      case (ImreadColor.Color, ImreadScale.Quarter) => Imgcodecs.IMREAD_REDUCED_COLOR_4
+      case (ImreadColor.Color, ImreadScale.Eighth) => Imgcodecs.IMREAD_REDUCED_COLOR_8
+      case (ImreadColor.ColorRgb, ImreadScale.Full) => Imgcodecs.IMREAD_COLOR_RGB
+      case (ImreadColor.Unchanged, ImreadScale.Full) => Imgcodecs.IMREAD_UNCHANGED
+      case (ImreadColor.AnyDepth, ImreadScale.Full) => Imgcodecs.IMREAD_ANYDEPTH
+      case _ => throw IllegalStateException(s"unreachable: require() guards ($color,$scale)")
+    if ignoreOrientation then base | Imgcodecs.IMREAD_IGNORE_ORIENTATION else base
 
 object ImreadFlags:
-  enum Mode(val cvValue: Int):
-    case Unchanged extends Mode(Imgcodecs.IMREAD_UNCHANGED)
-    case Grayscale extends Mode(Imgcodecs.IMREAD_GRAYSCALE)
-    case Color extends Mode(Imgcodecs.IMREAD_COLOR)
-    case AnyDepth extends Mode(Imgcodecs.IMREAD_ANYDEPTH)
-
-  enum Modifier(val cvValue: Int):
-    case IgnoreOrientation extends Modifier(Imgcodecs.IMREAD_IGNORE_ORIENTATION)
-    case ReducedHalf extends Modifier(Imgcodecs.IMREAD_REDUCED_COLOR_2)
-    case ReducedQuarter extends Modifier(Imgcodecs.IMREAD_REDUCED_COLOR_4)
-
-  val Color: ImreadFlags = ImreadFlags(Mode.Color)
-  val Grayscale: ImreadFlags = ImreadFlags(Mode.Grayscale)
-  val Unchanged: ImreadFlags = ImreadFlags(Mode.Unchanged)
+  val Color: ImreadFlags = ImreadFlags(ImreadColor.Color)
+  val Grayscale: ImreadFlags = ImreadFlags(ImreadColor.Grayscale)
+  val Unchanged: ImreadFlags = ImreadFlags(ImreadColor.Unchanged)

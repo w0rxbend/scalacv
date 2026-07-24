@@ -51,9 +51,7 @@ a toolkit may appear, and it is never built in CI or published.
 
 ## Commits
 
-Conventional commits (`feat:`, `fix:`, `build:`, `docs:`, `test:`, `chore:`). If your change
-completes a `ROADMAP.md` checkbox, flip it **in the same commit** — the roadmap in git
-history should always describe the tree it sits in.
+Conventional commits (`feat:`, `fix:`, `build:`, `docs:`, `test:`, `chore:`).
 
 Write commit messages that explain *why*. "fix: handle empty Mat" tells the next person
 nothing; the reason it was broken, and what it cost, is the useful part.

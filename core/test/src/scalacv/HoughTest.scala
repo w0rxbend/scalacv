@@ -6,7 +6,7 @@ import org.opencv.core.{CvType, Mat}
 import org.opencv.imgproc.Imgproc
 
 /** Fixtures are drawn here rather than loaded, so the geometry the assertions check is the geometry the test
-  * itself put there. ROADMAP §3.5 removes the only image this repository ever had.
+  * itself put there. No bitmap image ships with this repository.
   *
   * The interesting assertions are the decoding ones. `HoughLinesP` returns `CV_32SC4` — int32 — while
   * `HoughLines` returns `CV_32FC2`; reading either with the other's element type does not fail cleanly, so a

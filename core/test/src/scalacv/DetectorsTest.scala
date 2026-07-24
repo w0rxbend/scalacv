@@ -7,8 +7,8 @@ import org.opencv.imgproc.Imgproc
 import org.opencv.objdetect.QRCodeEncoder
 
 /** Round-trip tests. Every fixture is synthesised here — there is no image file in this repo and none may be
-  * added (ROADMAP §3.5) — which for fiducials is the honest test anyway: OpenCV generates the marker, OpenCV
-  * reads it back, and the assertion is on the id that came out.
+  * added — which for fiducials is the honest test anyway: OpenCV generates the marker, OpenCV reads it back,
+  * and the assertion is on the id that came out.
   */
 class DetectorsTest extends munit.FunSuite:
 

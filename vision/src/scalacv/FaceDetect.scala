@@ -64,9 +64,9 @@ final case class Face(box: Rect, landmarks: Seq[Point], score: Float):
   */
 object FaceDetect:
 
-  /** `FaceDetectorYN` is one of the 185 generated types with no public `release()` (ROADMAP §3.8), so it
-    * needs the `delete(long)` bridge. Public so callers who build their own detector — with a `MatOfByte`
-    * buffer, or a non-default `topK` — can `import FaceDetect.given` and manage it on the same terms.
+  /** `FaceDetectorYN` is one of the 185 generated types with no public `release()`, so it needs the
+    * `delete(long)` bridge. Public so callers who build their own detector — with a `MatOfByte` buffer, or a
+    * non-default `topK` — can `import FaceDetect.given` and manage it on the same terms.
     *
     * This is the same one-liner every other handle type uses ([[Cascades]], [[Dnn]], [[Qr]], [[Aruco]]):
     * [[Releasable.handle]] reads the address, then disarms the binding's unconditional `finalize()` *before*
@@ -118,6 +118,11 @@ object FaceDetect:
     "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_detection_yunet/" +
       ModelFileName
   )
+
+  /** This detector's model as a [[ModelSpec]] for the generic [[Models.fetch]] downloader — the registry form
+    * of [[downloadModel]], carrying the same file name, mirrors and pinned checksum.
+    */
+  val modelSpec: ModelSpec = ModelSpec(ModelFileName, ModelUrls, ModelSha256)
 
   private val ConnectTimeout = Duration.ofSeconds(20)
   private val RequestTimeout = Duration.ofSeconds(120)

@@ -9,11 +9,11 @@ import org.opencv.core.{CvType, Mat, Scalar as CvScalar}
 
 /** The model under test is *built here*, byte by byte.
   *
-  * ROADMAP §3.5 forbids committing a fixture file, and B13's ONNX model (YuNet) is a build-time download that
-  * would make this suite need the network. So [[TinyOnnx]] emits a real ONNX ModelProto — one `Relu` over a
-  * declared input shape — as protobuf wire bytes. It is 106 bytes, it costs nothing, and it makes the forward
-  * pass genuinely testable: `Relu` has an exact expected output, so an implementation that forwarded the
-  * wrong blob, or returned its input unchanged, fails here.
+  * No fixture file may be committed, and the ONNX model (YuNet) is a build-time download that would make this
+  * suite need the network. So [[TinyOnnx]] emits a real ONNX ModelProto — one `Relu` over a declared input
+  * shape — as protobuf wire bytes. It is 106 bytes, it costs nothing, and it makes the forward pass genuinely
+  * testable: `Relu` has an exact expected output, so an implementation that forwarded the wrong blob, or
+  * returned its input unchanged, fails here.
   */
 class DnnTest extends munit.FunSuite:
 

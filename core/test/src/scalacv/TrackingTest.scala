@@ -51,7 +51,7 @@ class TrackingTest extends munit.FunSuite:
       f0.close()
 
   test("ObjectTracker keeps a stable id for each object across frames"):
-    val t = ObjectTracker()
+    val t = ObjectTracker.create()
     try
       val a = Rect(10, 10, 20, 20)
       val b = Rect(120, 120, 20, 20)
@@ -65,7 +65,7 @@ class TrackingTest extends munit.FunSuite:
     finally t.close()
 
   test("ObjectTracker retires a lost track and counts a genuinely new one"):
-    val t = ObjectTracker(maxAge = 0)
+    val t = ObjectTracker.create(maxAge = 0)
     try
       t.update(Seq(Rect(10, 10, 20, 20), Rect(120, 120, 20, 20))) // ids 0, 1
       assertEquals(t.count, 2)

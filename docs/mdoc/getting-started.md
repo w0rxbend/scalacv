@@ -30,8 +30,13 @@ There is **no** `windows-arm64` build.
 Don't want to choose? `mvn"org.bytedeco:opencv-platform:4.13.0-1.5.13"` bundles every platform and
 works anywhere — for about **408 MB** instead of 36–80 MB.
 
-If you forget the natives, `OpenCv.load()` does not fail with a link error — it tells you the exact
-two lines to add for the platform you are actually on.
+`scalacv` alone compiles without the native lines, but it will not run: the OpenCV symbols are
+absent until you add them. If you forget them, `OpenCv.load()` does not fail with a link error — it
+prints a copy-pasteable fix naming the platform you are actually on.
+
+**What lands on disk.** For `linux-x86_64` the `opencv` jar is ~31 MB and `openblas` ~20 MB; the
+first `OpenCv.load()` extracts them once into `~/.javacpp` (~196 MB on Linux) and every later run
+reuses that cache — see [The native cache](/native-cache) to relocate or pre-warm it.
 
 ## Load the natives
 
@@ -46,7 +51,17 @@ OpenCv.load()
 ## Your first pipeline
 
 The high-level [`Image`](/image-api) API reads, transforms and writes in a single chain — every
-intermediate is freed for you:
+intermediate is freed for you. Lead with `Image.reading`: it scopes the image to the block and
+releases it on success, on failure, and on exception, so this is the one entry point that cannot
+leak the source:
+
+```scala mdoc:compile-only
+Image.reading("photo.jpg") { img => img.gray.blur(2).canny(80, 160).write("edges.png") }
+```
+
+The `read`/`flatMap` form is equivalent when you would rather thread the `Either` by hand — every
+terminal (`write`, `bytes`, `close`) still releases — but reach for it only when `reading` does not
+fit:
 
 ```scala mdoc:compile-only
 Image.read("photo.jpg").flatMap(_.gray.blur(2).canny(80, 160).write("edges.png"))

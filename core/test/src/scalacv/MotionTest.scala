@@ -14,11 +14,14 @@ class MotionTest extends munit.FunSuite:
   private val Width = 160
   private val Height = 120
 
-  /** A grey scene with a 20×20 white square whose left edge is at `squareX`. */
-  private def frameWith(squareX: Int): Image =
-    val m = Mat(Height, Width, CvType.CV_8UC3, cv.Scalar(60, 60, 60))
+  /** A grey `w`×`h` scene with a 20×20 white square whose left edge is at `squareX`. */
+  private def frameSized(w: Int, h: Int, squareX: Int): Image =
+    val m = Mat(h, w, CvType.CV_8UC3, cv.Scalar(60, 60, 60))
     Imgproc.rectangle(m, cv.Point(squareX, 40), cv.Point(squareX + 20, 60), cv.Scalar(240, 240, 240), -1)
     Image.wrap(Managed(m))
+
+  /** A grey scene with a 20×20 white square whose left edge is at `squareX`. */
+  private def frameWith(squareX: Int): Image = frameSized(Width, Height, squareX)
 
   /** Feeds one frame (detect borrows it) and closes it. */
   private def motionOf(d: MotionDetector, squareX: Int): Motion =
@@ -70,6 +73,21 @@ class MotionTest extends munit.FunSuite:
       for _ <- 0 until 15 do motionOf(d, 20) // let the model learn the static scene
       val moved = motionOf(d, 95)
       assert(moved.moving, s"a new foreground object should be motion, ratio=${moved.ratio}")
+    finally d.close()
+
+  test("a size mismatch throws without wedging the detector (H1: no leak, no stale baseline)"):
+    val d = MotionDetector.frameDifference(minArea = 50)
+    try
+      assert(!motionOf(d, 20).moving, "the first frame is the baseline")
+      // A differently sized frame cannot be diffed against the baseline: absdiff throws (surfaced as the
+      // boundary CvError.NativeCall), and the leaked `current` bug (H1) would have both stranded that
+      // frame and left the detector wedged.
+      val odd = frameSized(Width + 40, Height + 40, 20)
+      try intercept[CvError](d.detect(odd))
+      finally odd.close()
+      // The baseline survived and nothing was left half-swapped: a correctly sized frame still detects.
+      val moved = motionOf(d, 90)
+      assert(moved.moving, s"after the mismatch the detector still works, ratio=${moved.ratio}")
     finally d.close()
 
   test("Motion.still is no motion"):

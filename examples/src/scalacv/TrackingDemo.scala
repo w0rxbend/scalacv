@@ -19,7 +19,7 @@ import org.opencv.imgproc.Imgproc
     Imgproc.rectangle(m, cv.Point(bx - 12, 120), cv.Point(bx + 12, 150), cv.Scalar(255, 255, 255), -1)
     Image.wrap(Managed(m))
 
-  val tracker = ObjectTracker(iouThreshold = 0.2, maxAge = 3)
+  val tracker = ObjectTracker.create(iouThreshold = 0.2, maxAge = 3)
   try
     for step <- 0 until 8 do
       // Detect: threshold to a mask, take each contour's bounding box as a detection.

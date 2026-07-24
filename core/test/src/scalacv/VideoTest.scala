@@ -9,7 +9,7 @@ import org.opencv.imgproc.Imgproc
 import org.opencv.videoio.{VideoCapture, VideoWriter}
 
 /** The video under test is written here, frame by frame, so that every assertion can name the exact content
-  * the round trip has to preserve. No asset ships with this repository and none may (ROADMAP §3.5).
+  * the round trip has to preserve. No asset ships with this repository and none may.
   *
   * The codec is MJPG in an AVI container, which is the one combination OpenCV can always write: it is served
   * by the built-in MJPEG writer and needs no FFmpeg, no GStreamer and no system codec. Measured on the

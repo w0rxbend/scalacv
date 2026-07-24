@@ -112,7 +112,9 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
     */
   def blur(radius: Int): Image =
     require(radius >= 0, s"blur radius cannot be negative, got $radius")
-    if radius == 0 then this
+    // radius 0 is the identity, but it must still spend the receiver like every other branch: move the Mat
+    // out of this handle into a fresh Image (no pixel copy) so the source is left spent, not aliased alive.
+    if radius == 0 then Image(Managed(handle.take()))
     else
       val side = radius * 2 + 1
       transform(_.gaussianBlur(Size(side.toDouble, side.toDouble)))
@@ -167,9 +169,11 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
       s"crop $rect does not fit inside ${width}x$height"
     )
     // submat is an aliasing view of the parent's data; clone makes it independent, and the view Mat is
-    // released before the parent so no header is stranded.
-    val out = Managed.use(handle.get.submat(rect.toCv))(_.clone())
-    try Image(Managed(out))
+    // released before the parent so no header is stranded. The allocation lives inside the try so the
+    // parent's release runs even when submat/clone throws.
+    try
+      val out = Managed.use(handle.get.submat(rect.toCv))(_.clone())
+      Image(Managed(out))
     finally handle.release()
 
   /** Mirrors the image — see [[Flip]]. */
@@ -183,11 +187,12 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
     */
   def rotate(degrees: Double, scale: Double = 1.0): Image = transform(_.rotated(degrees, scale))
 
-  /** Removes lens distortion using a [[Calibration]], straightening the lines a real lens bends. Feed it a
-    * calibration from [[Calibration.fromChessboard]]; with an uncalibrated [[Intrinsics.approx]] guess (no
-    * distortion) this is a plain copy.
+  /** Removes lens distortion using calibrated camera [[Intrinsics]], straightening the lines a real lens
+    * bends. With an uncalibrated [[Intrinsics.approx]] guess (no distortion) this is a plain copy. Given a
+    * [[Calibration]] value, the `undistort(calibration)` extension overload (in `Calibration.scala`) unwraps
+    * its intrinsics for you.
     */
-  def undistort(calibration: Calibration): Image = transform(_.undistort(calibration.intrinsics))
+  def undistort(intrinsics: Intrinsics): Image = transform(_.undistorted(intrinsics))
 
   /** Adds a uniform border of `size` pixels on every side. */
   def pad(size: Int, borderType: BorderType = BorderType.Constant, color: Scalar = Scalar.Black): Image =
@@ -443,6 +448,7 @@ object Image:
   /** A blank canvas, filled with `color`. `channels` is 1, 3 or 4. */
   def blank(width: Int, height: Int, color: Scalar = Scalar.Black, channels: Int = 3): Image =
     require(width > 0 && height > 0, s"a blank Image needs a positive size, got ${width}x$height")
+    require(channels == 1 || channels == 3 || channels == 4, s"channels must be 1, 3 or 4, got $channels")
     val cvType = channels match
       case 1 => CvType.CV_8UC1
       case 3 => CvType.CV_8UC3
@@ -458,8 +464,15 @@ object Image:
     * }}}
     *
     * Do not let the `Image` (or one derived from it) escape `use`; it is closed when the block returns.
+    *
+    * The whole `use` body runs inside [[Cv.attempt]], so a [[CvError.NativeCall]] thrown by a transform in
+    * the chain (`gray`/`canny`/…) comes back as a `Left` rather than escaping past the `Either` — the return
+    * type is honest about failure, not just about the read. Programmer errors (`IllegalArgumentException`,
+    * use-after-move) still throw, as everywhere else.
     */
   def reading[A](path: String, flags: ImreadFlags = ImreadFlags.Color)(use: Image => A): Either[CvError, A] =
-    read(path, flags).map: img =>
-      try use(img)
-      finally img.close()
+    read(path, flags).flatMap: img =>
+      Cv.attempt("reading")(
+        try use(img)
+        finally img.close()
+      )

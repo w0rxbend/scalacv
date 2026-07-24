@@ -24,10 +24,10 @@ private final case class FaceTruth(
 
 /** YuNet face detection.
   *
-  * The fixture is drawn here, pixel by pixel — there is no image file in this repo and none may be added
-  * (ROADMAP §3.5). That turns out to be the *stronger* test: because the test knows where it put the eyes,
-  * the nose and the mouth, it can assert that OpenCV's five landmarks land on them, which is precisely the
-  * assertion a mis-indexed 15-column decode fails.
+  * The fixture is drawn here, pixel by pixel — there is no image file in this repo and none may be added by
+  * design. That turns out to be the *stronger* test: because the test knows where it put the eyes, the nose
+  * and the mouth, it can assert that OpenCV's five landmarks land on them, which is precisely the assertion a
+  * mis-indexed 15-column decode fails.
   *
   * Everything that needs the model needs the network the first time it runs, so those tests `assume`-skip
   * rather than fail when it is not reachable. The model is cached in the system temp directory and reused.

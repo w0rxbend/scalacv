@@ -58,7 +58,7 @@ final class LoopDetector private (maxFeatures: Int, minMatches: Int, recentExclu
     */
   def process(image: Image): Option[LoopClosure] =
     val loop = detect(image)
-    addKeyframe(image)
+    addKeyframe(image): Unit
     loop
 
   /** How many keyframes are stored. */

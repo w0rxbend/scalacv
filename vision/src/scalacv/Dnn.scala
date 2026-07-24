@@ -14,10 +14,10 @@ import org.opencv.dnn.{Dnn as CvDnn, Net}
   *
   * ==Ownership==
   *
-  * `Net` is one of the 185 generated types with no public `release()` (ROADMAP §3.8), so it is freed through
-  * the `delete(long)` bridge — see [[Releasable.handle]]. Both the [[Net]] from [[fromOnnx]] and the `Mat`s
-  * from [[blobFromImage]] and [[forward]] are **caller-owned**: release them, or take them with
-  * [[Managed.use]]. Nothing here takes ownership of an argument.
+  * `Net` is one of the 185 generated types with no public `release()`, so it is freed through the
+  * `delete(long)` bridge — see [[Releasable.handle]]. Both the [[Net]] from [[fromOnnx]] and the `Mat`s from
+  * [[blobFromImage]] and [[forward]] are **caller-owned**: release them, or take them with [[Managed.use]].
+  * Nothing here takes ownership of an argument.
   *
   * ==Statefulness==
   *

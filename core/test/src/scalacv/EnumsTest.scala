@@ -1,5 +1,6 @@
 package scalacv
 
+import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 
 /** These assert against OpenCV's own constants rather than against literals, so a version bump that renumbers
@@ -26,11 +27,42 @@ class EnumsTest extends munit.FunSuite:
     assert(!Threshold(Threshold.Mode.Binary).computesThreshold)
     assert(Threshold.otsu().computesThreshold)
 
-  test("ImreadFlags ORs its modifiers"):
-    val f = ImreadFlags(ImreadFlags.Mode.Color, Set(ImreadFlags.Modifier.IgnoreOrientation))
-    assertEquals(
-      f.cvValue,
-      org.opencv.imgcodecs.Imgcodecs.IMREAD_COLOR | org.opencv.imgcodecs.Imgcodecs.IMREAD_IGNORE_ORIENTATION
+  test("ImreadFlags maps every legal (colour, scale) pair onto its named constant"):
+    // The (colour, scale) pair is total: each legal combination is exactly one Imgcodecs.IMREAD_* value, not
+    // an OR of reduced bits. Any renumber upstream fails here.
+    val expected: Map[(ImreadColor, ImreadScale), Int] = Map(
+      (ImreadColor.Grayscale, ImreadScale.Full) -> Imgcodecs.IMREAD_GRAYSCALE,
+      (ImreadColor.Grayscale, ImreadScale.Half) -> Imgcodecs.IMREAD_REDUCED_GRAYSCALE_2,
+      (ImreadColor.Grayscale, ImreadScale.Quarter) -> Imgcodecs.IMREAD_REDUCED_GRAYSCALE_4,
+      (ImreadColor.Grayscale, ImreadScale.Eighth) -> Imgcodecs.IMREAD_REDUCED_GRAYSCALE_8,
+      (ImreadColor.Color, ImreadScale.Full) -> Imgcodecs.IMREAD_COLOR,
+      (ImreadColor.Color, ImreadScale.Half) -> Imgcodecs.IMREAD_REDUCED_COLOR_2,
+      (ImreadColor.Color, ImreadScale.Quarter) -> Imgcodecs.IMREAD_REDUCED_COLOR_4,
+      (ImreadColor.Color, ImreadScale.Eighth) -> Imgcodecs.IMREAD_REDUCED_COLOR_8,
+      (ImreadColor.ColorRgb, ImreadScale.Full) -> Imgcodecs.IMREAD_COLOR_RGB,
+      (ImreadColor.Unchanged, ImreadScale.Full) -> Imgcodecs.IMREAD_UNCHANGED,
+      (ImreadColor.AnyDepth, ImreadScale.Full) -> Imgcodecs.IMREAD_ANYDEPTH
+    )
+    // Every legal combination — both orientation settings — is covered, and no illegal one sneaks in.
+    for
+      color <- ImreadColor.values
+      scale <- ImreadScale.values
+      ignore <- Seq(false, true)
+      base <- expected.get((color, scale))
+      // Unchanged (-1) admits no extra bit, so its orientation-on variant is illegal, not covered here.
+      if !(color == ImreadColor.Unchanged && ignore)
+    do
+      val want = if ignore then base | Imgcodecs.IMREAD_IGNORE_ORIENTATION else base
+      assertEquals(ImreadFlags(color, scale, ignore).cvValue, want, s"$color/$scale ignore=$ignore")
+
+  test("ImreadFlags rejects combinations OpenCV has no constant for"):
+    // Reduced-size decode exists only for Grayscale and Color.
+    intercept[IllegalArgumentException](ImreadFlags(ImreadColor.Unchanged, ImreadScale.Half))
+    intercept[IllegalArgumentException](ImreadFlags(ImreadColor.AnyDepth, ImreadScale.Half))
+    intercept[IllegalArgumentException](ImreadFlags(ImreadColor.ColorRgb, ImreadScale.Quarter))
+    // Unchanged (-1) can carry no extra bit, orientation included.
+    intercept[IllegalArgumentException](
+      ImreadFlags(ImreadColor.Unchanged, ImreadScale.Full, ignoreOrientation = true)
     )
 
   test("geometry round-trips across the native boundary"):

@@ -14,7 +14,7 @@ import org.bytedeco.javacpp.Loader
   * `libopencv_java` itself links no GUI toolkit. So we bring javacpp up through a GUI-free preset, extract
   * the platform payload, and then load the JNI shim, resolving its dependencies **on demand** — see
   * [[satisfy]] for why loading them speculatively is not merely wasteful but unsafe. The result needs no
-  * `apt-get install libgtk2.0-0t64` on any runner. See ROADMAP §3.2.
+  * `apt-get install libgtk2.0-0t64` on any runner.
   */
 object OpenCv:
 
@@ -86,46 +86,46 @@ object OpenCv:
     */
   private def satisfy(target: File, payload: Map[String, File]): Unit =
     val loaded = scala.collection.mutable.Set.empty[String]
-    var lastMissing = ""
     var bulkTried = false
 
-    def attempt(load: () => Unit, what: String): Unit =
-      var settled = false
-      while !settled do
-        try
-          load()
-          settled = true
-        catch
-          case e: UnsatisfiedLinkError =>
-            missingSoname(e.getMessage) match
-              case Some(missing) =>
-                if missing == lastMissing then
-                  // Asking for the same library twice means loading it did not help.
+    // `lastMissing` is threaded as a parameter, not shared: each retry chain carries its own last-missing
+    // soname, so satisfying a dependency on one path cannot mask a genuine repeat on another.
+    def attempt(load: () => Unit, what: String, lastMissing: String): Unit =
+      try load()
+      catch
+        case e: UnsatisfiedLinkError =>
+          missingSoname(e.getMessage) match
+            case Some(missing) =>
+              if missing == lastMissing then
+                // Asking for the same library twice means loading it did not help.
+                throw CvError.NativesMissing(
+                  s"$what needs $missing, which is in the payload but does not satisfy it"
+                )
+              val dep = payload
+                .get(missing)
+                .orElse(payload.get(baseName(missing)))
+                .getOrElse:
                   throw CvError.NativesMissing(
-                    s"$what needs $missing, which is in the payload but does not satisfy it"
+                    s"""$what needs $missing, which is not in the extracted OpenCV payload.
+                     |
+                     |This is a dependency of OpenCV itself rather than of scalacv. It usually means
+                     |the platform-classifier jar is incomplete or was extracted only partially; try
+                     |clearing the javacpp cache (~/.javacpp) and running again.""".stripMargin
                   )
-                lastMissing = missing
-                val dep = payload
-                  .get(missing)
-                  .orElse(payload.get(baseName(missing)))
-                  .getOrElse:
-                    throw CvError.NativesMissing(
-                      s"""$what needs $missing, which is not in the extracted OpenCV payload.
-                       |
-                       |This is a dependency of OpenCV itself rather than of scalacv. It usually means
-                       |the platform-classifier jar is incomplete or was extracted only partially; try
-                       |clearing the javacpp cache (~/.javacpp) and running again.""".stripMargin
-                    )
-                if !loaded.add(dep.getName) then throw e
-                attempt(() => Loader.loadGlobal(dep.getAbsolutePath), dep.getName)
-              case None =>
-                // The error named no library (Windows). Bulk-load the payload once, then retry.
-                // If we have already bulk-loaded and still cannot satisfy the shim, it is a real error.
-                if bulkTried then throw e
-                bulkTried = true
-                bulkLoad(payload.values)
+              if !loaded.add(dep.getName) then throw e
+              // Load the dependency on its own fresh path, then retry the original load — remembering this
+              // round's missing soname, so a repeat of it means loading the dependency did not help.
+              attempt(() => Loader.loadGlobal(dep.getAbsolutePath), dep.getName, "")
+              attempt(load, what, missing)
+            case None =>
+              // The error named no library (Windows). Bulk-load the payload once, then retry.
+              // If we have already bulk-loaded and still cannot satisfy the shim, it is a real error.
+              if bulkTried then throw e
+              bulkTried = true
+              bulkLoad(payload.values)
+              attempt(load, what, lastMissing)
 
-    attempt(() => System.load(target.getAbsolutePath), target.getName)
+    attempt(() => System.load(target.getAbsolutePath), target.getName, "")
 
   /** Loads every library in `libs`, retrying until a whole pass makes no progress.
     *
@@ -151,7 +151,7 @@ object OpenCv:
     * `Library not loaded: @rpath/libopencv_highgui.413.dylib` Windows: `Can't find dependent libraries` — no
     * name, so this returns None and [[satisfy]] falls back to a bulk load (safe there; see its comment).
     */
-  private def missingSoname(message: String | Null): Option[String] =
+  private[scalacv] def missingSoname(message: String | Null): Option[String] =
     Option(message).flatMap: m =>
       val linux = raw"([\w.+-]+\.so[\w.]*): cannot open shared object file".r
       val mac = raw"Library not loaded: (?:@rpath/)?([\w.+-]+\.dylib)".r
@@ -176,8 +176,8 @@ object OpenCv:
   private lazy val libPrefix: String =
     Option(Loader.loadProperties().getProperty("platform.library.prefix")).getOrElse("")
 
-  private def isNativeLib(n: String): Boolean =
-    n.startsWith(s"${libPrefix}opencv_") && n.matches(raw".*\.(so|dylib|dll)(\.\d+)?")
+  private[scalacv] def isNativeLib(n: String): Boolean =
+    n.startsWith(s"${libPrefix}opencv_") && n.matches(raw".*\.(so|dylib|dll)(\.\d+)*")
 
   /** The natives are not on the classpath — which, for a consumer, is the expected state until they add the
     * dependency for their platform. Tell them exactly what to add, for the platform they are actually on,

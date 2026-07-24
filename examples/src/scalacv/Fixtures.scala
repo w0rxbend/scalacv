@@ -7,8 +7,8 @@ import org.opencv.objdetect.{Objdetect, QRCodeEncoder}
 /** Synthetic scenes for the examples, drawn programmatically.
   *
   * The examples exist to be run and to assert their own output in CI, and there is no image asset in this
-  * repository (the old `Lena.png` was removed for licensing reasons — ROADMAP §3.5). So every example
-  * generates its input here rather than reading a file.
+  * repository (no bitmap fixture ships, for licensing reasons). So every example generates its input here
+  * rather than reading a file.
   */
 object Fixtures:
 

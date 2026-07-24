@@ -16,11 +16,15 @@ private[scalacv] object Interop:
   def toBufferedImage(mat: Mat): BufferedImage =
     require(mat.depth == CvType.CV_8U, s"toBufferedImage needs an 8-bit image, got depth ${mat.depth}")
     require(!mat.empty(), "toBufferedImage needs a non-empty image")
-    // AWT can take grey or 3-byte BGR directly; anything else is converted to BGR first.
+    require(
+      mat.channels == 1 || mat.channels == 3 || mat.channels == 4,
+      s"toBufferedImage supports 1, 3 or 4 channels, got unsupported channel count: ${mat.channels}"
+    )
+    // AWT can take grey or 3-byte BGR directly; a 4-channel BGRA image is flattened to BGR first.
     val (source, kind) = mat.channels match
       case 1 => (Managed(mat.clone()), BufferedImage.TYPE_BYTE_GRAY)
       case 3 => (Managed(mat.clone()), BufferedImage.TYPE_3BYTE_BGR)
-      case _ => (mat.cvtColor(ColorConversion.BgraToBgr), BufferedImage.TYPE_3BYTE_BGR)
+      case 4 => (mat.cvtColor(ColorConversion.BgraToBgr), BufferedImage.TYPE_3BYTE_BGR)
     source.use: src =>
       // clone/cvtColor both yield a continuous Mat, so one bulk get fills the whole buffer.
       val channels = if kind == BufferedImage.TYPE_BYTE_GRAY then 1 else 3

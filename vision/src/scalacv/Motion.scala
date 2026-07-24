@@ -167,23 +167,31 @@ object MotionDetector:
 
     def detect(image: Image): Motion =
       val current = prepare(image.mat, blurRadius)
-      previous match
-        case null =>
-          previous = current // first frame becomes the baseline; kept, not released
-          Motion.still
-        case prev =>
-          val motion =
-            prev.get
-              .absdiff(current.get)
-              .use: diff =>
-                diff
-                  .threshold(threshold.toDouble, 255)
-                  ._1
-                  .use: mask =>
-                    mask.dilate(radius = 2).use(merged => measure(merged, minArea, motionRatio))
-          prev.release() // the old baseline is done
-          previous = current // this frame is the new baseline
-          motion
+      try
+        previous match
+          case null =>
+            previous = current // first frame becomes the baseline; kept, not released
+            Motion.still
+          case prev =>
+            val motion =
+              prev.get
+                .absdiff(
+                  current.get
+                ) // throws CvException if this frame's size/type differs from the baseline
+                .use: diff =>
+                  diff
+                    .threshold(threshold.toDouble, 255)
+                    ._1
+                    .use: mask =>
+                      mask.dilate(radius = 2).use(merged => measure(merged, minArea, motionRatio))
+            prev.release() // the old baseline is done
+            previous = current // this frame is the new baseline
+            motion
+      catch
+        case e: Throwable =>
+          // Free this frame unless it was just installed as the new baseline (the `null` branch above).
+          if previous ne current then current.release()
+          throw e
 
     def reset(): Unit =
       val p = previous

@@ -9,16 +9,13 @@ import org.opencv.videoio.VideoCapture
 /** The heritage webcam face-detector, on JavaFX.
   *
   * This is the one place a GUI toolkit is allowed: `examples-gui` is never built in CI and never published,
-  * because OpenJFX resolves per-host (ROADMAP §2). It ties every native object to a `try`/`finally` and
-  * closes the capture when the window closes.
+  * because OpenJFX resolves per-host. It ties every native object to a `try`/`finally` and closes the capture
+  * when the window closes.
   *
   * It needs a camera and a display, so it is not part of any automated gate — it exists to show the full
   * pipeline, not to be tested here. Run with: `./mill examples-gui.runMain scalacv.CamFaceDetect`.
   */
 class CamFaceDetect extends Application:
-
-  private given Releasable[org.opencv.objdetect.CascadeClassifier] =
-    Releasable.handle(_.getNativeObjAddr)
 
   override def start(stage: Stage): Unit =
     OpenCv.load()

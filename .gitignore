@@ -3,6 +3,7 @@ out/
 .mill-daemon/
 
 # Build servers / IDE tooling
+.claude/
 .bsp/
 .bloop/
 .metals/

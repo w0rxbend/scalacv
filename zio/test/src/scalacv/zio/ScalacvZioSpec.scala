@@ -48,6 +48,19 @@ object ScalacvZioSpec extends ZIOSpecDefault:
     acquireRelease(VideoCapture(path)).flatMap: cap =>
       ZIO.fromEither(Either.cond(cap.isOpened, cap, RuntimeException(s"cannot open $path")))
 
+  /** The module source, located by walking up from the test's working directory. Mill forks tests from either
+    * the build root or the module directory, both ancestors of (or equal to) the tree that holds this file,
+    * so one of them resolves. `None` only if the layout moved — the scan test then guards rather than fails.
+    */
+  private def moduleSource: Option[String] =
+    val rel = java.nio.file.Paths.get("zio", "src", "scalacv", "zio", "package.scala")
+    Iterator
+      .iterate(java.nio.file.Paths.get("").toAbsolutePath)(p => p.getParent)
+      .takeWhile(_ != null)
+      .map(_.resolve(rel))
+      .find(java.nio.file.Files.exists(_))
+      .map(p => new String(java.nio.file.Files.readAllBytes(p), java.nio.charset.StandardCharsets.UTF_8))
+
   def spec = suite("scalacv-zio")(
     test("acquireRelease frees a Mat when the scope closes"):
       for
@@ -108,6 +121,23 @@ object ScalacvZioSpec extends ZIOSpecDefault:
             assertTrue(addrs.toSet.size == 1)
     ,
 
+    test("frameStream forces exception mode off, completes at EOF, and restores the caller's mode"):
+      ZIO.scoped:
+        for
+          _ <- loadNatives
+          path <- writeSample()
+          cap <- openCapture(path.toString)
+          // Exception mode ON: OpenCV reports plain end-of-file through the same CvException it uses for a
+          // broken stream, so without the stream's save/off/restore guard EOF would fail the stream rather
+          // than end it. With the guard, the stream completes normally over every written frame.
+          _ <- ZIO.succeed(cap.setExceptionMode(true))
+          exit <- frameStream(cap).runCount.exit
+          restored <- ZIO.succeed(cap.getExceptionMode)
+        yield assertTrue(exit == Exit.succeed(FrameCount.toLong)) &&
+          // The mode we set before streaming is put back when the stream ends.
+          assertTrue(restored)
+    ,
+
     test("framesCopied yields distinct owned frames"):
       ZIO.scoped:
         for
@@ -121,4 +151,34 @@ object ScalacvZioSpec extends ZIOSpecDefault:
 
     test("opening a nonexistent video is a failure, not an empty stream"):
       ZIO.scoped(openCapture("/does/not/exist.avi")).exit.map(e => assertTrue(e.isFailure))
+    ,
+
+    test("imageScoped reads and closes an image; a missing path fails as a typed CvError"):
+      for
+        _ <- loadNatives
+        path <- ZIO.attempt:
+          val p = Files.createTempFile("scalacv-zio-img-", ".png")
+          Image.blank(8, 8, Scalar.White).write(p.toString).fold(throw _, identity)
+          p
+        // Success: the image is read, usable inside the scope, and closed when it ends.
+        dims <- ZIO.scoped(imageScoped(path.toString).map(img => (img.width, img.height)))
+        // Failure travels in the typed CvError channel, not as an unchecked defect.
+        failed <- ZIO.scoped(imageScoped("/does/not/exist.png")).exit
+      yield assertTrue(dims == (8, 8)) &&
+        assertTrue(failed.isFailure) &&
+        assertTrue(failed.causeOption.exists(_.failures.forall(_.isInstanceOf[CvError])))
+    ,
+
+    test("no native or filesystem call is wrapped in the compute-executor ZIO.attempt"):
+      // Every blocking native/filesystem site was moved onto the blocking pool (attemptBlocking,
+      // attemptBlockingInterrupt, ZIO.blocking). A plain `ZIO.attempt(` in the module would park such a
+      // call on the CPU-sized default executor. Comments — the scaladoc examples do use ZIO.attempt — are
+      // stripped first so only real code is scanned.
+      moduleSource match
+        case Some(src) =>
+          val code = src.replaceAll("(?s)/\\*.*?\\*/", "")
+          assertTrue(!code.contains("ZIO.attempt("))
+        case None =>
+          // Source not locatable from the test's working directory: guard rather than fail.
+          assertCompletes
   )

@@ -73,7 +73,13 @@ final case class Color(red: Int, green: Int, blue: Int, alpha: Int = 255):
         else (r - g) / d + 4
       (h * 60, s, l)
 
-  private[scalacv] def toBgr: Scalar = Scalar(blue.toDouble, green.toDouble, red.toDouble)
+  /** This colour as an OpenCV [[Scalar]] — the bridge from the RGBA [[Picture]] palette to the BGR values the
+    * `Image` drawing verbs and the `org.opencv.*` ops take. The alpha is dropped (a `Scalar`'s fourth channel
+    * is not an alpha the drawing verbs honour); pre-blend with [[fadeOut]]/[[blend]] if you need it baked in.
+    */
+  def toScalar: Scalar = Scalar(blue.toDouble, green.toDouble, red.toDouble)
+
+  private[scalacv] def toBgr: Scalar = toScalar
 
   private def clamp(v: Int): Int = math.max(0, math.min(255, v))
   private def clampUnit(v: Double): Double = math.max(0.0, math.min(1.0, v))
@@ -139,3 +145,14 @@ object Color:
   val Pink: Color = Color(240, 120, 170)
   val Cyan: Color = Color(40, 200, 220)
   val Magenta: Color = Color(220, 60, 200)
+
+/** The reverse of [[Color.toScalar]]: read an OpenCV BGR [[Scalar]] into the RGBA [[Color]] palette, for
+  * handing an OpenCV colour to the [[Picture]] graphics layer. Channels are rounded and clamped to
+  * `[0, 255]`; the result is fully opaque (a `Scalar`'s fourth channel is not a reliable alpha, so it is not
+  * carried over). An extension rather than a method on `Scalar` so the core `Scalar` type stays free of any
+  * dependency on this graphics-layer palette.
+  */
+extension (self: Scalar)
+  def toColor: Color =
+    def channel(v: Double): Int = math.max(0, math.min(255, v.round.toInt))
+    Color(red = channel(self.v2), green = channel(self.v1), blue = channel(self.v0))

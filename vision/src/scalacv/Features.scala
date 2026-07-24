@@ -47,10 +47,15 @@ object Features:
       Managed(ORB.create(maxFeatures)).use: orb =>
         Managed.use(MatOfKeyPoint()): keypoints =>
           val descriptors = Mat() // transferred to the returned Descriptors, so not released here
-          Managed.use(Mat()): noMask =>
-            orb.detectAndCompute(gray, noMask, keypoints, descriptors)
-          val points = keypoints.toArray.map(kp => Point(kp.pt.x, kp.pt.y)).toSeq
-          new Descriptors(points, Managed(descriptors))
+          try
+            Managed.use(Mat()): noMask =>
+              orb.detectAndCompute(gray, noMask, keypoints, descriptors)
+            val points = keypoints.toArray.map(kp => Point(kp.pt.x, kp.pt.y)).toSeq
+            new Descriptors(points, Managed(descriptors))
+          catch
+            case e: Throwable =>
+              descriptors.release() // no ownership transfer happened, so free it
+              throw e
 
   /** Matches two descriptor sets with a brute-force Hamming matcher and cross-check (each match is mutually
     * best), keeps those within `maxDistance`, and returns them best (smallest distance) first.

@@ -28,7 +28,7 @@ import org.opencv.photo.Photo
  *
  * [[pipe]] exists for exactly that shape: it feeds the intermediate to the next stage and releases it once
  * that stage has produced its own output, so the intermediate cannot be leaked and cannot be used after the
- * chain moves on. [[Mats.chain]] is the n-stage form. See ROADMAP §4 B6.
+ * chain moves on. [[Mats.chain]] is the n-stage form.
  *
  * ==Errors==
  *
@@ -280,13 +280,13 @@ extension (self: Mat)
     * adds is mapped back out, so straight edges in the world come back straight. A no-op (a plain copy) when
     * `intrinsics.distortion` is empty. See [[Calibration]].
     */
-  def undistort(intrinsics: Intrinsics): Managed[Mat] =
+  def undistorted(intrinsics: Intrinsics): Managed[Mat] =
     val camera = intrinsics.cameraMatrix
     val dist = intrinsics.distCoeffs
     try Mats.produce("undistort")(dst => Calib3d.undistort(self, dst, camera, dist))
     finally
-      camera.release()
-      dist.release()
+      try camera.release()
+      finally dist.release()
 
   /** Adds a border (padding) of the given pixel widths on each side. */
   def border(
@@ -470,12 +470,11 @@ extension (self: Mat)
         Core.findNonZero(bin, coords)
         if coords.rows == 0 then Managed(self.clone()) // a blank page — nothing to straighten
         else
-          val pts = org.opencv.core.MatOfPoint2f()
-          coords.convertTo(pts, CvType.CV_32F)
-          val skew = normalizeSkew(Imgproc.minAreaRect(pts).angle)
-          pts.release()
-          if math.abs(skew) < 0.1 || math.abs(skew) > maxAngle then Managed(self.clone())
-          else deskewRotate(self, skew)
+          Managed.use(org.opencv.core.MatOfPoint2f()): pts =>
+            coords.convertTo(pts, CvType.CV_32F)
+            val skew = normalizeSkew(Imgproc.minAreaRect(pts).angle)
+            if math.abs(skew) < 0.1 || math.abs(skew) > maxAngle then Managed(self.clone())
+            else deskewRotate(self, skew)
       finally coords.release()
 
   /** Folds a `minAreaRect` angle into the equivalent tilt in `(-45, 45]`. */

@@ -1,18 +1,37 @@
 package scalacv
 
+import java.io.IOException
 import java.net.URI
+import java.net.http.{HttpClient, HttpRequest, HttpResponse}
 import java.nio.file.{Files, Path, StandardCopyOption}
 import java.security.MessageDigest
+import java.time.Duration
 
 import scala.util.Using
 
-/** A downloadable model file: its fixed name, the mirror URLs to try in order, and an optional SHA-256 to
-  * verify what was fetched. A `None` hash means "download but do not verify" — fine for a model with no
-  * pinned checksum, but you lose the tamper/corruption check.
+/** A downloadable model file: its fixed name, the mirror URLs to try in order, and the SHA-256 the fetched
+  * bytes must match.
+  *
+  * Integrity checking is the default: build a spec with [[ModelSpec.apply]] and its pinned hash is verified
+  * on every download and on every cache hit. Skipping the check is a deliberate, named opt-out —
+  * [[ModelSpec.unverified]] — that loses the tamper/corruption guard, so reach for it only for a model with
+  * no published checksum.
   */
-final case class ModelSpec(fileName: String, urls: Seq[String], sha256: Option[String] = None):
+final case class ModelSpec private (fileName: String, urls: Seq[String], sha256: Option[String]):
   require(fileName.nonEmpty, "a model needs a file name")
   require(urls.nonEmpty, "a model needs at least one URL")
+
+object ModelSpec:
+
+  /** The default, verifying form: the downloaded bytes must match `sha256` or the fetch fails. */
+  def apply(fileName: String, urls: Seq[String], sha256: String): ModelSpec =
+    new ModelSpec(fileName, urls, Some(sha256))
+
+  /** A spec with **no** integrity check — the explicit opt-out for a model with no pinned checksum. The bytes
+    * are trusted as-is, so a corrupt or tampered download loads without complaint. Prefer [[apply]].
+    */
+  def unverified(fileName: String, urls: Seq[String]): ModelSpec =
+    new ModelSpec(fileName, urls, None)
 
 /** A small registry and downloader for the model files scalacv's detectors need — the general form of
   * [[FaceDetect.downloadModel]].
@@ -22,23 +41,23 @@ final case class ModelSpec(fileName: String, urls: Seq[String], sha256: Option[S
   * that already exists (and, if a hash is pinned, still matches) is returned without touching the network.
   * URLs may be `http(s)://` or `file://`, so a model you already have on disk is just another source.
   *
-  * The bundled [[YuNet]] and [[SFace]] specs point at the OpenCV Zoo mirrors; supply your own [[ModelSpec]]
-  * for anything else.
+  * The detector model specs live next to their detectors ([[FaceDetect.modelSpec]] and
+  * [[FaceRecognizer.modelSpec]]); supply your own [[ModelSpec]] for anything else.
   */
 object Models:
 
-  /** The YuNet face detector model — the same file [[FaceDetect]] uses, with its pinned checksum. */
-  val YuNet: ModelSpec =
-    ModelSpec(FaceDetect.ModelFileName, FaceDetect.ModelUrls, Some(FaceDetect.ModelSha256))
+  /** How long to wait for a mirror's TCP connection before giving up and moving to the next. */
+  private val ConnectTimeout: Duration = Duration.ofSeconds(15)
 
-  /** The SFace recognition model for [[FaceRecognizer]]. No checksum is pinned, so it is downloaded as-is. */
-  val SFace: ModelSpec = ModelSpec(
-    "face_recognition_sface_2021dec.onnx",
-    Seq(
-      "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/" +
-        "face_recognition_sface_2021dec.onnx"
-    )
-  )
+  /** How long a single download may take, end to end, before it is abandoned for the next mirror. */
+  private val RequestTimeout: Duration = Duration.ofSeconds(60)
+
+  private lazy val httpClient: HttpClient =
+    HttpClient
+      .newBuilder()
+      .connectTimeout(ConnectTimeout)
+      .followRedirects(HttpClient.Redirect.NORMAL)
+      .build()
 
   /** Fetches `spec` into the directory `into` (created if absent), returning the verified file's path or a
     * `Left` describing which stage failed — the directory, every URL tried, or the checksum.
@@ -75,9 +94,7 @@ object Models:
   private def fetchOne(spec: ModelSpec, url: String, target: Path): Either[CvError, Path] =
     val tmp = Files.createTempFile(target.getParent, ".model-", ".part")
     try
-      Using.resource(URI.create(url).toURL.openStream())(in =>
-        Files.copy(in, tmp, StandardCopyOption.REPLACE_EXISTING)
-      )
+      download(url, tmp)
       spec.sha256 match
         case Some(want) =>
           val got = sha256Of(tmp)
@@ -86,7 +103,25 @@ object Models:
           else Right(move(tmp, target))
         case None => Right(move(tmp, target))
     catch case e: Exception => Left(CvError.LoadFailed(url, e.getMessage))
-    finally Files.deleteIfExists(tmp)
+    finally
+      val _ = Files.deleteIfExists(tmp)
+
+  /** Streams one URL onto `tmp`. `http(s)` goes through a timeout-bounded [[HttpClient]] so a stalled mirror
+    * fails fast — surfacing as an exception that lets [[fetchFirst]] try the next mirror rather than hang
+    * forever. Other schemes (notably `file://`, which the JDK HTTP client does not serve) fall back to a
+    * plain stream.
+    */
+  private def download(url: String, tmp: Path): Unit =
+    val uri = URI.create(url)
+    uri.getScheme match
+      case "http" | "https" =>
+        val request = HttpRequest.newBuilder(uri).timeout(RequestTimeout).GET().build()
+        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(tmp))
+        if response.statusCode() >= 400 then throw IOException(s"HTTP ${response.statusCode()} from $url")
+      case _ =>
+        Using.resource(uri.toURL.openStream())(in =>
+          Files.copy(in, tmp, StandardCopyOption.REPLACE_EXISTING): Unit
+        )
 
   private def move(tmp: Path, target: Path): Path =
     Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING)

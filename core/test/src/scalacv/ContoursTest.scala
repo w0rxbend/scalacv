@@ -6,8 +6,8 @@ import org.opencv.core.{CvType, Mat, Scalar as CvScalar}
 import org.opencv.core.Point as CvPoint
 import org.opencv.imgproc.Imgproc
 
-/** Fixtures are drawn, not loaded. There is no test image in this repo by design (ROADMAP D12), and a
-  * synthetic one is also the only way to assert an *exact* bounding rect.
+/** Fixtures are drawn, not loaded. There is no test image in this repo by design, and a synthetic one is also
+  * the only way to assert an *exact* bounding rect.
   */
 class ContoursTest extends munit.FunSuite:
 

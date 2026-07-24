@@ -87,3 +87,15 @@ class GraphicsTest extends munit.FunSuite:
     assertEquals(Color.White.fadeOut(0.5).alpha, 128)
     val red = Color.hsl(0, 1.0, 0.5)
     assert(red.red > 200 && red.green < 60 && red.blue < 60, s"hsl(0,1,0.5) should be red, got $red")
+
+  test("Color.toScalar bridges RGBA to the BGR the drawing verbs take"):
+    // A red Color must land in the BGR Scalar's third slot, not its first.
+    assertEquals(Color(200, 40, 40).toScalar, Scalar(40, 40, 200))
+    // Scalar.Red (BGR) round-trips back to an opaque red Color.
+    assertEquals(Scalar.Red.toColor, Color(255, 0, 0))
+    // Round-trip through the bridge preserves an opaque colour.
+    val c = Color(17, 128, 240)
+    assertEquals(c.toScalar.toColor, c)
+
+  test("Scalar.toColor clamps and rounds out-of-gamut channels"):
+    assertEquals(Scalar(-10.0, 127.6, 300.0).toColor, Color(red = 255, green = 128, blue = 0))

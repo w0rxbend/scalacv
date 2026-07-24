@@ -15,14 +15,22 @@ import org.opencv.videoio.{VideoCapture, VideoWriter}
   *
   * Relying on that `finalize()` is not viable. It is not disabled (a common myth), but it only runs when the
   * collector runs, and the collector sees ~40 bytes of Java header per multi- megabyte native buffer.
-  * Measured: 2000 unreleased 1000x1000 Mats reach 5.8 GB RSS against 144 MB when released. See ROADMAP §3.6
-  * and §3.8.
+  * Measured: 2000 unreleased 1000x1000 Mats reach 5.8 GB RSS against 144 MB when released.
   */
 trait Releasable[-A]:
   def release(a: A): Unit
 
 object Releasable:
 
+  /** `Mat` frees through `release()`, which drops the reference to the pixel **buffer** at once — the
+    * multi-megabyte allocation that actually costs memory. The small (~100 B) `cv::Mat` **header** is not
+    * freed here; it is reclaimed by the inherited `CleanableMat.finalize()` whenever the collector next runs.
+    *
+    * We deliberately do **not** route `Mat` through the `delete(long)` bridge the other 185 types use: `Mat`
+    * exposes no accessible `delete(long)` — only its superclass's private `CleanableMat.n_delete` — and the
+    * header is too small for reflection to reclaim it a little sooner to be worth the cost. The buffer, which
+    * is the part that matters, is already gone the instant `release()` returns.
+    */
   given Releasable[Mat] = _.release()
   given Releasable[VideoCapture] = _.release()
   given Releasable[VideoWriter] = _.release()
@@ -44,6 +52,18 @@ object Releasable:
         NativeFinalizer.disarm(a)
         NativeDelete.of(a.getClass).invokeExact(addr): Unit
 
+/** The `--add-opens` line that would let reflection reach `cls`, computed from the class's own module and
+  * package rather than guessed. A class in the unnamed module — OpenCV on the classpath, the normal case —
+  * has no module to open, so this is not a module-access failure at all; we say so instead of emitting a flag
+  * with a `null` module name in it.
+  */
+private def addOpensRemedy(cls: Class[?]): String =
+  Option(cls.getModule.getName) match
+    case Some(m) => s"  --add-opens $m/${cls.getPackageName}=ALL-UNNAMED"
+    case None =>
+      "  (OpenCV is on the classpath, so this is not a module-access failure — " +
+        "please report it with the cause below.)"
+
 /** Opens and caches the private `delete(long)` of a generated OpenCV binding class. */
 private object NativeDelete:
 
@@ -61,20 +81,20 @@ private object NativeDelete:
       case e: NoSuchMethodException =>
         throw CvError.NativesMissing(
           s"${cls.getName} has no delete(long): this build of the OpenCV bindings is not one " +
-            s"scalacv can free. Please report the bytedeco version."
+            s"scalacv can free. Please report the bytedeco version.",
+          e
         )
       case e: RuntimeException =>
         // InaccessibleObjectException, typically: OpenCV is on the module path.
+        val remedy = addOpensRemedy(cls)
         throw CvError.NativesMissing(
           s"""cannot open ${cls.getName}.delete(long) (${e.getClass.getSimpleName}).
              |
-             |This happens when the OpenCV classes are loaded from a named module rather than the
-             |classpath. Add:
-             |
-             |  --add-opens java.base/java.lang=ALL-UNNAMED
+             |$remedy
              |
              |scalacv fails here rather than falling back to the garbage collector, because that
-             |fallback does not reclaim native memory in any useful timeframe.""".stripMargin
+             |fallback does not reclaim native memory in any useful timeframe.""".stripMargin,
+          e
         )
 
 /** Stops a generated OpenCV binding from freeing a pointer we have already freed.
@@ -126,16 +146,18 @@ private object NativeFinalizer:
           f
         catch
           case e: RuntimeException =>
+            val remedy = addOpensRemedy(cls)
             throw CvError.NativesMissing(
               s"""cannot make ${cls.getName}.nativeObj writable (${e.getClass.getSimpleName}).
                  |
                  |scalacv must zero this field before freeing the object, because the binding's
                  |finalizer calls delete(nativeObj) unconditionally and would otherwise free the
-                 |same pointer twice. Add:
+                 |same pointer twice.
                  |
-                 |  --add-opens java.base/java.lang=ALL-UNNAMED
+                 |$remedy
                  |
-                 |scalacv refuses to free the object rather than risk corrupting the heap.""".stripMargin
+                 |scalacv refuses to free the object rather than risk corrupting the heap.""".stripMargin,
+              e
             )
       case None =>
         throw CvError.NativesMissing(

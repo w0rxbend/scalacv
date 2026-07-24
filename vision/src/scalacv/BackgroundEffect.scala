@@ -3,6 +3,7 @@ package scalacv
 import scala.util.Using
 
 import org.opencv.core.{Core, CvType, Mat, Scalar as CvScalar}
+import org.opencv.dnn.Net
 import org.opencv.imgproc.Imgproc
 
 /** Video-conferencing background effects — blur or replace the background behind a person.
@@ -107,6 +108,38 @@ object Segmenter:
   * `image.replaceBackground(mask, bg)`.
   */
 extension (img: Image)
+
+  /** Runs a selfie-segmentation [[Net]] over this image and decodes the person mask — the one-call form of
+    * blob → forward → [[Segmenter.decodeMask]], ready to hand to [[blurBackground]] or [[replaceBackground]].
+    * The image is only read from (it stays alive, so you can segment then composite in two lines), and the
+    * network is borrowed, not released. The returned mask is a new owned `CV_8UC1` [[Image]].
+    *
+    * The blob knobs mirror [[Dnn.blobFromImage]] and are model-specific; the defaults suit a MediaPipe-selfie
+    * or MODNet-style export (RGB input, `[0, 1]` range). When you need the raw output tensor, drop to [[Dnn]]
+    * and [[Segmenter.decodeMask]] directly.
+    *
+    * @param net
+    *   a caller-owned segmentation network (see [[Dnn.fromOnnx]]). Stateful — one per thread.
+    * @param inputSize
+    *   the spatial size the network expects, e.g. `Size(256, 256)`.
+    * @param threshold
+    *   the foreground probability above which a pixel is the person.
+    */
+  def segment(
+      net: Net,
+      inputSize: Size,
+      threshold: Float = 0.5f,
+      scaleFactor: Double = 1.0 / 255,
+      mean: Scalar = Scalar(0, 0, 0),
+      swapRB: Boolean = true
+  ): Image =
+    Dnn
+      .blobFromImage(img.mat, scaleFactor, Some(inputSize), mean, swapRB)
+      .use: blob =>
+        Dnn
+          .forward(net, blob)
+          .use: out =>
+            Segmenter.decodeMask(out, img.size, threshold)
 
   /** Video-conferencing blur: keeps the person (where `mask` is white) sharp and blurs the background,
     * feathering the edge. `mask` is a borrowed `CV_8UC1` foreground mask (from [[Segmenter]] or any keying).
