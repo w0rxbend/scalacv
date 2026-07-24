@@ -413,6 +413,8 @@ final class scalacv.Image
   def convert(scalacv.ColorConversion): scalacv.Image
   def copy(): scalacv.Image
   def crop(scalacv.Rect): scalacv.Image
+  def deskew$default$1(): double
+  def deskew(double): scalacv.Image
   def detectHaar$default$2(): double
   def detectHaar$default$3(): int
   def detectHaar$default$4(): scala.Option<scalacv.Size>
@@ -445,6 +447,10 @@ final class scalacv.Image
   def erode(int, scalacv.MorphShape): scalacv.Image
   def faces(org.opencv.objdetect.FaceDetectorYN): scala.collection.immutable.Seq<scalacv.Face>
   def flip(scalacv.Flip): scalacv.Image
+  def forOcr$default$1(): int
+  def forOcr$default$2(): int
+  def forOcr$default$3(): double
+  def forOcr(int, int, double): scalacv.Image
   def gaussianBlur$default$2(): double
   def gaussianBlur$default$3(): double
   def gaussianBlur(scalacv.Size, double, double): scalacv.Image
@@ -579,6 +585,50 @@ final class scalacv.MotionDetector.FrameDiff
   def close(): void
   def detect(scalacv.Image): scalacv.Motion
   def reset(): void
+final class scalacv.OcrResult
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(java.lang.String, scala.collection.immutable.Seq<scalacv.OcrWord>): void
+  def _1(): java.lang.String
+  def _2(): scala.collection.immutable.Seq<scalacv.OcrWord>
+  def canEqual(java.lang.Object): boolean
+  def confident$default$1(): float
+  def confident(float): scala.collection.immutable.Seq<scalacv.OcrWord>
+  def copy$default$1(): java.lang.String
+  def copy$default$2(): scala.collection.immutable.Seq<scalacv.OcrWord>
+  def copy(java.lang.String, scala.collection.immutable.Seq<scalacv.OcrWord>): scalacv.OcrResult
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def isEmpty(): boolean
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def text(): java.lang.String
+  def toString(): java.lang.String
+  def words(): scala.collection.immutable.Seq<scalacv.OcrWord>
+final class scalacv.OcrWord
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(java.lang.String, float, scalacv.Rect): void
+  def _1(): java.lang.String
+  def _2(): float
+  def _3(): scalacv.Rect
+  def box(): scalacv.Rect
+  def canEqual(java.lang.Object): boolean
+  def confidence(): float
+  def copy$default$1(): java.lang.String
+  def copy$default$2(): float
+  def copy$default$3(): scalacv.Rect
+  def copy(java.lang.String, float, scalacv.Rect): scalacv.OcrWord
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def text(): java.lang.String
+  def toString(): java.lang.String
 final class scalacv.Point
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -1519,6 +1569,26 @@ object scalacv.NativeFinalizer
   extends java.lang.Object
   implements java.io.Serializable
   def disarm(java.lang.Object): void
+object scalacv.Ocr
+  extends java.lang.Object
+  implements java.io.Serializable
+  def read$default$3(): boolean
+  def read(scalacv.Image, scalacv.OcrEngine, boolean): scalacv.OcrResult
+object scalacv.OcrResult
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def <init>$default$2(): scala.collection.immutable.Seq<scalacv.OcrWord>
+  def apply(java.lang.String, scala.collection.immutable.Seq<scalacv.OcrWord>): scalacv.OcrResult
+  def fromProduct(scala.Product): scalacv.OcrResult
+  def toString(): java.lang.String
+  def unapply(scalacv.OcrResult): scalacv.OcrResult
+object scalacv.OcrWord
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def apply(java.lang.String, float, scalacv.Rect): scalacv.OcrWord
+  def fromProduct(scala.Product): scalacv.OcrWord
+  def toString(): java.lang.String
+  def unapply(scalacv.OcrWord): scalacv.OcrWord
 object scalacv.OpenCv
   extends java.lang.Object
   implements java.io.Serializable
@@ -1551,6 +1621,9 @@ object scalacv.Ops.package
   def convertScaleAbs$default$3(org.opencv.core.Mat): double
   def convertScaleAbs(org.opencv.core.Mat, double, double): scalacv.Managed<org.opencv.core.Mat>
   def cvtColor(org.opencv.core.Mat, scalacv.ColorConversion): scalacv.Managed<org.opencv.core.Mat>
+  def deskew$default$2(org.opencv.core.Mat): double
+  def deskew(org.opencv.core.Mat, double): scalacv.Managed<org.opencv.core.Mat>
+  def deskewRotate(org.opencv.core.Mat, org.opencv.core.Mat, double): scalacv.Managed<org.opencv.core.Mat>
   def dilate$default$2(org.opencv.core.Mat): int
   def dilate$default$3(org.opencv.core.Mat): scalacv.MorphShape
   def dilate$default$4(org.opencv.core.Mat): int
@@ -1582,6 +1655,7 @@ object scalacv.Ops.package
   def normalize$default$2(org.opencv.core.Mat): double
   def normalize$default$3(org.opencv.core.Mat): double
   def normalize(org.opencv.core.Mat, double, double): scalacv.Managed<org.opencv.core.Mat>
+  def normalizeSkew(org.opencv.core.Mat, double): double
   def pipe(scalacv.Managed<org.opencv.core.Mat>, scala.Function1<org.opencv.core.Mat, scalacv.Managed<org.opencv.core.Mat>>): scalacv.Managed<org.opencv.core.Mat>
   def resize$default$3(org.opencv.core.Mat): scalacv.Interpolation
   def resize(org.opencv.core.Mat, scalacv.Size, scalacv.Interpolation): scalacv.Managed<org.opencv.core.Mat>
@@ -1851,6 +1925,8 @@ trait scalacv.MotionDetector
   abstract def reset(): void
   def close(): void
   def detect(byte[]): scala.util.Either<scalacv.CvError, scalacv.Motion>
+trait scalacv.OcrEngine
+  abstract def recognize(scalacv.Image): scalacv.OcrResult
 trait scalacv.Releasable<A>
   abstract def release(A): void
 trait scalacv.Thickness

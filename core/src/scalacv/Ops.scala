@@ -355,6 +355,50 @@ extension (self: Mat)
     require(amount >= 0, s"sharpen amount cannot be negative, got $amount")
     gaussianBlur(Size(0, 0), sigmaX = 3.0).use(blurred => addWeighted(1 + amount, blurred, -amount))
 
+  /** Detects the dominant text skew and rotates the image upright — the classic OCR pre-step. Works on any
+    * image: it binarises internally to find the text pixels, fits a minimum-area rectangle to them, and
+    * rotates by that tilt. The exposed corners are filled white, and a detected skew beyond `maxAngle` is
+    * treated as a misread and left alone (a page of large graphics can fool the estimate).
+    */
+  def deskew(maxAngle: Double = 45.0): Managed[Mat] =
+    require(maxAngle > 0 && maxAngle <= 90, s"maxAngle must be in (0, 90], got $maxAngle")
+    val binarised =
+      val gray =
+        if self.channels >= 3 then self.cvtColor(ColorConversion.BgrToGray) else Managed(self.clone())
+      gray.pipe(_.threshold(0, 255, Threshold.otsu(Threshold.Mode.BinaryInv))._1) // text becomes white
+    binarised.use: bin =>
+      val coords = Mat()
+      try
+        Core.findNonZero(bin, coords)
+        if coords.rows == 0 then Managed(self.clone()) // a blank page — nothing to straighten
+        else
+          val pts = org.opencv.core.MatOfPoint2f()
+          coords.convertTo(pts, CvType.CV_32F)
+          val skew = normalizeSkew(Imgproc.minAreaRect(pts).angle)
+          pts.release()
+          if math.abs(skew) < 0.1 || math.abs(skew) > maxAngle then Managed(self.clone())
+          else deskewRotate(self, skew)
+      finally coords.release()
+
+  /** Folds a `minAreaRect` angle into the equivalent tilt in `(-45, 45]`. */
+  private def normalizeSkew(angle: Double): Double =
+    val a = angle % 90.0
+    if a > 45.0 then a - 90.0 else if a <= -45.0 then a + 90.0 else a
+
+  /** Rotates `mat` by `degrees` about its centre, keeping the frame size, white outside. */
+  private def deskewRotate(mat: Mat, degrees: Double): Managed[Mat] =
+    Managed.use(Imgproc.getRotationMatrix2D(Point(mat.cols / 2.0, mat.rows / 2.0).toCv, degrees, 1.0)): m =>
+      Mats.produce("deskew"): dst =>
+        Imgproc.warpAffine(
+          mat,
+          dst,
+          m,
+          Size(mat.cols.toDouble, mat.rows.toDouble).toCv,
+          Imgproc.INTER_LINEAR,
+          Core.BORDER_CONSTANT,
+          Scalar.White.toCv
+        )
+
   /** Builds a `radius`-derived structuring element, runs `f` with it, and frees it — the one place morphology
     * allocates a kernel.
     */

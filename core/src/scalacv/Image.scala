@@ -243,6 +243,25 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
   /** Extracts a single channel as its own single-channel image. */
   def channel(index: Int): Image = transform(_.extractChannel(index))
 
+  /** Detects the text skew and rotates the image upright — the OCR straightening step. See [[Ops.deskew]]. */
+  def deskew(maxAngle: Double = 45.0): Image = transform(_.deskew(maxAngle))
+
+  /** Prepares this image for OCR — the OpenCV half of the pipeline: grayscale → denoise → adaptive threshold
+    * → deskew, producing a clean, upright, binarised image an [[OcrEngine]] can read well. Feed the result to
+    * [[Ocr.read]] with `preprocess = false`, or just call `Ocr.read(image, engine)` which does this for you.
+    *
+    * @param denoise
+    *   median-blur radius applied before thresholding; `0` skips it.
+    * @param blockSize
+    *   the adaptive-threshold neighbourhood (odd, ≥ 3).
+    * @param c
+    *   the adaptive-threshold bias — raise it to keep less ink.
+    */
+  def forOcr(denoise: Int = 1, blockSize: Int = 15, c: Double = 10): Image =
+    val gray = if channels >= 3 then this.gray else this
+    val cleaned = if denoise > 0 then gray.medianBlur(denoise) else gray
+    cleaned.adaptiveThreshold(blockSize = blockSize, c = c).deskew()
+
   /** A binary mask of the pixels whose channels all fall within `[lo, hi]` — the core of colour segmentation.
     * Consumes this image and returns the mask; usually run after [[toHsv]].
     */
