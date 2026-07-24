@@ -396,6 +396,9 @@ final class scalacv.Image
   def drawRect$default$2(): scalacv.Scalar
   def drawRect$default$3(): scalacv.Thickness
   def drawRect(scalacv.Rect, scalacv.Scalar, scalacv.Thickness): scalacv.Image
+  def drawRects$default$2(): scalacv.Scalar
+  def drawRects$default$3(): scalacv.Thickness
+  def drawRects(scala.collection.immutable.Seq<scalacv.Rect>, scalacv.Scalar, scalacv.Thickness): scalacv.Image
   def drawText$default$3(): scalacv.Scalar
   def drawText$default$4(): double
   def drawText(java.lang.String, scalacv.Point, scalacv.Scalar, double): scalacv.Image
@@ -477,6 +480,44 @@ final class scalacv.Managed<A>
   def take(): A
   def toString(): java.lang.String
   def use<B>(scala.Function1<A, B>): B
+final class scalacv.Motion
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(boolean, double, scala.collection.immutable.Seq<scalacv.Rect>): void
+  def _1(): boolean
+  def _2(): double
+  def _3(): scala.collection.immutable.Seq<scalacv.Rect>
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): boolean
+  def copy$default$2(): double
+  def copy$default$3(): scala.collection.immutable.Seq<scalacv.Rect>
+  def copy(boolean, double, scala.collection.immutable.Seq<scalacv.Rect>): scalacv.Motion
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def largest(): scala.Option<scalacv.Rect>
+  def moving(): boolean
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def ratio(): double
+  def regionCount(): int
+  def regions(): scala.collection.immutable.Seq<scalacv.Rect>
+  def toString(): java.lang.String
+final class scalacv.MotionDetector.BgSubtract
+  extends java.lang.Object
+  implements scalacv.MotionDetector
+  def <init>(scalacv.Managed<org.opencv.video.BackgroundSubtractorMOG2>, int, double, double): void
+  def close(): void
+  def detect(scalacv.Image): scalacv.Motion
+  def reset(): void
+final class scalacv.MotionDetector.FrameDiff
+  extends java.lang.Object
+  implements scalacv.MotionDetector
+  def <init>(int, int, int, double): void
+  def close(): void
+  def detect(scalacv.Image): scalacv.Motion
+  def reset(): void
 final class scalacv.Point
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -1274,6 +1315,30 @@ object scalacv.MorphShape
   static val Cross: scalacv.MorphShape
   static val Ellipse: scalacv.MorphShape
   static val Rect: scalacv.MorphShape
+object scalacv.Motion
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def apply(boolean, double, scala.collection.immutable.Seq<scalacv.Rect>): scalacv.Motion
+  def fromProduct(scala.Product): scalacv.Motion
+  def still(): scalacv.Motion
+  def unapply(scalacv.Motion): scalacv.Motion
+object scalacv.MotionDetector
+  extends java.lang.Object
+  implements java.io.Serializable
+  def backgroundSubtraction$default$1(): int
+  def backgroundSubtraction$default$2(): double
+  def backgroundSubtraction$default$3(): boolean
+  def backgroundSubtraction$default$4(): int
+  def backgroundSubtraction$default$5(): double
+  def backgroundSubtraction$default$6(): double
+  def backgroundSubtraction(int, double, boolean, int, double, double): scalacv.MotionDetector
+  def frameDifference$default$1(): int
+  def frameDifference$default$2(): int
+  def frameDifference$default$3(): int
+  def frameDifference$default$4(): double
+  def frameDifference(int, int, int, double): scalacv.MotionDetector
+  def scalacv$MotionDetector$$$measure(org.opencv.core.Mat, int, double): scalacv.Motion
+  def scalacv$MotionDetector$$$prepare(org.opencv.core.Mat, int): scalacv.Managed<org.opencv.core.Mat>
 object scalacv.NativeDelete
   extends java.lang.Object
   implements java.io.Serializable
@@ -1290,6 +1355,7 @@ object scalacv.OpenCv
 object scalacv.Ops.package
   extends java.lang.Object
   implements java.io.Serializable
+  def absdiff(org.opencv.core.Mat, org.opencv.core.Mat): scalacv.Managed<org.opencv.core.Mat>
   def adaptiveThreshold$default$2(org.opencv.core.Mat): double
   def adaptiveThreshold$default$3(org.opencv.core.Mat): scalacv.AdaptiveMethod
   def adaptiveThreshold$default$4(org.opencv.core.Mat): int
@@ -1564,6 +1630,12 @@ object scalacv.Video
   def open(int, scalacv.CaptureOptions): scala.util.Either<scalacv.CvError, scalacv.Managed<org.opencv.videoio.VideoCapture>>
   def open(java.lang.String): scala.util.Either<scalacv.CvError, scalacv.Managed<org.opencv.videoio.VideoCapture>>
   def open(java.lang.String, scalacv.CaptureOptions): scala.util.Either<scalacv.CvError, scalacv.Managed<org.opencv.videoio.VideoCapture>>
+trait scalacv.MotionDetector
+  implements java.lang.AutoCloseable
+  abstract def detect(scalacv.Image): scalacv.Motion
+  abstract def reset(): void
+  def close(): void
+  def detect(byte[]): scala.util.Either<scalacv.CvError, scalacv.Motion>
 trait scalacv.Releasable<A>
   abstract def release(A): void
 trait scalacv.Thickness

@@ -285,6 +285,13 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
   ): Image =
     paint(_.drawContours(contours, color, thickness))
 
+  /** Draws every rectangle in one pass — detector bounding boxes, motion regions, ROIs. */
+  def drawRects(
+      rects: Seq[Rect],
+      color: Scalar = Scalar.Green,
+      thickness: Thickness = Thickness.Default
+  ): Image = paint(m => rects.foreach(r => m.drawRect(r, color, thickness)))
+
   /** Annotates detected faces: a box per face and a dot per landmark. The one-call "show me what YuNet found"
     * convenience.
     */

@@ -317,6 +317,12 @@ extension (self: Mat)
   def bitwiseNot(): Managed[Mat] =
     Mats.produce("bitwiseNot")(Core.bitwise_not(self, _))
 
+  /** Absolute per-element difference `|self - other|`. `other` is borrowed. The basis of frame-difference
+    * motion detection — see [[MotionDetector]].
+    */
+  def absdiff(other: Mat): Managed[Mat] =
+    Mats.produce("absdiff")(Core.absdiff(self, other, _))
+
   /** A binary mask (`CV_8UC1`, 0 or 255) of the pixels whose every channel lies within `[lo, hi]`. The core
     * of colour segmentation — usually run on an HSV image.
     */
