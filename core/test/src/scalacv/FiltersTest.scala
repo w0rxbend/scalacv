@@ -1,0 +1,113 @@
+package scalacv
+
+import org.opencv.core as cv
+import org.opencv.core.{CvType, Mat}
+import org.opencv.imgproc.Imgproc
+
+/** The photo-filter library: tone/colour effects, colormaps, the photo module, and the Filter catalog. */
+class FiltersTest extends munit.FunSuite:
+
+  override def beforeAll(): Unit = OpenCv.load()
+
+  /** A small colourful scene (needed 8-bit 3-channel for the photo/stylisation filters). */
+  private def sample(): Image =
+    val m = Mat(80, 100, CvType.CV_8UC3, cv.Scalar(60, 90, 140))
+    Imgproc.rectangle(m, cv.Point(15, 15), cv.Point(45, 45), cv.Scalar(40, 200, 60), -1)
+    Imgproc.circle(m, cv.Point(70, 40), 18, cv.Scalar(220, 80, 60), -1)
+    Image.wrap(Managed(m))
+
+  test("saturate(0) produces a grey (channels equal)"):
+    val grey = Image.blank(40, 40, Scalar(0, 0, 255)).saturate(0) // pure red → grey
+    try
+      val p = grey.mat.get(20, 20)
+      assert(math.abs(p(0) - p(1)) < 6 && math.abs(p(1) - p(2)) < 6, s"expected grey, got ${p.toList}")
+    finally grey.close()
+
+  test("temperature warms toward red and cools toward blue"):
+    val warm = Image.blank(30, 30, Scalar(128, 128, 128)).temperature(0.8)
+    try assert(warm.mat.get(15, 15)(2) > warm.mat.get(15, 15)(0), "warm: red > blue")
+    finally warm.close()
+    val cool = Image.blank(30, 30, Scalar(128, 128, 128)).temperature(-0.8)
+    try assert(cool.mat.get(15, 15)(0) > cool.mat.get(15, 15)(2), "cool: blue > red")
+    finally cool.close()
+
+  test("a colormap turns a grey value into a colour"):
+    val heat = Image.blank(40, 40, Scalar(200, 200, 200), channels = 1).colorMap(Colormap.Jet)
+    try
+      assertEquals(heat.channels, 3)
+      val p = heat.mat.get(20, 20)
+      assert(
+        !(math.abs(p(0) - p(1)) < 6 && math.abs(p(1) - p(2)) < 6),
+        s"colormap should be colourful, got ${p.toList}"
+      )
+    finally heat.close()
+
+  test("posterize collapses to the requested levels"):
+    val bright = Image.blank(20, 20, Scalar(200, 200, 200)).posterize(2)
+    try assert(bright.mat.get(10, 10)(0) > 200, "200 → top level")
+    finally bright.close()
+    val dark = Image.blank(20, 20, Scalar(100, 100, 100)).posterize(2)
+    try assert(dark.mat.get(10, 10)(0) < 55, "100 → bottom level")
+    finally dark.close()
+
+  test("gamma < 1 darkens the mid-tones"):
+    val original = Image.blank(20, 20, Scalar(128, 128, 128))
+    val darker = Image.blank(20, 20, Scalar(128, 128, 128)).gamma(0.5)
+    try
+      assert(
+        darker.mat.get(10, 10)(0) < 128,
+        s"gamma 0.5 should darken 128, got ${darker.mat.get(10, 10)(0)}"
+      )
+    finally
+      original.close()
+      darker.close()
+
+  test("sepia and emboss run on a 3-channel image"):
+    val s = sample().sepia
+    try assertEquals(s.channels, 3)
+    finally s.close()
+    val e = sample().emboss
+    try assertEquals((e.width, e.height, e.channels), (100, 80, 3))
+    finally e.close()
+
+  test("inpaint fills a masked hole from its surroundings"):
+    val holed = Image
+      .blank(60, 60, Scalar(255, 255, 255))
+      .drawRect(Rect(25, 25, 10, 10), Scalar.Black, Thickness.Filled)
+    val mask = Image
+      .blank(60, 60, Scalar.Black, channels = 1)
+      .drawRect(Rect(25, 25, 10, 10), Scalar.White, Thickness.Filled)
+    try
+      val fixed = holed.inpaint(mask)
+      try
+        assert(
+          fixed.mat.get(30, 30)(0) > 200,
+          s"the hole should be filled white, got ${fixed.mat.get(30, 30).toList}"
+        )
+      finally fixed.close()
+    finally mask.close()
+
+  test("seamlessCloneInto returns a background-sized composite"):
+    val obj = Image.blank(30, 30, Scalar(40, 60, 220))
+    val mask = Image.blank(30, 30, Scalar.White, channels = 1)
+    val background = Image.blank(120, 120, Scalar(180, 180, 180))
+    try
+      val out = obj.seamlessCloneInto(background, mask, Point(60, 60))
+      try assertEquals((out.width, out.height), (120, 120))
+      finally out.close()
+    finally
+      mask.close()
+      background.close()
+
+  test("every built-in filter applies without error"):
+    for f <- Filter.all do
+      val out = sample().filter(f)
+      try assert(out.width == 100 && out.height == 80, s"filter ${f.name} changed the size unexpectedly")
+      finally out.close()
+
+  test("filters compose with andThen"):
+    val combo = Filter.sepia.andThen(Filter.sharpen)
+    assert(combo.name.contains("sepia") && combo.name.contains("sharpen"))
+    val out = sample().filter(combo)
+    try assertEquals(out.channels, 3)
+    finally out.close()

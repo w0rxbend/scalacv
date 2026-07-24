@@ -122,6 +122,22 @@ enum AdaptiveMethod(val cvValue: Int):
   case Mean extends AdaptiveMethod(Imgproc.ADAPTIVE_THRESH_MEAN_C)
   case Gaussian extends AdaptiveMethod(Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C)
 
+/** A false-colour map — turns a single-channel image (a depth map, a motion field, any data) into a colour
+  * heatmap. The perceptually-uniform ones ([[Viridis]], [[Magma]], [[Inferno]], [[Plasma]], [[Turbo]]) are
+  * the honest choice for data; [[Jet]] is the classic-but-misleading rainbow.
+  */
+enum Colormap(val cvValue: Int):
+  case Autumn extends Colormap(Imgproc.COLORMAP_AUTUMN)
+  case Bone extends Colormap(Imgproc.COLORMAP_BONE)
+  case Jet extends Colormap(Imgproc.COLORMAP_JET)
+  case Ocean extends Colormap(Imgproc.COLORMAP_OCEAN)
+  case Hot extends Colormap(Imgproc.COLORMAP_HOT)
+  case Magma extends Colormap(Imgproc.COLORMAP_MAGMA)
+  case Inferno extends Colormap(Imgproc.COLORMAP_INFERNO)
+  case Plasma extends Colormap(Imgproc.COLORMAP_PLASMA)
+  case Viridis extends Colormap(Imgproc.COLORMAP_VIRIDIS)
+  case Turbo extends Colormap(Imgproc.COLORMAP_TURBO)
+
 /** Thresholding — **a bitmask, not an enumeration.**
   *
   * `Imgproc.threshold` takes a mode OR-ed with at most one automatic-threshold modifier. Modelled as `enum`

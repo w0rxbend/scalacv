@@ -2,6 +2,7 @@ package scalacv
 
 import org.opencv.core.{Core, CvType, Mat}
 import org.opencv.imgproc.Imgproc
+import org.opencv.photo.Photo
 
 /* Imgproc and Core operations as extension methods on [[org.opencv.core.Mat]].
  *
@@ -354,6 +355,90 @@ extension (self: Mat)
   def sharpen(amount: Double = 1.0): Managed[Mat] =
     require(amount >= 0, s"sharpen amount cannot be negative, got $amount")
     gaussianBlur(Size(0, 0), sigmaX = 3.0).use(blurred => addWeighted(1 + amount, blurred, -amount))
+
+  /** Applies a false-colour map — turns a single-channel image (a depth map, a motion field, any data) into a
+    * colour heatmap. See [[Colormap]].
+    */
+  def colorMap(map: Colormap): Managed[Mat] =
+    Mats.produce("applyColorMap")(Imgproc.applyColorMap(self, _, map.cvValue))
+
+  /** Stylisation — a smooth, painterly cartoon look via edge-aware smoothing. Needs 8-bit 3-channel input. */
+  def stylize(strength: Float = 60, detail: Float = 0.45f): Managed[Mat] =
+    Mats.produce("stylization")(Photo.stylization(self, _, strength, detail))
+
+  /** A colour pencil-sketch rendering. Needs 8-bit 3-channel input. */
+  def pencilSketch(strength: Float = 60, detail: Float = 0.07f, shade: Float = 0.02f): Managed[Mat] =
+    Managed.use(Mat()): grayscale =>
+      Mats.produce("pencilSketch")(colour =>
+        Photo.pencilSketch(self, grayscale, colour, strength, detail, shade)
+      )
+
+  /** Detail enhancement — boosts local contrast and texture. Needs 8-bit 3-channel input. */
+  def detailEnhance(strength: Float = 10, detail: Float = 0.15f): Managed[Mat] =
+    Mats.produce("detailEnhance")(Photo.detailEnhance(self, _, strength, detail))
+
+  /** Edge-preserving smoothing — flattens texture while keeping edges (the basis of the painterly filters).
+    */
+  def edgePreserving(strength: Float = 60, detail: Float = 0.4f): Managed[Mat] =
+    Mats.produce("edgePreservingFilter")(Photo.edgePreservingFilter(self, _, 1, strength, detail))
+
+  /** Inpaints the region under `mask` (`CV_8UC1`, non-zero = repair) from its surroundings — remove a
+    * scratch, an object, or a watermark. `mask` is borrowed.
+    */
+  def inpaint(mask: Mat, radius: Double = 3.0): Managed[Mat] =
+    Mats.produce("inpaint")(Photo.inpaint(self, mask, _, radius, Photo.INPAINT_TELEA))
+
+  /** Seamlessly clones this image (the foreground object) into `background` at `center`, blending gradients
+    * so the paste is invisible (Poisson editing). `mask` (`CV_8UC1`) marks the object; `background` and
+    * `mask` are borrowed. The result is `background`-sized.
+    */
+  def seamlessCloneInto(background: Mat, mask: Mat, center: Point): Managed[Mat] =
+    Mats.produce("seamlessClone")(
+      Photo.seamlessClone(self, background, mask, center.toCv, _, Photo.NORMAL_CLONE)
+    )
+
+  /** Sepia tone, via a colour matrix. */
+  def sepia: Managed[Mat] =
+    Managed.use(Mat(3, 3, CvType.CV_32F)): m =>
+      m.put(0, 0, 0.131, 0.534, 0.272, 0.168, 0.686, 0.349, 0.189, 0.769, 0.393)
+      Mats.produce("sepia")(Core.transform(self, _, m))
+
+  /** Gamma correction: `g` < 1 darkens the mid-tones, `g` > 1 lifts them. */
+  def gamma(g: Double): Managed[Mat] =
+    require(g > 0, s"gamma must be positive, got $g")
+    lut(Array.tabulate(256)(i => math.round(math.pow(i / 255.0, 1.0 / g) * 255).toInt.min(255).max(0)))
+
+  /** Posterises to `levels` tones per channel. */
+  def posterize(levels: Int): Managed[Mat] =
+    require(levels >= 2 && levels <= 256, s"levels must be in [2, 256], got $levels")
+    val step = 255.0 / (levels - 1)
+    lut(Array.tabulate(256)(i => (math.round(i / step) * step).round.toInt.min(255)))
+
+  /** Emboss, via a directional convolution. */
+  def emboss: Managed[Mat] =
+    Managed.use(Mat(3, 3, CvType.CV_32F)): k =>
+      k.put(0, 0, -2.0, -1.0, 0.0, -1.0, 1.0, 1.0, 0.0, 1.0, 2.0)
+      Mats.produce("emboss")(Imgproc.filter2D(self, _, -1, k))
+
+  /** Adjusts saturation: `factor` > 1 is more vivid, `< 1` toward grey, `0` fully grey (still 3-channel). */
+  def saturate(factor: Double): Managed[Mat] =
+    require(factor >= 0, s"saturation factor cannot be negative, got $factor")
+    cvtColor(ColorConversion.BgrToGray)
+      .pipe(_.cvtColor(ColorConversion.GrayToBgr))
+      .use(grey => addWeighted(factor, grey, 1 - factor))
+
+  /** Colour temperature: `shift` > 0 warms (more red), `< 0` cools (more blue), in `[-1, 1]`. */
+  def temperature(shift: Double): Managed[Mat] =
+    require(shift >= -1 && shift <= 1, s"temperature shift must be in [-1, 1], got $shift")
+    Managed.use(Mat(3, 3, CvType.CV_32F)): m =>
+      m.put(0, 0, 1 - 0.3 * shift, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1 + 0.3 * shift)
+      Mats.produce("temperature")(Core.transform(self, _, m))
+
+  /** A 256-entry lookup table applied to every channel — the engine behind [[gamma]] and [[posterize]]. */
+  private def lut(table: Array[Int]): Managed[Mat] =
+    Managed.use(Mat(1, 256, CvType.CV_8UC1)): lookup =>
+      lookup.put(0, 0, table.map(_.toByte))
+      Mats.produce("LUT")(Core.LUT(self, lookup, _))
 
   /** Detects the dominant text skew and rotates the image upright — the classic OCR pre-step. Works on any
     * image: it binarises internally to find the text pixels, fits a minimum-area rectangle to them, and

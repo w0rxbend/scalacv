@@ -243,6 +243,61 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
   /** Extracts a single channel as its own single-channel image. */
   def channel(index: Int): Image = transform(_.extractChannel(index))
 
+  /** False-colours a single-channel image (depth, motion, data) into a heatmap — see [[Colormap]]. Makes the
+    * output of [[StereoDepth]], [[MotionDetector]] and friends actually visible.
+    */
+  def colorMap(map: Colormap): Image = transform(_.colorMap(map))
+
+  /** A smooth, painterly cartoon stylisation. */
+  def stylize(strength: Float = 60, detail: Float = 0.45f): Image = transform(_.stylize(strength, detail))
+
+  /** A colour pencil-sketch rendering. */
+  def sketch(strength: Float = 60, detail: Float = 0.07f, shade: Float = 0.02f): Image =
+    transform(_.pencilSketch(strength, detail, shade))
+
+  /** Detail enhancement — boosts local contrast and texture. */
+  def enhance(strength: Float = 10, detail: Float = 0.15f): Image = transform(
+    _.detailEnhance(strength, detail)
+  )
+
+  /** Edge-preserving smoothing — flattens texture while keeping edges. */
+  def edgePreserving(strength: Float = 60, detail: Float = 0.4f): Image = transform(
+    _.edgePreserving(strength, detail)
+  )
+
+  /** Inpaints the region under `mask` (non-zero = repair) from its surroundings — remove a scratch, object,
+    * or watermark. `mask` is borrowed.
+    */
+  def inpaint(mask: Image, radius: Double = 3.0): Image = transform(_.inpaint(mask.mat, radius))
+
+  /** Seamlessly clones this image (the object, under `mask`) into `background` at `center` via Poisson
+    * blending — an invisible paste, the compositing behind a good virtual background. `background` and `mask`
+    * are borrowed; the result is `background`-sized.
+    */
+  def seamlessCloneInto(background: Image, mask: Image, center: Point): Image =
+    transform(_.seamlessCloneInto(background.mat, mask.mat, center))
+
+  /** Sepia tone. */
+  def sepia: Image = transform(_.sepia)
+
+  /** Gamma correction (`< 1` darkens, `> 1` lifts the mid-tones). */
+  def gamma(g: Double): Image = transform(_.gamma(g))
+
+  /** Posterises to `levels` tones per channel. */
+  def posterize(levels: Int): Image = transform(_.posterize(levels))
+
+  /** Emboss. */
+  def emboss: Image = transform(_.emboss)
+
+  /** Saturation (`> 1` vivid, `< 1` muted, `0` grey). */
+  def saturate(factor: Double): Image = transform(_.saturate(factor))
+
+  /** Colour temperature (`> 0` warm, `< 0` cool). */
+  def temperature(shift: Double): Image = transform(_.temperature(shift))
+
+  /** Applies a named, composable [[Filter]] — `image.filter(Filter.vintage)`. */
+  def filter(f: Filter): Image = f(this)
+
   /** Detects the text skew and rotates the image upright — the OCR straightening step. See [[Ops.deskew]]. */
   def deskew(maxAngle: Double = 45.0): Image = transform(_.deskew(maxAngle))
 
