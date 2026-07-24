@@ -30,4 +30,10 @@ features:
   - icon: 🖥️
     title: Genuinely headless
     details: OpenCv.load() needs no GUI toolkit and no apt-get, on any runner — plus ArUco, QR, YuNet faces, ONNX, and an optional ZIO module.
+  - icon: 🎨
+    title: A composable 2D graphics layer
+    details: A Doodle-inspired Picture value — shapes, curves, dashed strokes, labels, layout, palettes, charts and animation — to annotate detections or draw from scratch.
+  - icon: 🧭
+    title: Batteries for real vision work
+    details: OCR preprocessing, visual navigation & SLAM front-ends, marker AR pose overlays, object tracking with stable IDs, and a rich photo-filter library.
 ---
