@@ -47,6 +47,21 @@ const config: Config = {
 
   i18n: {defaultLocale: 'en', locales: ['en']},
 
+  plugins: [
+    // Local search via Pagefind: it indexes the final build/ HTML in a postBuild step — including
+    // the static Scaladoc under /api/ that Algolia/other Docusaurus search can't reach — so ONE
+    // ⌘K box covers guides AND the API reference. No account, works on PR previews. The chosen
+    // fallback over Algolia DocSearch (needs an application, a live crawl, and lags deploys).
+    // See SEARCH-REPORT.md.
+    [
+      'docusaurus-plugin-pagefind',
+      {
+        // Keep nav chrome out of the index; weight is left at Pagefind defaults (headings > body).
+        excludeSelectors: ['.navbar', '.footer', '.theme-doc-toc-desktop', '.pagination-nav'],
+      },
+    ],
+  ],
+
   presets: [
     [
       'classic',
