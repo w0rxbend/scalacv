@@ -321,6 +321,11 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
   ): Image =
     paint(_.drawContours(contours, color, thickness))
 
+  /** Draws a composable [[Picture]] onto the image — the high-level graphics layer (shapes, dashed strokes,
+    * text, transforms, transparency). Consumes this image and returns the annotated one.
+    */
+  def draw(picture: Picture): Image = paint(mat => Graphics.renderTo(picture, mat))
+
   /** Draws every rectangle in one pass — detector bounding boxes, motion regions, ROIs. */
   def drawRects(
       rects: Seq[Rect],
