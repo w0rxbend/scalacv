@@ -13,22 +13,58 @@ import java.util.concurrent.atomic.AtomicReference
   *   1. Access after release throws [[IllegalStateException]] on the Scala side, before anything crosses JNI.
   *
   * Prefer [[use]] over holding one of these. The scoped form is the only one where the compiler helps you.
+  *
+  * ==Diagnosing use-after-move==
+  *
+  * The move semantics of [[Image]] mean the commonest mistake is reusing a handle a transform already
+  * consumed, and the resulting `IllegalStateException` fires at the *reuse*, which is rarely the interesting
+  * line. Start the JVM with `-Dscalacv.trackOwnership=true` and the exception carries, as its cause, the
+  * stack of the transform or terminal that actually spent the handle. It is off by default because it
+  * allocates a `Throwable` every time a handle is spent; the check that reads it lives only on the
+  * already-failing path, so a program that never misuses a handle pays nothing.
   */
 final class Managed[A] private (initial: A, releaser: Releasable[A]) extends AutoCloseable:
 
   private val ref = AtomicReference[A | Null](initial)
 
+  /** Where this handle was spent, captured **only** when `-Dscalacv.trackOwnership=true` (see [[Managed]]).
+    * Off, it stays `null` and costs nothing on the hot path; on, it is attached as the cause of the
+    * use-after-move error so the crash points at the transform/terminal that consumed the handle, not just at
+    * the reuse.
+    */
+  @volatile private var spentAt: Throwable | Null = null
+
+  private def markSpent(): Unit =
+    if Managed.TrackOwnership then spentAt = Throwable("this handle was consumed here")
+
+  /** The `IllegalStateException` thrown when a spent handle is touched — worded for the common case, an
+    * [[Image]] used after a move, and pointing at the consuming call when ownership tracking is on.
+    */
+  private def spentError(verb: String): IllegalStateException =
+    val what = initial.getClass.getSimpleName
+    val hint =
+      spentAt match
+        case _: Throwable => "" // the consuming site is attached as the cause below
+        case null if !Managed.TrackOwnership =>
+          " Run with -Dscalacv.trackOwnership=true to record where it was consumed."
+        case null => ""
+    val e = IllegalStateException(
+      s"this $what has already been released or consumed — $verb it now would crash the JVM from native " +
+        "code. A high-level Image is spent by any transform (gray/blur/…) or terminal (write/bytes/close); " +
+        s"call `.copy` before the first use if you need it twice.$hint"
+    )
+    spentAt match
+      case t: Throwable => e.initCause(t)
+      case null => ()
+    e
+
   /** The underlying OpenCV object.
     *
     * @throws IllegalStateException
-    *   if it has already been released. Deliberately eager: the alternative is a SIGSEGV.
+    *   if it has already been released or consumed. Deliberately eager: the alternative is a SIGSEGV.
     */
   def get: A = ref.get match
-    case null =>
-      throw IllegalStateException(
-        s"this ${initial.getClass.getSimpleName} has already been released; " +
-          "using it now would crash the JVM from native code"
-      )
+    case null => throw spentError("using")
     case a => a.asInstanceOf[A]
 
   /** Hands the object out and leaves this `Managed` spent **without freeing it** — ownership transfers to the
@@ -44,17 +80,18 @@ final class Managed[A] private (initial: A, releaser: Releasable[A]) extends Aut
     */
   private[scalacv] def take(): A =
     ref.getAndSet(null) match
-      case null =>
-        throw IllegalStateException(
-          s"this ${initial.getClass.getSimpleName} has already been released or transferred"
-        )
-      case a => a.asInstanceOf[A]
+      case null => throw spentError("transferring")
+      case a =>
+        markSpent()
+        a.asInstanceOf[A]
 
   /** Releases the native memory. Idempotent — a second call does nothing. */
   def release(): Unit =
     ref.getAndSet(null) match
       case null => ()
-      case a => releaser.release(a.asInstanceOf[A])
+      case a =>
+        markSpent()
+        releaser.release(a.asInstanceOf[A])
 
   override def close(): Unit = release()
 
@@ -69,6 +106,11 @@ final class Managed[A] private (initial: A, releaser: Releasable[A]) extends Aut
     if isReleased then "Managed(<released>)" else s"Managed(${ref.get})"
 
 object Managed:
+
+  /** Whether a spent handle records where it was consumed — see the class scaladoc. Read once at class load
+    * from `-Dscalacv.trackOwnership=true`; off by default.
+    */
+  private val TrackOwnership: Boolean = java.lang.Boolean.getBoolean("scalacv.trackOwnership")
 
   def apply[A](a: A)(using r: Releasable[A]): Managed[A] = new Managed(a, r)
 

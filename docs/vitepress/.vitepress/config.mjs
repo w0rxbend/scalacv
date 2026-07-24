@@ -62,6 +62,7 @@ export default defineConfig({
         { text: 'OCR', link: '/ocr' }
       ]},
       { text: 'Robotics & 3D vision', items: [
+        { text: 'Camera calibration', link: '/calibration' },
         { text: 'Visual navigation & SLAM', link: '/navigation' },
         { text: 'Marker AR', link: '/marker-ar' }
       ]},

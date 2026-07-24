@@ -353,3 +353,27 @@ object FaceDetect:
         n = in.read(buf)
     finally in.close()
     digest.digest().map(b => f"$b%02x").mkString
+
+/** The high-level face verbs on [[Image]] — extension methods so YuNet detection lives beside [[FaceDetect]]
+  * rather than in the image class. `import scalacv.*` gives `image.faces(detector)` and `image.markFaces(…)`.
+  */
+extension (img: Image)
+
+  /** Faces via a YuNet [[FaceDetectorYN]] you supply — the model is yours to build (see [[FaceDetect]]). The
+    * detector is borrowed and mutated (its input size is set to this image), never released here.
+    */
+  def faces(detector: FaceDetectorYN): Seq[Face] = FaceDetect.detect(detector, img.mat)
+
+  /** As [[faces]], but taking the [[Managed]] the loaders hand back directly — the recommended path, since
+    * the spent-handle guard travels with the argument instead of being discarded by a bare `.get`.
+    */
+  def faces(detector: Managed[FaceDetectorYN]): Seq[Face] = FaceDetect.detect(detector.get, img.mat)
+
+  /** Annotates detected faces: a box per face and a dot per landmark. The one-call "show me what YuNet found"
+    * convenience.
+    */
+  def markFaces(faces: Seq[Face], color: Scalar = Scalar.Green): Image =
+    img.paint: m =>
+      faces.foreach: f =>
+        m.drawRect(f.box, color)
+        f.landmarks.foreach(p => m.drawCircle(p, 2, color, Thickness.Filled))

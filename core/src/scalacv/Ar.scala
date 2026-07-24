@@ -57,7 +57,7 @@ final case class Pose3D(rvec: Seq[Double], tvec: Seq[Double]):
   private[scalacv] def tvecMat: Mat =
     val m = Mat(3, 1, org.opencv.core.CvType.CV_64F); m.put(0, 0, tvec*); m
 
-/** A detected marker together with the pose recovered for it — what [[Image.arMarkers]] returns. */
+/** A detected marker together with the pose recovered for it — what `image.arMarkers` returns. */
 final case class MarkerPose(marker: ArucoMarker, pose: Pose3D):
   export pose.distance
   def id: Int = marker.id
@@ -69,8 +69,8 @@ final case class MarkerPose(marker: ArucoMarker, pose: Pose3D):
   * solver, which is both faster and more stable for a flat tag than the general iterative one) against the
   * four corners an [[Aruco]] detection gives you, yielding a [[Pose3D]]. [[project]] then maps any [[Point3]]
   * model — a set of axes, a cube — through that pose and the camera [[Intrinsics]] to pixel coordinates you
-  * can draw with the ordinary [[Draw]] verbs. The high-level [[Image.drawMarkerAxes]] and
-  * [[Image.drawMarkerCube]] wire all three steps together.
+  * can draw with the ordinary [[Draw]] verbs. The high-level `image.drawMarkerAxes` and
+  * `image.drawMarkerCube` wire all three steps together.
   */
 object Ar:
 
@@ -144,3 +144,62 @@ object Ar:
   /** Reads a 3×1 `CV_64F` Mat column into a `Seq[Double]`. */
   private def matColumn(m: Mat): Seq[Double] =
     Seq(m.get(0, 0)(0), m.get(1, 0)(0), m.get(2, 0)(0))
+
+/** The high-level marker-AR verbs on [[Image]]. Extension methods, not members of [[Image]], so the marker
+  * pipeline lives next to [[Ar]] rather than in the image class; `import scalacv.*` makes
+  * `image.arMarkers(…)` and the overlays available.
+  */
+extension (img: Image)
+
+  /** Detects every marker and recovers its 3D [[Pose3D]] in one step — the query behind marker AR.
+    * `markerLength` is the tag's real side length (metres, conventionally); `intrinsics` is the camera model
+    * ([[Intrinsics.approx]] if you have not calibrated). Markers whose pose fails to solve are dropped.
+    */
+  def arMarkers(
+      intrinsics: Intrinsics,
+      markerLength: Double,
+      dictionary: ArucoDictionary = ArucoDictionary.Dict4x4_50
+  ): Seq[MarkerPose] =
+    Aruco
+      .detect(img.mat, dictionary)
+      .flatMap(m => Ar.estimatePose(m, markerLength, intrinsics).map(MarkerPose(m, _)))
+
+  /** Draws a 3D coordinate frame at every marker's pose — the classic "is my pose right?" overlay. X is red,
+    * Y green, Z blue (pointing out of the tag toward the camera). `markerLength` is the tag's real side; the
+    * axes are drawn at `axisLength` (defaulting to half the side).
+    */
+  def drawMarkerAxes(
+      intrinsics: Intrinsics,
+      markerLength: Double,
+      dictionary: ArucoDictionary = ArucoDictionary.Dict4x4_50,
+      axisLength: Double = Double.NaN
+  ): Image =
+    val len = if axisLength.isNaN then markerLength / 2.0 else axisLength
+    val poses = img.arMarkers(intrinsics, markerLength, dictionary)
+    img.paint: m =>
+      poses.foreach: mp =>
+        val pts = Ar.project(
+          Seq(Point3(0, 0, 0), Point3(len, 0, 0), Point3(0, len, 0), Point3(0, 0, len)),
+          mp.pose,
+          intrinsics
+        )
+        m.drawLine(pts(0), pts(1), Scalar.Red, Thickness.Stroke(2)) // X
+        m.drawLine(pts(0), pts(2), Scalar.Green, Thickness.Stroke(2)) // Y
+        m.drawLine(pts(0), pts(3), Scalar.Blue, Thickness.Stroke(2)) // Z
+
+  /** Draws a wireframe cube standing on every marker, sized to the marker's side by default — the "hello
+    * world" of marker AR. Consumes this image and returns the annotated one.
+    */
+  def drawMarkerCube(
+      intrinsics: Intrinsics,
+      markerLength: Double,
+      dictionary: ArucoDictionary = ArucoDictionary.Dict4x4_50,
+      color: Scalar = Scalar.Green,
+      size: Double = Double.NaN
+  ): Image =
+    val cube = if size.isNaN then markerLength else size
+    val poses = img.arMarkers(intrinsics, markerLength, dictionary)
+    img.paint: m =>
+      poses.foreach: mp =>
+        val pts = Ar.project(Ar.cubeCorners(cube), mp.pose, intrinsics)
+        Ar.cubeEdges.foreach((a, b) => m.drawLine(pts(a), pts(b), color, Thickness.Stroke(2)))

@@ -34,6 +34,21 @@ class ManagedTest extends munit.FunSuite:
     val e = intercept[IllegalStateException](m.get)
     assert(e.getMessage.contains("already been released"), e.getMessage)
 
+  test("the spent-handle error names the fix and, when tracking is off, the flag that would locate it"):
+    val m = Managed(Mat(8, 8, CvType.CV_8UC1))
+    m.release()
+    val e = intercept[IllegalStateException](m.get)
+    // The commonest cause is an Image reused after a move, so the message points at `.copy`...
+    assert(e.getMessage.contains(".copy"), e.getMessage)
+    // ...and, since tracking is off by default in this suite, at the flag that records the consuming site.
+    assert(e.getMessage.contains("scalacv.trackOwnership"), e.getMessage)
+
+  test("an Image reused after a transform throws the move-semantics error rather than reading freed memory"):
+    val img = Image.blank(16, 16)
+    img.gray.close() // gray consumes `img` and returns a fresh Image, which we close
+    val e = intercept[IllegalStateException](img.width)
+    assert(e.getMessage.contains("already been released or consumed"), e.getMessage)
+
   test("use releases on the happy path"):
     val m = Managed(Mat(8, 8, CvType.CV_8UC1))
     assertEquals(m.use(_.rows), 8)

@@ -252,3 +252,19 @@ object HeadPose:
       distortion.release()
       rvec.release()
       tvec.release()
+
+/** The high-level pose overlay on [[Image]] — an extension method so it lives beside the pose types rather
+  * than in the image class. `import scalacv.*` gives `image.drawSkeleton(pose)`.
+  */
+extension (img: Image)
+
+  /** Draws a [[Pose]] skeleton: a line per bone and a dot per confident keypoint. */
+  def drawSkeleton(
+      pose: Pose,
+      minScore: Float = 0.3f,
+      color: Scalar = Scalar.Green,
+      jointColor: Scalar = Scalar.Red
+  ): Image =
+    img.paint: m =>
+      pose.bones(minScore).foreach((a, b) => m.drawLine(a, b, color, Thickness.Stroke(2)))
+      pose.confident(minScore).foreach(kp => m.drawCircle(kp.point, 3, jointColor, Thickness.Filled))

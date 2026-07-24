@@ -75,7 +75,7 @@ object Gallery:
   *
   * The model is **yours to supply**, exactly as with the [[FaceDetect YuNet detector]]: download the SFace
   * ONNX (`face_recognition_sface_2021dec.onnx`, ~37 MB, from the OpenCV Zoo) and hand [[load]] its path.
-  * Recognition builds on detection: [[embed]] takes a [[Face]] (from [[Image.faces]]) and the image it came
+  * Recognition builds on detection: [[embed]] takes a [[Face]] (from `image.faces`) and the image it came
   * from, aligns and crops the face using its five landmarks, then extracts the embedding.
   *
   * {{{

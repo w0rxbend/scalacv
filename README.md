@@ -26,7 +26,7 @@
 - **Genuinely headless.** `OpenCv.load()` needs no GUI toolkit and no `apt-get` on any runner.
 - **Errors as values where they belong.** `Either[CvError, A]` for the failures you can expect; exceptions for the bugs you cannot.
 - **Two levels, one library.** A high-level `Image` pipeline for the common cases, and the full typed `org.opencv.*` surface underneath — never hidden.
-- **Batteries included.** Filters and morphology, geometric transforms, contours and Hough, colour segmentation; a composable **2D graphics layer** (`Picture`) for overlays, dashed strokes, charts and animation; Haar/YuNet faces, QR, ArUco, ONNX inference; a high-level `Camera`/`Recorder`; **motion detection** for a static/MJPEG cam; **pose estimation** (skeletons, hands, head pose); **gesture recognition**; **video-conferencing** background blur & virtual backgrounds; **screen analysis** (template matching, change detection); **OCR** preprocessing (deskew + a pluggable engine); and a **visual-navigation front end** — optical flow, ORB features, stereo depth & obstacles, and visual odometry.
+- **Batteries included.** Filters and morphology, geometric transforms, contours and Hough, colour segmentation; a composable **2D graphics layer** (`Picture`) for overlays, dashed strokes, charts and animation; Haar/YuNet faces, QR, ArUco, ONNX inference; a high-level `Camera`/`Recorder`; **motion detection** for a static/MJPEG cam; **pose estimation** (skeletons, hands, head pose); **gesture recognition**; **video-conferencing** background blur & virtual backgrounds; **screen analysis** (template matching, change detection); **OCR** preprocessing (deskew + a pluggable engine); **camera calibration** (chessboard intrinsics + lens undistortion); and a **visual-navigation front end** — optical flow, ORB features, stereo depth & obstacles, and visual odometry.
 
 ## 🚀 Quick start
 
@@ -91,6 +91,8 @@ Image.reading("photo.jpg") { img =>
 Don't want to choose? `mvn"org.bytedeco:opencv-platform:4.13.0-1.5.13"` bundles every platform and works anywhere — for about **408 MB** instead of 36–80 MB.
 
 Get it wrong and `OpenCv.load()` tells you the exact line to add for the platform you are actually on. It does not fail with a link error.
+
+> **Scala-first.** scalacv targets Scala 3 consumers: the API returns `Seq`/`Option`/`Either` and reaches you through extension methods brought in by `import scalacv.*`. It wraps a Java library but is not designed to be called _from_ Java.
 
 ## 🧠 Why this exists
 

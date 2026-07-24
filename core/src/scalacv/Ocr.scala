@@ -17,7 +17,7 @@ final case class OcrResult(text: String, words: Seq[OcrWord] = Seq.empty):
 /** A pluggable OCR engine.
   *
   * scalacv owns the **OpenCV half** of OCR — the grayscale → denoise → threshold → deskew preprocessing that
-  * makes or breaks recognition ([[Image.forOcr]]) — and this contract. The **engine** is yours to supply,
+  * makes or breaks recognition (`image.forOcr`) — and this contract. The **engine** is yours to supply,
   * because Tesseract (and the cloud OCRs) are heavy, separately-licensed native dependencies that do not
   * belong in a thin OpenCV wrapper. Implementing it is a few lines over `tess4j` or bytedeco's `tesseract`
   * preset — see the OCR guide.
@@ -30,7 +30,7 @@ final case class OcrResult(text: String, words: Seq[OcrWord] = Seq.empty):
 trait OcrEngine:
 
   /** Reads the text in `image`. The image is **borrowed** (read only), not consumed. Implementations get the
-    * best results on an image already run through [[Image.forOcr]].
+    * best results on an image already run through `image.forOcr`.
     */
   def recognize(image: Image): OcrResult
 
@@ -50,3 +50,24 @@ object Ocr:
       try engine.recognize(prepared)
       finally prepared.close()
     else engine.recognize(image)
+
+/** The high-level OCR-preparation verb on [[Image]] — an extension method so the preprocessing pipeline lives
+  * beside [[Ocr]]. `import scalacv.*` gives `image.forOcr()`.
+  */
+extension (img: Image)
+
+  /** Prepares this image for OCR — the OpenCV half of the pipeline: grayscale → denoise → adaptive threshold
+    * → deskew, producing a clean, upright, binarised image an [[OcrEngine]] can read well. Feed the result to
+    * [[Ocr.read]] with `preprocess = false`, or just call `Ocr.read(image, engine)` which does this for you.
+    *
+    * @param denoise
+    *   median-blur radius applied before thresholding; `0` skips it.
+    * @param blockSize
+    *   the adaptive-threshold neighbourhood (odd, ≥ 3).
+    * @param c
+    *   the adaptive-threshold bias — raise it to keep less ink.
+    */
+  def forOcr(denoise: Int = 1, blockSize: Int = 15, c: Double = 10): Image =
+    val gray = if img.channels >= 3 then img.gray else img
+    val cleaned = if denoise > 0 then gray.medianBlur(denoise) else gray
+    cleaned.adaptiveThreshold(blockSize = blockSize, c = c).deskew()

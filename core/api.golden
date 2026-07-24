@@ -227,6 +227,28 @@ final class scalacv.Bounds
   def toString(): java.lang.String
   def union(scalacv.Bounds): scalacv.Bounds
   def width(): double
+final class scalacv.Calibration
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(scalacv.Intrinsics, scalacv.Size, double): void
+  def _1(): scalacv.Intrinsics
+  def _2(): scalacv.Size
+  def _3(): double
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): scalacv.Intrinsics
+  def copy$default$2(): scalacv.Size
+  def copy$default$3(): double
+  def copy(scalacv.Intrinsics, scalacv.Size, double): scalacv.Calibration
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def imageSize(): scalacv.Size
+  def intrinsics(): scalacv.Intrinsics
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def reprojectionError(): double
+  def toString(): java.lang.String
 final class scalacv.Camera
   extends java.lang.Object
   implements java.lang.AutoCloseable
@@ -338,6 +360,31 @@ final class scalacv.CaptureOptions
   def productPrefix(): java.lang.String
   def readTimeout(): scala.Option<scala.concurrent.duration.FiniteDuration>
   def toString(): java.lang.String
+final class scalacv.ChessboardPattern
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(int, int, double): void
+  def _1(): int
+  def _2(): int
+  def _3(): double
+  def canEqual(java.lang.Object): boolean
+  def columns(): int
+  def copy$default$1(): int
+  def copy$default$2(): int
+  def copy$default$3(): double
+  def copy(int, int, double): scalacv.ChessboardPattern
+  def corners(): int
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def objectPoints(): org.opencv.core.MatOfPoint3f
+  def patternSize(): org.opencv.core.Size
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def rows(): int
+  def squareSize(): double
+  def toString(): java.lang.String
 final class scalacv.Color
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -395,6 +442,21 @@ final class scalacv.Contour
   def productElementName(int): java.lang.String
   def productPrefix(): java.lang.String
   def toString(): java.lang.String
+final class scalacv.CvError.CalibrationFailed
+  extends scalacv.CvError
+  implements scala.Product
+  def <init>(java.lang.String): void
+  def _1(): java.lang.String
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): java.lang.String
+  def copy(java.lang.String): scalacv.CvError$CalibrationFailed
+  def details(): java.lang.String
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
 final class scalacv.CvError.DecodeFailed
   extends scalacv.CvError
   implements scala.Product
@@ -681,10 +743,6 @@ final class scalacv.Image
   def adjust$default$2(): double
   def adjust(double, double): scalacv.Image
   def applyMask(scalacv.Image): scalacv.Image
-  def arMarkers$default$3(): scalacv.ArucoDictionary
-  def arMarkers(scalacv.Intrinsics, double, scalacv.ArucoDictionary): scala.collection.immutable.Seq<scalacv.MarkerPose>
-  def arucoMarkers$default$1(): scalacv.ArucoDictionary
-  def arucoMarkers(scalacv.ArucoDictionary): scala.collection.immutable.Seq<scalacv.ArucoMarker>
   def bilateralFilter$default$1(): int
   def bilateralFilter$default$2(): double
   def bilateralFilter$default$3(): double
@@ -692,9 +750,6 @@ final class scalacv.Image
   def blend$default$2(): double
   def blend(scalacv.Image, double): scalacv.Image
   def blur(int): scalacv.Image
-  def blurBackground$default$2(): int
-  def blurBackground$default$3(): int
-  def blurBackground(scalacv.Image, int, int): scalacv.Image
   def border$default$5(): scalacv.BorderType
   def border$default$6(): scalacv.Scalar
   def border(int, int, int, int, scalacv.BorderType, scalacv.Scalar): scalacv.Image
@@ -715,42 +770,24 @@ final class scalacv.Image
   def crop(scalacv.Rect): scalacv.Image
   def deskew$default$1(): double
   def deskew(double): scalacv.Image
-  def detectHaar$default$2(): double
-  def detectHaar$default$3(): int
-  def detectHaar$default$4(): scala.Option<scalacv.Size>
-  def detectHaar(org.opencv.objdetect.CascadeClassifier, double, int, scala.Option<scalacv.Size>): scala.collection.immutable.Seq<scalacv.Rect>
   def dilate$default$1(): int
   def dilate$default$2(): scalacv.MorphShape
   def dilate(int, scalacv.MorphShape): scalacv.Image
-  def draw(scalacv.Picture): scalacv.Image
   def drawCircle$default$3(): scalacv.Scalar
   def drawCircle$default$4(): scalacv.Thickness
   def drawCircle(scalacv.Point, int, scalacv.Scalar, scalacv.Thickness): scalacv.Image
   def drawContours$default$2(): scalacv.Scalar
   def drawContours$default$3(): scalacv.Thickness
   def drawContours(scala.collection.immutable.Seq<scalacv.Contour>, scalacv.Scalar, scalacv.Thickness): scalacv.Image
-  def drawMarkerAxes$default$3(): scalacv.ArucoDictionary
-  def drawMarkerAxes$default$4(): double
-  def drawMarkerAxes(scalacv.Intrinsics, double, scalacv.ArucoDictionary, double): scalacv.Image
-  def drawMarkerCube$default$3(): scalacv.ArucoDictionary
-  def drawMarkerCube$default$4(): scalacv.Scalar
-  def drawMarkerCube$default$5(): double
-  def drawMarkerCube(scalacv.Intrinsics, double, scalacv.ArucoDictionary, scalacv.Scalar, double): scalacv.Image
   def drawRect$default$2(): scalacv.Scalar
   def drawRect$default$3(): scalacv.Thickness
   def drawRect(scalacv.Rect, scalacv.Scalar, scalacv.Thickness): scalacv.Image
   def drawRects$default$2(): scalacv.Scalar
   def drawRects$default$3(): scalacv.Thickness
   def drawRects(scala.collection.immutable.Seq<scalacv.Rect>, scalacv.Scalar, scalacv.Thickness): scalacv.Image
-  def drawSkeleton$default$2(): float
-  def drawSkeleton$default$3(): scalacv.Scalar
-  def drawSkeleton$default$4(): scalacv.Scalar
-  def drawSkeleton(scalacv.Pose, float, scalacv.Scalar, scalacv.Scalar): scalacv.Image
   def drawText$default$3(): scalacv.Scalar
   def drawText$default$4(): double
   def drawText(java.lang.String, scalacv.Point, scalacv.Scalar, double): scalacv.Image
-  def drawTracks$default$2(): scalacv.Scalar
-  def drawTracks(scala.collection.immutable.Seq<scalacv.ObjectTrack>, scalacv.Scalar): scalacv.Image
   def edgePreserving$default$1(): float
   def edgePreserving$default$2(): float
   def edgePreserving(float, float): scalacv.Image
@@ -762,13 +799,8 @@ final class scalacv.Image
   def erode$default$1(): int
   def erode$default$2(): scalacv.MorphShape
   def erode(int, scalacv.MorphShape): scalacv.Image
-  def faces(org.opencv.objdetect.FaceDetectorYN): scala.collection.immutable.Seq<scalacv.Face>
   def filter(scalacv.Filter): scalacv.Image
   def flip(scalacv.Flip): scalacv.Image
-  def forOcr$default$1(): int
-  def forOcr$default$2(): int
-  def forOcr$default$3(): double
-  def forOcr(int, int, double): scalacv.Image
   def gamma(double): scalacv.Image
   def gaussianBlur$default$2(): double
   def gaussianBlur$default$3(): double
@@ -781,8 +813,6 @@ final class scalacv.Image
   def invert(): scalacv.Image
   def isEmpty(): boolean
   def managed(): scalacv.Managed<org.opencv.core.Mat>
-  def markFaces$default$2(): scalacv.Scalar
-  def markFaces(scala.collection.immutable.Seq<scalacv.Face>, scalacv.Scalar): scalacv.Image
   def mat(): org.opencv.core.Mat
   def medianBlur(int): scalacv.Image
   def morphology$default$2(): int
@@ -794,10 +824,8 @@ final class scalacv.Image
   def pad$default$2(): scalacv.BorderType
   def pad$default$3(): scalacv.Scalar
   def pad(int, scalacv.BorderType, scalacv.Scalar): scalacv.Image
+  def paint(scala.Function1<org.opencv.core.Mat, scala.runtime.BoxedUnit>): scalacv.Image
   def posterize(int): scalacv.Image
-  def qrCodes(): scala.collection.immutable.Seq<scalacv.QrCode>
-  def replaceBackground$default$3(): int
-  def replaceBackground(scalacv.Image, scalacv.Image, int): scalacv.Image
   def resize(int, int): scalacv.Image
   def resizeTo$default$2(): scalacv.Interpolation
   def resizeTo(scalacv.Size, scalacv.Interpolation): scalacv.Image
@@ -826,6 +854,7 @@ final class scalacv.Image
   def toBufferedImage(): java.awt.image.BufferedImage
   def toHsv(): scalacv.Image
   def toString(): java.lang.String
+  def undistort(scalacv.Calibration): scalacv.Image
   def width(): int
   def write(java.lang.String): scala.util.Either<scalacv.CvError, scala.runtime.BoxedUnit>
 final class scalacv.ImreadFlags
@@ -1792,6 +1821,18 @@ object scalacv.Ar
   def cubeEdges(): scala.collection.immutable.Seq<scala.Tuple2<java.lang.Object, java.lang.Object>>
   def estimatePose(scalacv.ArucoMarker, double, scalacv.Intrinsics): scala.Option<scalacv.Pose3D>
   def project(scala.collection.immutable.Seq<scalacv.Point3>, scalacv.Pose3D, scalacv.Intrinsics): scala.collection.immutable.Seq<scalacv.Point>
+object scalacv.Ar.package
+  extends java.lang.Object
+  implements java.io.Serializable
+  def arMarkers$default$4(scalacv.Image): scalacv.ArucoDictionary
+  def arMarkers(scalacv.Image, scalacv.Intrinsics, double, scalacv.ArucoDictionary): scala.collection.immutable.Seq<scalacv.MarkerPose>
+  def drawMarkerAxes$default$4(scalacv.Image): scalacv.ArucoDictionary
+  def drawMarkerAxes$default$5(scalacv.Image): double
+  def drawMarkerAxes(scalacv.Image, scalacv.Intrinsics, double, scalacv.ArucoDictionary, double): scalacv.Image
+  def drawMarkerCube$default$4(scalacv.Image): scalacv.ArucoDictionary
+  def drawMarkerCube$default$5(scalacv.Image): scalacv.Scalar
+  def drawMarkerCube$default$6(scalacv.Image): double
+  def drawMarkerCube(scalacv.Image, scalacv.Intrinsics, double, scalacv.ArucoDictionary, scalacv.Scalar, double): scalacv.Image
 object scalacv.Aruco
   extends java.lang.Object
   implements java.io.Serializable
@@ -1840,6 +1881,14 @@ object scalacv.BackgroundEffect
   def alphaBlend(org.opencv.core.Mat, org.opencv.core.Mat, org.opencv.core.Mat, int): scalacv.Managed<org.opencv.core.Mat>
   def blur(org.opencv.core.Mat, org.opencv.core.Mat, int, int): scalacv.Managed<org.opencv.core.Mat>
   def replace(org.opencv.core.Mat, org.opencv.core.Mat, org.opencv.core.Mat, int): scalacv.Managed<org.opencv.core.Mat>
+object scalacv.BackgroundEffect.package
+  extends java.lang.Object
+  implements java.io.Serializable
+  def blurBackground$default$3(scalacv.Image): int
+  def blurBackground$default$4(scalacv.Image): int
+  def blurBackground(scalacv.Image, scalacv.Image, int, int): scalacv.Image
+  def replaceBackground$default$4(scalacv.Image): int
+  def replaceBackground(scalacv.Image, scalacv.Image, scalacv.Image, int): scalacv.Image
 object scalacv.BorderType
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Sum
@@ -1864,6 +1913,15 @@ object scalacv.Build
   implements java.io.Serializable
   def openCvVersion(): java.lang.String
   def scalaVersion(): java.lang.String
+object scalacv.Calibration
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def apply(scalacv.Intrinsics, scalacv.Size, double): scalacv.Calibration
+  def findCorners(scalacv.Image, scalacv.ChessboardPattern): scala.Option<scala.collection.immutable.Seq<scalacv.Point>>
+  def fromChessboard$default$3(): int
+  def fromChessboard(scala.collection.immutable.Seq<scalacv.Image>, scalacv.ChessboardPattern, int): scala.util.Either<scalacv.CvError, scalacv.Calibration>
+  def fromProduct(scala.Product): scalacv.Calibration
+  def unapply(scalacv.Calibration): scalacv.Calibration
 object scalacv.Camera
   extends java.lang.Object
   implements java.io.Serializable
@@ -1958,6 +2016,10 @@ object scalacv.Cascades.package
   def detect$default$4(org.opencv.core.Mat): int
   def detect$default$5(org.opencv.core.Mat): scala.Option<scalacv.Size>
   def detect(org.opencv.core.Mat, org.opencv.objdetect.CascadeClassifier, double, int, scala.Option<scalacv.Size>): scala.collection.immutable.Seq<scalacv.Rect>
+  def detectHaar$default$3(scalacv.Image): double
+  def detectHaar$default$4(scalacv.Image): int
+  def detectHaar$default$5(scalacv.Image): scala.Option<scalacv.Size>
+  def detectHaar(scalacv.Image, org.opencv.objdetect.CascadeClassifier, double, int, scala.Option<scalacv.Size>): scala.collection.immutable.Seq<scalacv.Rect>
 object scalacv.Chart
   extends java.lang.Object
   implements java.io.Serializable
@@ -1977,6 +2039,14 @@ object scalacv.Chart
   def scatter$default$4(): scalacv.Color
   def scatter$default$5(): double
   def scatter(scala.collection.immutable.Seq<scala.Tuple2<java.lang.Object, java.lang.Object>>, int, int, scalacv.Color, double): scalacv.Picture
+object scalacv.ChessboardPattern
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def <init>$default$3(): double
+  def apply(int, int, double): scalacv.ChessboardPattern
+  def fromProduct(scala.Product): scalacv.ChessboardPattern
+  def toString(): java.lang.String
+  def unapply(scalacv.ChessboardPattern): scalacv.ChessboardPattern
 object scalacv.Codec
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Sum
@@ -2099,11 +2169,20 @@ object scalacv.CvError
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Sum
   def ordinal(scalacv.CvError): int
+  static val CalibrationFailed: scalacv.CvError$CalibrationFailed$
   static val DecodeFailed: scalacv.CvError$DecodeFailed$
   static val EncodeFailed: scalacv.CvError$EncodeFailed$
   static val LoadFailed: scalacv.CvError$LoadFailed$
   static val NativeCall: scalacv.CvError$NativeCall$
   static val NativesMissing: scalacv.CvError$NativesMissing$
+object scalacv.CvError.CalibrationFailed
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def <init>(): void
+  def apply(java.lang.String): scalacv.CvError$CalibrationFailed
+  def fromProduct(scala.Product): scalacv.CvError$CalibrationFailed
+  def toString(): java.lang.String
+  def unapply(scalacv.CvError$CalibrationFailed): scalacv.CvError$CalibrationFailed
 object scalacv.CvError.DecodeFailed
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -2158,6 +2237,12 @@ object scalacv.DetectorQuads
   implements java.io.Serializable
   def first(org.opencv.core.Mat): scala.collection.immutable.Seq<scalacv.Point>
   def read(org.opencv.core.Mat): scala.collection.immutable.Seq<scala.collection.immutable.Seq<scalacv.Point>>
+object scalacv.Detectors.package
+  extends java.lang.Object
+  implements java.io.Serializable
+  def arucoMarkers$default$2(scalacv.Image): scalacv.ArucoDictionary
+  def arucoMarkers(scalacv.Image, scalacv.ArucoDictionary): scala.collection.immutable.Seq<scalacv.ArucoMarker>
+  def qrCodes(scalacv.Image): scala.collection.immutable.Seq<scalacv.QrCode>
 object scalacv.Dnn
   extends java.lang.Object
   implements java.io.Serializable
@@ -2247,6 +2332,13 @@ object scalacv.FaceDetect
   def detect(org.opencv.objdetect.FaceDetectorYN, org.opencv.core.Mat): scala.collection.immutable.Seq<scalacv.Face>
   def downloadModel(java.nio.file.Path): scala.util.Either<scalacv.CvError, java.nio.file.Path>
   def given_Releasable_FaceDetectorYN(): scalacv.Releasable<org.opencv.objdetect.FaceDetectorYN>
+object scalacv.FaceDetect.package
+  extends java.lang.Object
+  implements java.io.Serializable
+  def faces(scalacv.Image, org.opencv.objdetect.FaceDetectorYN): scala.collection.immutable.Seq<scalacv.Face>
+  def faces(scalacv.Image, scalacv.Managed<org.opencv.objdetect.FaceDetectorYN>): scala.collection.immutable.Seq<scalacv.Face>
+  def markFaces$default$3(scalacv.Image): scalacv.Scalar
+  def markFaces(scalacv.Image, scala.collection.immutable.Seq<scalacv.Face>, scalacv.Scalar): scalacv.Image
 object scalacv.FaceEmbedding
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -2340,6 +2432,10 @@ object scalacv.Graphics
   implements java.io.Serializable
   def boundsOf(scalacv.Picture, scalacv.Affine, scalacv.Style): scala.Option<scalacv.Bounds>
   def renderTo(scalacv.Picture, org.opencv.core.Mat): void
+object scalacv.Graphics.package
+  extends java.lang.Object
+  implements java.io.Serializable
+  def draw(scalacv.Image, scalacv.Picture): scalacv.Image
 object scalacv.Guidance
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -2536,6 +2632,7 @@ object scalacv.Managed
   implements java.io.Serializable
   def apply<A>(A, scalacv.Releasable<A>): scalacv.Managed<A>
   def use<A, B>(scala.Function0<A>, scala.Function1<A, B>, scalacv.Releasable<A>): B
+  static val scalacv$Managed$$$TrackOwnership: boolean
 object scalacv.MarkerPose
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -2662,6 +2759,13 @@ object scalacv.Ocr
   implements java.io.Serializable
   def read$default$3(): boolean
   def read(scalacv.Image, scalacv.OcrEngine, boolean): scalacv.OcrResult
+object scalacv.Ocr.package
+  extends java.lang.Object
+  implements java.io.Serializable
+  def forOcr$default$2(scalacv.Image): int
+  def forOcr$default$3(scalacv.Image): int
+  def forOcr$default$4(scalacv.Image): double
+  def forOcr(scalacv.Image, int, int, double): scalacv.Image
 object scalacv.OcrResult
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -2794,6 +2898,7 @@ object scalacv.Ops.package
   def threshold$default$3(org.opencv.core.Mat): double
   def threshold$default$4(org.opencv.core.Mat): scalacv.Threshold
   def threshold(org.opencv.core.Mat, double, double, scalacv.Threshold): scala.Tuple2<scalacv.Managed<org.opencv.core.Mat>, scalacv.ThresholdResult>
+  def undistort(org.opencv.core.Mat, scalacv.Intrinsics): scalacv.Managed<org.opencv.core.Mat>
   def withStructuringElement(org.opencv.core.Mat, java.lang.String, int, scalacv.MorphShape, int, scala.Function2<org.opencv.core.Mat, java.lang.Object, scalacv.Managed<org.opencv.core.Mat>>): scalacv.Managed<org.opencv.core.Mat>
 object scalacv.OpticalFlow
   extends java.lang.Object
@@ -2990,6 +3095,13 @@ object scalacv.Pose
   def fromProduct(scala.Product): scalacv.Pose
   def toString(): java.lang.String
   def unapply(scalacv.Pose): scalacv.Pose
+object scalacv.Pose.package
+  extends java.lang.Object
+  implements java.io.Serializable
+  def drawSkeleton$default$3(scalacv.Image): float
+  def drawSkeleton$default$4(scalacv.Image): scalacv.Scalar
+  def drawSkeleton$default$5(scalacv.Image): scalacv.Scalar
+  def drawSkeleton(scalacv.Image, scalacv.Pose, float, scalacv.Scalar, scalacv.Scalar): scalacv.Image
 object scalacv.Pose3D
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -3237,6 +3349,11 @@ object scalacv.TrackerKind
   static val Csrt: scalacv.TrackerKind
   static val Kcf: scalacv.TrackerKind
   static val Mil: scalacv.TrackerKind
+object scalacv.Tracking.package
+  extends java.lang.Object
+  implements java.io.Serializable
+  def drawTracks$default$3(scalacv.Image): scalacv.Scalar
+  def drawTracks(scalacv.Image, scala.collection.immutable.Seq<scalacv.ObjectTrack>, scalacv.Scalar): scalacv.Image
 object scalacv.Video
   extends java.lang.Object
   implements java.io.Serializable

@@ -13,7 +13,7 @@ import org.opencv.imgproc.Imgproc
   * with [[Segmenter]], or bring any binary mask you already have (even a colour [[Image.inRange]] key for a
   * green screen).
   *
-  * The effects are methods on [[Image]] — `image.blurBackground(mask)` and
+  * The effects are extension methods on [[Image]] (defined below) — `image.blurBackground(mask)` and
   * `image.replaceBackground(mask, bg)` — so they chain like any other transform; this object holds the shared
   * compositing they delegate to.
   */
@@ -101,3 +101,25 @@ object Segmenter:
         val bytes = plane.map(p => (if p >= threshold then 255 else 0).toByte)
         small.put(0, 0, bytes)
         Image.wrap(small.resize(imageSize, Interpolation.Nearest))
+
+/** The high-level virtual-background verbs on [[Image]] — extension methods so they sit beside the
+  * compositing in [[BackgroundEffect]]. `import scalacv.*` gives `image.blurBackground(mask)` and
+  * `image.replaceBackground(mask, bg)`.
+  */
+extension (img: Image)
+
+  /** Video-conferencing blur: keeps the person (where `mask` is white) sharp and blurs the background,
+    * feathering the edge. `mask` is a borrowed `CV_8UC1` foreground mask (from [[Segmenter]] or any keying).
+    */
+  def blurBackground(mask: Image, strength: Int = 15, feather: Int = 7): Image =
+    val out = BackgroundEffect.blur(img.mat, mask.mat, strength, feather)
+    try Image(out)
+    finally img.close()
+
+  /** Replaces the background (where `mask` is black) with `background`, resized to fit and feathered at the
+    * edge — a virtual background. `mask` and `background` are borrowed.
+    */
+  def replaceBackground(mask: Image, background: Image, feather: Int = 7): Image =
+    val out = BackgroundEffect.replace(img.mat, mask.mat, background.mat, feather)
+    try Image(out)
+    finally img.close()

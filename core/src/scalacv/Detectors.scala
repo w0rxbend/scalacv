@@ -178,3 +178,16 @@ private object DetectorQuads:
 
   /** The first quad in `m`, or empty. */
   def first(m: Mat): Seq[Point] = read(m).headOption.getOrElse(Seq.empty)
+
+/** The high-level [[Image]] entry points for fiducial and barcode detection. Extension methods rather than
+  * members of [[Image]] so that class stays about the image, not about every detector; `import scalacv.*`
+  * brings them in and `image.qrCodes` reads the same as a method would.
+  */
+extension (img: Image)
+
+  /** Every QR code in the image, decoded. Self-contained — builds and frees its own detector. */
+  def qrCodes: Seq[QrCode] = Qr.detectAndDecode(img.mat)
+
+  /** Every ArUco marker from `dictionary`. Self-contained — builds and frees its own detector. */
+  def arucoMarkers(dictionary: ArucoDictionary = ArucoDictionary.Dict4x4_50): Seq[ArucoMarker] =
+    Aruco.detect(img.mat, dictionary)

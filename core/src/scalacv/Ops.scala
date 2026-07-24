@@ -1,5 +1,6 @@
 package scalacv
 
+import org.opencv.calib3d.Calib3d
 import org.opencv.core.{Core, CvType, Mat}
 import org.opencv.imgproc.Imgproc
 import org.opencv.photo.Photo
@@ -274,6 +275,18 @@ extension (self: Mat)
           border.cvValue,
           borderValue.toCv
         )
+
+  /** Removes lens distortion using calibrated camera [[Intrinsics]] — the barrel/pincushion bend a real lens
+    * adds is mapped back out, so straight edges in the world come back straight. A no-op (a plain copy) when
+    * `intrinsics.distortion` is empty. See [[Calibration]].
+    */
+  def undistort(intrinsics: Intrinsics): Managed[Mat] =
+    val camera = intrinsics.cameraMatrix
+    val dist = intrinsics.distCoeffs
+    try Mats.produce("undistort")(dst => Calib3d.undistort(self, dst, camera, dist))
+    finally
+      camera.release()
+      dist.release()
 
   /** Adds a border (padding) of the given pixel widths on each side. */
   def border(

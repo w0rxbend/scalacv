@@ -174,3 +174,22 @@ extension (mat: Mat)
         case Some(s) => classifier.detectMultiScale(mat, out, scaleFactor, minNeighbors, 0, s.toCv)
         case None => classifier.detectMultiScale(mat, out, scaleFactor, minNeighbors)
       out.toArray.map(Rect.from).toSeq
+
+/** The high-level Haar-detection verb on [[Image]] — an extension method so it sits beside [[Cascades]] and
+  * the mid-level `Mat.detect` above. `import scalacv.*` gives `image.detectHaar(classifier)`.
+  */
+extension (img: Image)
+
+  /** Rectangles via a Haar [[CascadeClassifier]] you supply (see [[Cascades]]). Borrowed, not released.
+    *
+    * Takes the raw classifier, not the [[Managed]] [[Cascades.load]] returns — a defaulted overload for the
+    * `Managed` is not expressible alongside this one — so keep the classifier inside its scope to keep the
+    * spent-handle guard: `Cascades.load(name).map(_.use(c => image.detectHaar(c)))`. (The [[FaceDetectorYN]]
+    * detector, `faces`, does take a `Managed` directly, since it has no defaults to collide.)
+    */
+  def detectHaar(
+      classifier: CascadeClassifier,
+      scaleFactor: Double = 1.1,
+      minNeighbors: Int = 3,
+      minSize: Option[Size] = None
+  ): Seq[Rect] = img.mat.detect(classifier, scaleFactor, minNeighbors, minSize)

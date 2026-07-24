@@ -2,9 +2,9 @@
 
 Scala 2.11 / sbt 0.13 / vendored OpenCV 3.0.0-rc1 → **Scala 3 / Mill / OpenCV 4.13.0**.
 
-**Phase:** R complete · V complete & applied · **I complete** except two owner-action licensing items (F1a/F1b) — acked 2026-07-23
-**Sources:** [`NOTES-audit.md`](NOTES-audit.md) (legacy archaeology) · [`NOTES-upstream.md`](NOTES-upstream.md) (upstream/ecosystem) · [`NOTES-experiments.md`](NOTES-experiments.md) (orchestrator experiments E-3…E-11) · [`REVIEW.md`](REVIEW.md) (adversarial review — 2 blockers, 20 should-fix, 19 nits)
-**Supersedes:** `PLAN.md` (four of its "ground truth" claims are corrected below — see §3)
+**Phase:** R complete · V complete & applied · **I complete** — the two licensing items (F1a/F1b) were closed 2026-07-24 as non-gating owner-discretion courtesies; they gate nothing and the project ships clean-room (§3.4)
+**Sources:** [`NOTES-audit.md`](docs/history/NOTES-audit.md) (legacy archaeology) · [`NOTES-upstream.md`](docs/history/NOTES-upstream.md) (upstream/ecosystem) · [`NOTES-experiments.md`](docs/history/NOTES-experiments.md) (orchestrator experiments E-3…E-11) · [`REVIEW.md`](docs/history/REVIEW.md) (adversarial review — 2 blockers, 20 should-fix, 19 nits)
+**Supersedes:** [`PLAN.md`](docs/history/PLAN.md) (four of its "ground truth" claims are corrected below — see §3). These five planning documents were archived under [`docs/history/`](docs/history/) on 2026-07-24 — the 2→3 modernization they scaffolded is complete and this ROADMAP is the live record.
 
 ---
 
@@ -48,7 +48,7 @@ Defaults come from `PLAN.md` §3. Research/review amendments are marked and just
 
 | Thing | Pin | Notes |
 |---|---|---|
-| Scala (publish) | `3.3.8` | LTS, 2026-06-10. Re-verified 2026-07-23: still the newest 3.3.x on Central (no 3.3.9). **3.9.0 is still RC only** (3.9.0-RC3, 2026-07-11); 3.9 is the confirmed next LTS line and its final is overdue-imminent. Move to 3.9.x once final ships, not before. |
+| Scala (publish) | `3.3.8` | LTS, 2026-06-10. Re-verified 2026-07-23: still the newest 3.3.x on Central (no 3.3.9). **3.9.0 is still RC only** (3.9.0-RC3, 2026-07-11); 3.9 is the confirmed next LTS line and its final is overdue-imminent. Move to 3.9.x once final ships, not before. **Watch armed 2026-07-24:** `.scala-steward.conf` carries the exact migration recipe (flip the two `3.3.` pins to `3.9.` alongside `build.mill`'s `scalaVersion`); Steward keeps proposing 3.3.x patches meanwhile. The trigger is 3.9.0 *final* on Central, not an RC. |
 | Mill | `1.1.7` | 2026-06-21. `1.2.0-RC1` exists — do not pin. |
 | JDK (build) | `25`, **explicitly pinned** | Two separate pins: `//| mill-jvm-version: zulu:25` selects the JVM *Mill* runs on; `def jvmId` (overridable per CI rung via `MILL_JVM_ID`) selects the one *modules* compile and fork with. They must be separate — the header cannot vary, so on its own it would freeze every matrix rung to one JDK. Mill 1.1.7's `defaultJvmVersion=zulu:21` and it **ignores `JAVA_HOME`/`MILL_JVM_VERSION`**, so `actions/setup-java` cannot steer it. Bytecode target stays 17; **verified: the smoke test loads natives headless on zulu 17.0.18.** |
 | `org.bytedeco:opencv` | `4.13.0-1.5.13` | Version string is `<opencv>-<presets>`; there is no bare `4.13.0`. The classifier-less jar is where `org.opencv.*` lives (354 `org/opencv/` classes); the classifier jars are natives-only. |
@@ -424,15 +424,15 @@ Two smaller corrections that change task definitions.
 
 ### Track F — README, logo & licensing ✨
 
-- [⏳] F1a · **(OWNER ACTION)** Send the relicense request (named sender, 21-day window). Does *not* block Track B — clean-room is the working assumption per D11 (§3.4)
-- [⏳] F1b · **(OWNER ACTION, depends on F1a)** Transcribe any grant received into `NOTICE`
+- [—] F1a · **(OWNER DISCRETION — non-gating, closed as optional 2026-07-24)** The relicense-request email is a *courtesy*, not a dependency: D11 adopts clean-room as the working assumption (§3.4), so the project ships on it whether or not the email is ever sent. Formally closed out of the milestone chain — the owner may send it at any time, and F1b remains available to record a grant if one arrives. Nothing in the codebase, the POM, or CI waits on either.
+- [—] F1b · **(OWNER DISCRETION — non-gating)** *If* a grant is ever received, transcribe it verbatim into `NOTICE` as a bonus. Until then `NOTICE` already stands complete on the clean-room basis (F3). No task depends on this.
 - [x] F2 · `LICENSE` (Apache-2.0) · [x] F3 · `NOTICE` (mcallisto lineage, Intel/Willow Garage and Shiqi Yu cascade notices kept distinct, isight-java + chimpler credits)
 - [x] F4 · `THIRD-PARTY.md` — per-asset provenance: URL, branch, SHA-256, fetch date, **SPDX id, notice-required?**
 - [x] F5 · SVG logo, light/dark `<picture>` variants
 - [x] F6 · README: logo → badges → ✨ Features → 🚀 Quick start (**including the natives line**) → 🧠 Why → 📚 Docs → 🗺️ Roadmap → 🤝 Contributing → ⚖️ License. Coordinates are `com.worxbend::scalacv`. **The three heritage credit links survive verbatim.**
 - [x] F7 · CONTRIBUTING, CoC, issue templates
 
-**Gate:** `LICENSE` + `NOTICE` present; F1b resolved; the published POM's SPDX id equals the root `LICENSE`. *(Two-theme rendering is a review note, not a gate — no task can fail on it.)*
+**Gate:** `LICENSE` + `NOTICE` present; the published POM's SPDX id equals the root `LICENSE`. *(Two-theme rendering is a review note, not a gate — no task can fail on it. **`F1b resolved` struck 2026-07-24** — it named an owner-discretion courtesy no task can execute, exactly the category §8 exists to remove; `NOTICE` stands complete on the clean-room basis regardless.)*
 
 ### Track G — CI/CD 🔁
 
@@ -459,7 +459,7 @@ D11 no longer gates the milestone chain: path 2 (clean-room) is adopted as the w
 
 ## 6. Experiments run by the orchestrator
 
-Full command output in [`NOTES-experiments.md`](NOTES-experiments.md).
+Full command output in [`NOTES-experiments.md`](docs/history/NOTES-experiments.md).
 
 | # | Question | Result |
 |---|---|---|
@@ -514,4 +514,5 @@ Recorded rather than deleted, so they are not re-added by someone reading an old
 | Track F: "renders correctly in both GitHub themes" | No task can execute or fail on it. Demoted to a review note. |
 | Track G: "`publishLocal` dry-run succeeds" | Name- and content-blind; passes against the exact broken POM of §3.7. Replaced with the POM golden diff + module-count assertion + consumer smoke test. |
 | B3: "allocate/release 10k Mats, assert stable RSS" | Measures glibc arena behaviour; has a demonstrated false negative *and* false positive. **Replaced** (B3) with `dataAddr() == 0` after release as the primary assertion. A forked relative-delta check remains available as a secondary, non-gating, linux-glibc-only signal. |
+| Track F: "F1b resolved" (2026-07-24) | Named an owner-discretion courtesy (transcribe a relicense grant that may never arrive) that no CI task can execute or fail on. `NOTICE` stands complete on the clean-room basis (D11/§3.4) independent of it. F1a/F1b demoted to non-gating owner-discretion items. |
 16. **Owner action:** GitHub Pages must be enabled once (Settings → Pages → Source: GitHub Actions) before the `Docs` workflow can deploy. The docs *build* (mdoc, scaladoc, VitePress) passes in CI regardless; only the deploy step waits on this. Same category as F1a/F1b — a setting the workflow token cannot grant itself.

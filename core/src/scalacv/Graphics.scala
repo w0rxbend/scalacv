@@ -363,7 +363,7 @@ object Picture:
           case None => p
       })
 
-/** Renders a [[Picture]] onto a Mat. Package-private — the entry point is [[Image.draw]]. */
+/** Renders a [[Picture]] onto a Mat. Package-private — the entry point is `image.draw`. */
 private[scalacv] object Graphics:
 
   def renderTo(picture: Picture, mat: Mat): Unit = draw(picture, mat, Style(), Affine.identity)
@@ -510,3 +510,13 @@ private[scalacv] object Graphics:
     }
 
   private def lineType(style: Style): Int = if style.antialias then Imgproc.LINE_AA else Imgproc.LINE_8
+
+/** The high-level graphics verb on [[Image]] — an extension method so the [[Picture]] layer stays in this
+  * file rather than in the image class. `import scalacv.*` gives `image.draw(picture)`.
+  */
+extension (img: Image)
+
+  /** Draws a composable [[Picture]] onto the image — the high-level graphics layer (shapes, dashed strokes,
+    * text, transforms, transparency). Consumes this image and returns the annotated one.
+    */
+  def draw(picture: Picture): Image = img.paint(mat => Graphics.renderTo(picture, mat))

@@ -1,7 +1,6 @@
 package scalacv
 
 import org.opencv.core.{CvType, Mat}
-import org.opencv.objdetect.{CascadeClassifier, FaceDetectorYN}
 
 /** The high-level, fluent face of scalacv — an owned image you transform by chaining.
   *
@@ -39,7 +38,20 @@ import org.opencv.objdetect.{CascadeClassifier, FaceDetectorYN}
   *
   * `Image` never hides the library underneath it. [[mat]] borrows the raw `org.opencv.core.Mat` for any
   * `org.opencv.*` call this type does not wrap; [[managed]] hands the whole [[Managed]] over. The high-level
-  * API is the pleasant default, not a ceiling.
+  * API is the pleasant default, not a ceiling. Domain verbs that only *happen* to start from an image — face
+  * and marker detection, pose and track overlays, OCR preparation, background replacement — are **extension
+  * methods** brought in with `import scalacv.*`, not members of this class, which is why they are absent
+  * below; they read `image.faces(detector)` all the same.
+  *
+  * ==Failures==
+  *
+  * A transform does not return an `Either`: when OpenCV itself rejects the pixels (a data-dependent failure
+  * this library cannot foresee), the op throws [[CvError.NativeCall]], naming the operation — an unchecked
+  * throw, so it is invisible at the call site. Argument mistakes this library *can* see are rejected up front
+  * with `IllegalArgumentException`. Only the `Either`-returning boundary methods ([[Image.read]], [[write]],
+  * [[bytes]], [[decode]]) turn failure into a value. To fold a transform's throw into an `Either` too, wrap
+  * it with [[Cv.attempt]]. Reusing an already-consumed image throws `IllegalStateException`; see [[Managed]]
+  * for `-Dscalacv.trackOwnership=true`, which points the error at the consuming call.
   *
   * `Image` is `AutoCloseable`, so `scala.util.Using` manages it too.
   */
@@ -75,45 +87,17 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
   def toBufferedImage: java.awt.image.BufferedImage = Interop.toBufferedImage(handle.get)
 
   // -- Detection: borrow, return plain immutable data ----------------------------------------------
-
-  /** Every QR code in the image, decoded. Self-contained — builds and frees its own detector. */
-  def qrCodes: Seq[QrCode] = Qr.detectAndDecode(handle.get)
-
-  /** Every ArUco marker from `dictionary`. Self-contained — builds and frees its own detector. */
-  def arucoMarkers(dictionary: ArucoDictionary = ArucoDictionary.Dict4x4_50): Seq[ArucoMarker] =
-    Aruco.detect(handle.get, dictionary)
-
-  /** Detects every marker and recovers its 3D [[Pose3D]] in one step — the query behind marker AR.
-    * `markerLength` is the tag's real side length (metres, conventionally); `intrinsics` is the camera model
-    * ([[Intrinsics.approx]] if you have not calibrated). Markers whose pose fails to solve are dropped.
-    */
-  def arMarkers(
-      intrinsics: Intrinsics,
-      markerLength: Double,
-      dictionary: ArucoDictionary = ArucoDictionary.Dict4x4_50
-  ): Seq[MarkerPose] =
-    Aruco
-      .detect(handle.get, dictionary)
-      .flatMap(m => Ar.estimatePose(m, markerLength, intrinsics).map(MarkerPose(m, _)))
+  //
+  // Domain detectors that only start from an image live as extension methods in their own files — `qrCodes`
+  // and `arucoMarkers` in Detectors.scala, `arMarkers` in Ar.scala, `faces` in FaceDetect.scala, `detectHaar`
+  // in Cascades.scala — so this class stays about the image, not about every vision application. The generic
+  // `contours` stays because it is core image processing, not a domain.
 
   /** Contours of a binary image — see the mid-level `findContours` for the retrieval/approximation knobs. */
   def contours(
       retrieval: ContourRetrieval = ContourRetrieval.External,
       approximation: ContourApproximation = ContourApproximation.Simple
   ): Seq[Contour] = handle.get.findContours(retrieval, approximation)
-
-  /** Faces via a YuNet [[FaceDetectorYN]] you supply — the model is yours to build (see [[FaceDetect]]). The
-    * detector is borrowed and mutated (its input size is set to this image), never released here.
-    */
-  def faces(detector: FaceDetectorYN): Seq[Face] = FaceDetect.detect(detector, handle.get)
-
-  /** Rectangles via a Haar [[CascadeClassifier]] you supply (see [[Cascades]]). Borrowed, not released. */
-  def detectHaar(
-      classifier: CascadeClassifier,
-      scaleFactor: Double = 1.1,
-      minNeighbors: Int = 3,
-      minSize: Option[Size] = None
-  ): Seq[Rect] = handle.get.detect(classifier, scaleFactor, minNeighbors, minSize)
 
   // -- Transforms: consume this Image, return a fresh one ------------------------------------------
 
@@ -137,7 +121,10 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
   def gaussianBlur(kernel: Size, sigmaX: Double = 0, sigmaY: Double = 0): Image =
     transform(_.gaussianBlur(kernel, sigmaX, sigmaY))
 
-  /** Canny edge detection. The result is always `CV_8UC1`. */
+  /** Canny edge detection. The result is always `CV_8UC1`. `threshold1` is the weak (linking) edge and
+    * `threshold2` the strong one; they are both `Double` and silently swappable, so name them at the call
+    * site — `canny(threshold1 = 80, threshold2 = 160)` — when the values are not obviously ordered.
+    */
   def canny(
       threshold1: Double,
       threshold2: Double,
@@ -195,6 +182,12 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
     * clipped. `scale` zooms at the same time.
     */
   def rotate(degrees: Double, scale: Double = 1.0): Image = transform(_.rotated(degrees, scale))
+
+  /** Removes lens distortion using a [[Calibration]], straightening the lines a real lens bends. Feed it a
+    * calibration from [[Calibration.fromChessboard]]; with an uncalibrated [[Intrinsics.approx]] guess (no
+    * distortion) this is a plain copy.
+    */
+  def undistort(calibration: Calibration): Image = transform(_.undistort(calibration.intrinsics))
 
   /** Adds a uniform border of `size` pixels on every side. */
   def pad(size: Int, borderType: BorderType = BorderType.Constant, color: Scalar = Scalar.Black): Image =
@@ -320,22 +313,6 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
   /** Detects the text skew and rotates the image upright — the OCR straightening step. See [[Ops.deskew]]. */
   def deskew(maxAngle: Double = 45.0): Image = transform(_.deskew(maxAngle))
 
-  /** Prepares this image for OCR — the OpenCV half of the pipeline: grayscale → denoise → adaptive threshold
-    * → deskew, producing a clean, upright, binarised image an [[OcrEngine]] can read well. Feed the result to
-    * [[Ocr.read]] with `preprocess = false`, or just call `Ocr.read(image, engine)` which does this for you.
-    *
-    * @param denoise
-    *   median-blur radius applied before thresholding; `0` skips it.
-    * @param blockSize
-    *   the adaptive-threshold neighbourhood (odd, ≥ 3).
-    * @param c
-    *   the adaptive-threshold bias — raise it to keep less ink.
-    */
-  def forOcr(denoise: Int = 1, blockSize: Int = 15, c: Double = 10): Image =
-    val gray = if channels >= 3 then this.gray else this
-    val cleaned = if denoise > 0 then gray.medianBlur(denoise) else gray
-    cleaned.adaptiveThreshold(blockSize = blockSize, c = c).deskew()
-
   /** A binary mask of the pixels whose channels all fall within `[lo, hi]` — the core of colour segmentation.
     * Consumes this image and returns the mask; usually run after [[toHsv]].
     */
@@ -350,23 +327,6 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
   def blend(other: Image, weight: Double = 0.5): Image =
     require(weight >= 0 && weight <= 1, s"blend weight must be in [0, 1], got $weight")
     transform(_.addWeighted(weight, other.mat, 1 - weight))
-
-  /** Video-conferencing blur: keeps the person (where `mask` is white) sharp and blurs the background,
-    * feathering the edge. `mask` is a borrowed `CV_8UC1` foreground mask (from [[Segmenter]] or any keying).
-    * See [[BackgroundEffect]].
-    */
-  def blurBackground(mask: Image, strength: Int = 15, feather: Int = 7): Image =
-    val out = BackgroundEffect.blur(handle.get, mask.mat, strength, feather)
-    try Image(out)
-    finally handle.release()
-
-  /** Replaces the background (where `mask` is black) with `background`, resized to fit and feathered at the
-    * edge — a virtual background. `mask` and `background` are borrowed.
-    */
-  def replaceBackground(mask: Image, background: Image, feather: Int = 7): Image =
-    val out = BackgroundEffect.replace(handle.get, mask.mat, background.mat, feather)
-    try Image(out)
-    finally handle.release()
 
   // -- Drawing: mutate in place (we own the Mat), consume this Image -------------------------------
 
@@ -395,11 +355,6 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
   ): Image =
     paint(_.drawContours(contours, color, thickness))
 
-  /** Draws a composable [[Picture]] onto the image — the high-level graphics layer (shapes, dashed strokes,
-    * text, transforms, transparency). Consumes this image and returns the annotated one.
-    */
-  def draw(picture: Picture): Image = paint(mat => Graphics.renderTo(picture, mat))
-
   /** Draws every rectangle in one pass — detector bounding boxes, motion regions, ROIs. */
   def drawRects(
       rects: Seq[Rect],
@@ -407,74 +362,9 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
       thickness: Thickness = Thickness.Default
   ): Image = paint(m => rects.foreach(r => m.drawRect(r, color, thickness)))
 
-  /** Annotates detected faces: a box per face and a dot per landmark. The one-call "show me what YuNet found"
-    * convenience.
-    */
-  def markFaces(faces: Seq[Face], color: Scalar = Scalar.Green): Image =
-    paint: m =>
-      faces.foreach: f =>
-        m.drawRect(f.box, color)
-        f.landmarks.foreach(p => m.drawCircle(p, 2, color, Thickness.Filled))
-
-  /** Draws a [[Pose]] skeleton: a line per bone and a dot per confident keypoint. */
-  def drawSkeleton(
-      pose: Pose,
-      minScore: Float = 0.3f,
-      color: Scalar = Scalar.Green,
-      jointColor: Scalar = Scalar.Red
-  ): Image =
-    paint: m =>
-      pose.bones(minScore).foreach((a, b) => m.drawLine(a, b, color, Thickness.Stroke(2)))
-      pose.confident(minScore).foreach(kp => m.drawCircle(kp.point, 3, jointColor, Thickness.Filled))
-
-  /** Draws a 3D coordinate frame at every marker's pose — the classic "is my pose right?" overlay. X is red,
-    * Y green, Z blue (pointing out of the tag toward the camera). `markerLength` is the tag's real side; the
-    * axes are drawn at `axisLength` (defaulting to half the side).
-    */
-  def drawMarkerAxes(
-      intrinsics: Intrinsics,
-      markerLength: Double,
-      dictionary: ArucoDictionary = ArucoDictionary.Dict4x4_50,
-      axisLength: Double = Double.NaN
-  ): Image =
-    val len = if axisLength.isNaN then markerLength / 2.0 else axisLength
-    val poses = arMarkers(intrinsics, markerLength, dictionary)
-    paint: m =>
-      poses.foreach: mp =>
-        val pts = Ar.project(
-          Seq(Point3(0, 0, 0), Point3(len, 0, 0), Point3(0, len, 0), Point3(0, 0, len)),
-          mp.pose,
-          intrinsics
-        )
-        m.drawLine(pts(0), pts(1), Scalar.Red, Thickness.Stroke(2)) // X
-        m.drawLine(pts(0), pts(2), Scalar.Green, Thickness.Stroke(2)) // Y
-        m.drawLine(pts(0), pts(3), Scalar.Blue, Thickness.Stroke(2)) // Z
-
-  /** Draws a wireframe cube standing on every marker, sized to the marker's side by default — the "hello
-    * world" of marker AR. Consumes this image and returns the annotated one.
-    */
-  def drawMarkerCube(
-      intrinsics: Intrinsics,
-      markerLength: Double,
-      dictionary: ArucoDictionary = ArucoDictionary.Dict4x4_50,
-      color: Scalar = Scalar.Green,
-      size: Double = Double.NaN
-  ): Image =
-    val cube = if size.isNaN then markerLength else size
-    val poses = arMarkers(intrinsics, markerLength, dictionary)
-    paint: m =>
-      poses.foreach: mp =>
-        val pts = Ar.project(Ar.cubeCorners(cube), mp.pose, intrinsics)
-        Ar.cubeEdges.foreach((a, b) => m.drawLine(pts(a), pts(b), color, Thickness.Stroke(2)))
-
-  /** Annotates [[ObjectTrack]]s: a box and an `#id` label per track — the one-call "show me what the tracker
-    * is following". Consumes this image and returns the annotated one.
-    */
-  def drawTracks(tracks: Seq[ObjectTrack], color: Scalar = Scalar.Green): Image =
-    paint: m =>
-      tracks.foreach: t =>
-        m.drawRect(t.box, color)
-        m.drawText(s"#${t.id}", Point(t.box.x.toDouble, (t.box.y - 5).toDouble), color, scale = 0.5)
+  // Domain overlays that turn a domain result into pixels — `markFaces` (FaceDetect.scala), `drawSkeleton`
+  // (Pose.scala), `drawMarkerAxes`/`drawMarkerCube` (Ar.scala), `drawTracks` (Tracking.scala), and `draw` for
+  // the Picture layer (Graphics.scala) — are extension methods in their own files, built on `paint`.
 
   // -- Terminals: consume this Image and release ---------------------------------------------------
 
@@ -512,8 +402,11 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
     try Image(op(handle.get))
     finally handle.release()
 
-  /** An in-place draw: take the Mat (spending this handle without freeing), mutate it, rewrap it. No copy. */
-  private def paint(draw: Mat => Unit): Image =
+  /** An in-place draw: take the Mat (spending this handle without freeing), mutate it, rewrap it. No copy.
+    * `private[scalacv]` rather than `private` so a domain's drawing verbs can live as extension methods in
+    * their own file (e.g. `drawSkeleton` in `Pose.scala`) instead of swelling this class.
+    */
+  private[scalacv] def paint(draw: Mat => Unit): Image =
     val m = handle.take()
     try
       draw(m)

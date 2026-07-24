@@ -29,7 +29,16 @@ codebase already started** and **connecting components that currently stop one s
 
 ## 2. The highest-leverage gaps (recommended near-term)
 
-### 2.1 Camera calibration — the missing foundation
+### 2.1 Camera calibration — the missing foundation — ✅ SHIPPED
+
+Delivered as `core/src/scalacv/Calibration.scala`: `ChessboardPattern`, `Calibration.findCorners`,
+`Calibration.fromChessboard` (over `findChessboardCorners` → sub-pixel `cornerSubPix` → `calibrateCamera`,
+reporting RMS reprojection error), a `CvError.CalibrationFailed` value for under-constrained captures, and
+`Image.undistort` / `Mat.undistort`. The recovered `Intrinsics` are the same type `Ar`/`HeadPose`/`Localizer`
+already take, so a calibration drops straight into the pose stack. Docs: `/calibration`; runnable
+`CalibrationDemo` recovers a *known* synthetic camera to a fraction of a percent.
+*Still open from the original scope:* ChArUco targets and the stereo-rectification pair
+(`stereoCalibrate`/`stereoRectify`) — a natural follow-on now that the monocular foundation exists.
 
 **What.** A `Calibration` module: capture a chessboard/ChArUco from several views → intrinsics matrix +
 distortion coefficients; plus `Image.undistort(calibration)`.

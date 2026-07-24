@@ -229,3 +229,17 @@ object ObjectTracker:
     val inter = math.max(0, x2 - x1).toDouble * math.max(0, y2 - y1)
     val union = a.area.toDouble + b.area - inter
     if union <= 0 then 0.0 else inter / union
+
+/** The high-level track overlay on [[Image]] — an extension method so it lives beside the tracker types.
+  * `import scalacv.*` gives `image.drawTracks(tracks)`.
+  */
+extension (img: Image)
+
+  /** Annotates [[ObjectTrack]]s: a box and an `#id` label per track — the one-call "show me what the tracker
+    * is following". Consumes this image and returns the annotated one.
+    */
+  def drawTracks(tracks: Seq[ObjectTrack], color: Scalar = Scalar.Green): Image =
+    img.paint: m =>
+      tracks.foreach: t =>
+        m.drawRect(t.box, color)
+        m.drawText(s"#${t.id}", Point(t.box.x.toDouble, (t.box.y - 5).toDouble), color, scale = 0.5)
