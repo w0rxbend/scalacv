@@ -119,8 +119,32 @@ scene().scale(0.5).close()                     // half on both axes
 scene().crop(Rect(10, 10, 60, 60)).close()     // an independent copy of a region
 ```
 
-`convert`, `gaussianBlur`, `threshold` and `equalizeHist` cover the rest of the common imgproc surface — see
-[Image processing](/image-processing) for the full set and the mid-level equivalents.
+### The full verb set
+
+Beyond the basics above, `Image` covers the everyday OpenCV toolkit — each an ordinary transform that
+consumes the image and hands on a new one:
+
+| Group | Verbs |
+|---|---|
+| **Geometric** | `flip`, `rotate` (quarter-turns and arbitrary angle, auto-expanding), `pad`, `border`, `crop`, `resize`, `scale` |
+| **Smoothing** | `blur`, `gaussianBlur`, `medianBlur`, `bilateralFilter` |
+| **Edges & threshold** | `canny`, `threshold`, `adaptiveThreshold`, `equalizeHist` |
+| **Morphology** | `erode`, `dilate`, `morphology(MorphOp.Open / Close / Gradient / …)` |
+| **Intensity & colour** | `adjust` (brightness/contrast), `invert`, `normalize`, `sharpen`, `convert`, `gray`, `toHsv`, `channel` |
+| **Masking & compositing** | `inRange` (→ mask), `applyMask`, `blend` |
+
+```scala mdoc:silent
+scene()
+  .rotate(Rotation.Clockwise)     // lossless quarter-turn
+  .medianBlur(1)                  // de-noise
+  .adjust(brightness = 20)        // a touch brighter
+  .morphology(MorphOp.Open)       // clean up small specks
+  .bytes(".png")
+```
+
+The dedicated guides go deeper: [Geometric transforms & morphology](/transforms),
+[Colour, masking & compositing](/color-masking), and [Image processing](/image-processing) for the
+mid-level `Managed[Mat]` equivalents.
 
 ## Detecting
 

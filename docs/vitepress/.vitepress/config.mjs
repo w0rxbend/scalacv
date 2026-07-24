@@ -38,6 +38,8 @@ export default defineConfig({
       { text: 'The OpenCV surface', items: [
         { text: 'Reading & writing images', link: '/image-io' },
         { text: 'Image processing', link: '/image-processing' },
+        { text: 'Geometric transforms & morphology', link: '/transforms' },
+        { text: 'Colour, masking & compositing', link: '/color-masking' },
         { text: 'Drawing & annotation', link: '/drawing' },
         { text: 'Geometry & typed values', link: '/geometry' },
         { text: 'Contours & shape analysis', link: '/contours' },
@@ -48,7 +50,7 @@ export default defineConfig({
         { text: 'Deep learning (DNN)', link: '/dnn' }
       ]},
       { text: 'Video & runtime', items: [
-        { text: 'Video I/O', link: '/video' },
+        { text: 'Video & the camera', link: '/video' },
         { text: 'The native cache', link: '/native-cache' }
       ]},
       { text: 'Concepts', items: [
