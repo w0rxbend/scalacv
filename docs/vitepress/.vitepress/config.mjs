@@ -54,7 +54,8 @@ export default defineConfig({
       ]},
       { text: 'Applications', items: [
         { text: 'Video conferencing', link: '/conferencing' },
-        { text: 'Screen analysis', link: '/screen-analysis' }
+        { text: 'Screen analysis', link: '/screen-analysis' },
+        { text: 'OCR', link: '/ocr' }
       ]},
       { text: 'Video & runtime', items: [
         { text: 'Video & the camera', link: '/video' },
