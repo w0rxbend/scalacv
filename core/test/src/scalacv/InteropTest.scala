@@ -33,6 +33,43 @@ class InteropTest extends munit.FunSuite:
       assertEquals((bi.getWidth, bi.getHeight), (8, 8))
     finally img.close()
 
+  test("a non-continuous submat converts with the right pixels (clone-to-continue path)"):
+    // A cropped region of a larger Mat is a non-continuous view: its rows carry the parent's stride.
+    // toBufferedImage must still emit exactly the submat's pixels, not read across the padding.
+    val parent = Image.blank(40, 40, Scalar(10, 20, 30))
+    try
+      val view = parent.mat.submat(org.opencv.core.Rect(8, 8, 16, 12))
+      try
+        assert(!view.isContinuous, "the fixture must be non-continuous for this to exercise the branch")
+        val bi = Interop.toBufferedImage(view)
+        assertEquals((bi.getWidth, bi.getHeight), (16, 12))
+        val back = Image.fromBufferedImage(bi)
+        try
+          val p = back.mat.get(6, 10)
+          assert(
+            math.abs(p(0) - 10) < 2 && math.abs(p(1) - 20) < 2 && math.abs(p(2) - 30) < 2,
+            s"submat pixel should survive the conversion, got ${p.toList}"
+          )
+        finally back.close()
+      finally view.release()
+    finally parent.close()
+
+  test("a 4-channel image flattens to a 3-byte BGR BufferedImage"):
+    val img = Image.blank(10, 8, Scalar(30, 60, 200, 255), channels = 4)
+    try
+      val bi = img.toBufferedImage
+      assertEquals(bi.getType, BufferedImage.TYPE_3BYTE_BGR)
+      assertEquals((bi.getWidth, bi.getHeight), (10, 8))
+      val back = Image.fromBufferedImage(bi)
+      try
+        val p = back.mat.get(4, 5)
+        assert(
+          math.abs(p(0) - 30) < 2 && math.abs(p(1) - 60) < 2 && math.abs(p(2) - 200) < 2,
+          s"BGRA pixel should flatten to BGR, got ${p.toList}"
+        )
+      finally back.close()
+    finally img.close()
+
   test("fromBufferedImage accepts an ARGB source and yields a 3-channel image"):
     val argb = BufferedImage(6, 6, BufferedImage.TYPE_INT_ARGB)
     argb.setRGB(3, 3, 0xff00ff00) // opaque green

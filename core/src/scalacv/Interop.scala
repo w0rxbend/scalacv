@@ -20,20 +20,18 @@ private[scalacv] object Interop:
       mat.channels == 1 || mat.channels == 3 || mat.channels == 4,
       s"toBufferedImage supports 1, 3 or 4 channels, got unsupported channel count: ${mat.channels}"
     )
-    // AWT can take grey or 3-byte BGR directly; a 4-channel BGRA image is flattened to BGR first.
-    val (source, kind) = mat.channels match
-      case 1 => (Managed(mat.clone()), BufferedImage.TYPE_BYTE_GRAY)
-      case 3 => (Managed(mat.clone()), BufferedImage.TYPE_3BYTE_BGR)
-      case 4 => (mat.cvtColor(ColorConversion.BgraToBgr), BufferedImage.TYPE_3BYTE_BGR)
-    source.use: src =>
-      // clone/cvtColor both yield a continuous Mat, so one bulk get fills the whole buffer.
-      val channels = if kind == BufferedImage.TYPE_BYTE_GRAY then 1 else 3
-      val bytes = Array.ofDim[Byte](mat.rows * mat.cols * channels)
-      src.get(0, 0, bytes)
-      val image = BufferedImage(mat.cols, mat.rows, kind)
-      val target = image.getRaster.getDataBuffer.asInstanceOf[DataBufferByte].getData
-      System.arraycopy(bytes, 0, target, 0, bytes.length)
-      image
+    // AWT takes grey or 3-byte BGR directly; a 4-channel BGRA image is flattened to BGR first.
+    val kind = if mat.channels == 1 then BufferedImage.TYPE_BYTE_GRAY else BufferedImage.TYPE_3BYTE_BGR
+    val image = BufferedImage(mat.cols, mat.rows, kind)
+    val target = image.getRaster.getDataBuffer.asInstanceOf[DataBufferByte].getData
+    // Copy straight into AWT's own backing array: one bulk `get`, no intermediate byte[] and no
+    // defensive clone. `get` reads a contiguous run, so it needs a continuous Mat — a 1/3-channel Mat
+    // usually already is one (so the common path is a single copy), and only the rare non-continuous
+    // submat is cloned to continue it. A 4-channel image is converted to BGR, which continues it too.
+    if mat.channels == 4 then mat.cvtColor(ColorConversion.BgraToBgr).use(_.get(0, 0, target)): Unit
+    else if mat.isContinuous then mat.get(0, 0, target): Unit
+    else Managed.use(mat.clone())(_.get(0, 0, target)): Unit
+    image
 
   /** Copies any `BufferedImage` into a fresh 3-channel BGR `Mat` (caller-owned). */
   def toMat(image: BufferedImage): Mat =
