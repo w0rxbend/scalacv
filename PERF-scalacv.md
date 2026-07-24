@@ -25,13 +25,18 @@ hashes printed before each run).
 
 ---
 
-## Executive summary — the three changes that mattered
+## Executive summary — the four changes that mattered
 
 | # | Change | Path | Best delta |
 |---|--------|------|-----------|
-| 1 | `toMat` fast-path for a BGR `BufferedImage` (skip the redraw) | AWT → OpenCV, per-frame ingest | **−88%** (1080p) |
-| 2 | `toBufferedImage` drops the defensive clone + intermediate buffer | OpenCV → AWT, per-frame display/notebook | **−48%** (1080p 3ch), −57% (4K) |
-| 3 | `Motion.prepare` drops a wasted grey-frame clone | motion detection front end, per-frame | **−42%** (1080p) |
+| 1 | `Graphics.alpha` blends only the shape's ROI, not the whole image | translucent draws / annotation | **−97%** (4K), −94% (1080p) |
+| 2 | `toMat` fast-path for a BGR `BufferedImage` (skip the redraw) | AWT → OpenCV, per-frame ingest | **−88%** (1080p) |
+| 3 | `toBufferedImage` drops the defensive clone + intermediate buffer | OpenCV → AWT, per-frame display/notebook | **−48%** (1080p 3ch), −57% (4K) |
+| 4 | `Motion.prepare` drops a wasted grey-frame clone | motion detection front end, per-frame | **−42%** (1080p) |
+
+All four are **bit-identical** to the code they replace (verified by pixel hash —
+the alpha change by a 16-case corpus gate), and none trades readability for the
+win.
 
 All three are on **per-frame** paths (display, ingest, motion), all three are
 **bit-identical**, and none trades readability for the win — each removes work
@@ -42,8 +47,10 @@ expected.** There are no JVM-side per-pixel loops (every pixel operation already
 delegates to an OpenCV bulk op), the video read loop already reuses one `Mat`
 across frames, and the `Managed`/`Image` ownership model keeps intermediates
 from leaking. The wins that existed were concentrated at the **AWT interop
-boundary**, where defensive copies had accumulated, plus one wasted clone in the
-motion front end. The rest is documented under *Tried / rejected / deferred*.
+boundary** (defensive copies), one wasted clone in the motion front end, and one
+genuine algorithmic waste in the graphics layer — the translucent-draw path
+cloned and blended the *whole* image for a shape of any size. The rest is
+documented under *Tried / rejected / deferred*.
 
 ---
 
@@ -79,6 +86,17 @@ at every row.
 | 640×480 | 46.3 ± 0.3 | 28.5 ± 0.3 | −38% |
 | 1920×1080 | 218.9 ± 1.4 | 126.8 ± 1.7 | −42% |
 
+### `Graphics.alpha` translucent draw (`GraphicsAlphaBench`, small shape on a growing canvas)
+
+The cost of one small translucent shape, which used to scale with the *canvas*.
+The opaque draw of the same shape is shown as the floor the ROI blend now reaches.
+
+| size | translucent before | translucent after | delta | (opaque floor) |
+|---|---:|---:|---:|---:|
+| 640×480 | 194.8 ± 0.2 | 22.5 ± 0.1 | −88% | 19.5 |
+| 1920×1080 | 1287.5 ± 2.6 | 76.4 ± 0.2 | −94% | 73.0 |
+| 3840×2160 | 15297 ± 68 | 489.7 ± 8.9 | **−97%** | 537.5 |
+
 ---
 
 ## Ranked cost analysis — where the time went
@@ -97,6 +115,11 @@ copies and Mat allocations**, not by JNI call count (one crossing per bulk
   + two allocations → one copy on the continuous path.
 - **`Motion.prepare` (old)**: an extra `Mat.clone` per frame whose only consumer
   immediately freed it.
+
+The graphics `alpha` waste was different in kind: not a redundant copy alongside
+useful work, but O(whole image) work for an O(shape) draw — a full clone + full
+`addWeighted` per translucent shape regardless of size. That is why its delta is
+the largest here (up to −97%): the removed work was the entire cost.
 
 The heavy *compute* ops (`bilateralFilter`, `gaussianBlur`, `Canny`, the `photo`
 stylisers) spend their time in native code and are already parallelised by
@@ -128,7 +151,19 @@ OpenCV — see the config guide. There is no JVM-side headroom in them.
    **Readability: neutral** (a 4-case match that names each branch's intent).
    −38%…−42% on grey input.
 
-None of the three trades readability for speed, so there is nothing here for the
+4. **`perf(graphics): blend only the shape's ROI for translucent draws`** — a
+   translucent shape is painted opaquely onto the image at its real coordinates,
+   then only a conservative bounding box of the painted pixels (`roiOf`: geometry
+   + stroke width + an AA/caps/joins margin, clipped to the image) is saved and
+   blended back — instead of cloning and `addWeighted`-ing the whole image for a
+   shape of any size. Bit-identical: the same per-pixel arithmetic over a proven
+   superset of the touched pixels, gated by a 16-case pixel-exact corpus
+   (`GraphicsAlphaRoiTest`). **Readability: neutral-to-positive** — the ROI trick
+   is a few lines with a long comment justifying the bound, and it removed the
+   separate full-image clone path. −88%…−97%; a translucent draw now costs about
+   what an opaque one does.
+
+None of the four trades readability for speed, so there is nothing here for the
 owner to weigh on that axis. The items that *would* trade design or correctness
 are below, left undone on purpose.
 
@@ -166,16 +201,14 @@ a reason is a result.
   "report honestly if pooling loses to plain allocation" outcome the prompt asks
   for — the intuition was wrong, and the measurement is the result.
 
-- **`Graphics.alpha` full-image clone → ROI blend.** Every translucent shape
-  clones the *entire* `Mat` and `addWeighted`s the *entire* `Mat`, even for a
-  small dashed box. Restricting the clone+blend to the shape's bounding box would
-  be a large win for annotation-heavy pictures. **Deferred on correctness
-  grounds:** the blend must be bit-identical, and bounding the touched pixels
-  exactly is not safe by construction — `LINE_AA` antialiasing bleeds ~1–2px past
-  the geometry, thick strokes spread by `thickness/2`, and text extent is
-  awkward to bound. A too-tight ROI silently clips and is *not* bit-identical.
-  Doing this properly needs a proven pixel bound (or an exhaustive
-  render-and-hash corpus gate), which is more than a micro-edit. Left as headroom.
+- **`Graphics.alpha` full-image clone → ROI blend — DONE (change #4 above).**
+  Initially deferred here on correctness grounds — the blend must be bit-identical
+  and a too-tight ROI silently clips (`LINE_AA` bleeds ~1–2px, thick strokes
+  spread by `thickness/2`, text extent is awkward). It was then done properly: a
+  conservative superset bound (`roiOf`, margin = stroke width + 3) plus the
+  "exhaustive render-and-hash corpus gate" this entry called for
+  (`GraphicsAlphaRoiTest`, 16 cases across every primitive, thick/dashed strokes,
+  rotation, and edge/off-canvas positions). −88%…−97%.
 
 - **`OpticalFlow.grayscale` clone.** Looks like `Motion.prepare`, but here the
   cloned grey `Mat` is returned and `.use`d (released) by the caller, so a clone
@@ -260,18 +293,16 @@ not discovered the hard way.
 
 ## Remaining headroom
 
-Ranked by likely value, honestly. (Destination/arena reuse is **not** here — it
-was measured and rejected above; the intuition that it was "the biggest win" did
-not survive contact with `ArenaReuseBench`.)
+Ranked by likely value, honestly. (The two biggest theoretical items are gone:
+destination/arena reuse was **measured and rejected** above, and the
+`Graphics.alpha` ROI blend was **done**, change #4. What is left is genuinely
+minor.)
 
-1. **`Graphics.alpha` ROI blend** — large for annotation-heavy pictures, gated on
-   a proven pixel bound to stay bit-identical. Unlike destination reuse, the
-   overhead here (a full-image clone + a full-image `addWeighted` per translucent
-   shape) *is* the dominant cost of the draw, not a sub-1% tax — so it is worth
-   the correctness work. See the alpha entry above for the bound problem.
-2. **`Picture.bounds` memoisation** — easy, but only matters for large charts,
-   which are cold.
-3. **`Draw.withPolygons` converter leak** — needs an upstream fix or a
+1. **`Picture.bounds` memoisation** — `beside`/`above`/`grid` recompute a full
+   tree traversal, so a wide row built by repeated `beside` is O(n²). Easy (a
+   `lazy val` per node), but only matters for large charts, which are cold (no
+   JNI, rendered once). Not worth it until a chart proves large enough.
+2. **`Draw.withPolygons` converter leak** — needs an upstream fix or a
    private-API reimplementation; small per call but unbounded in a video loop.
 
 Cold-start (`OpenCv.load` native extraction) was not optimised: it is a one-time
@@ -283,12 +314,16 @@ long-running (video/detection), not CLI-shaped, so it does not dwarf the work.
 ## Reproducing
 
 ```
-./mill benchmarks.runMain scalacv.bench.ToMatBench
-./mill benchmarks.runMain scalacv.bench.ToBufferedImageBench
-./mill benchmarks.runMain scalacv.bench.GrayBlurCloneBench
-./mill benchmarks.runMain scalacv.bench.ConfigProbeBench
+./mill benchmarks.runMain scalacv.bench.ToMatBench            # interop ingest (#2)
+./mill benchmarks.runMain scalacv.bench.ToBufferedImageBench  # interop display (#3)
+./mill benchmarks.runMain scalacv.bench.GrayBlurCloneBench    # motion clone (#4 in commits)
+./mill benchmarks.runMain scalacv.bench.GraphicsAlphaBench    # translucent ROI blend (#1)
+./mill benchmarks.runMain scalacv.bench.ArenaReuseBench       # destination reuse (measured, rejected)
+./mill benchmarks.runMain scalacv.bench.ConfigProbeBench      # thread scaling / config guide
+./mill core.test                                              # includes GraphicsAlphaRoiTest, the bit-exact gate
 ```
 
 Each prints its environment header and, where it changed a path, per-case output
 hashes that must match before and after. Each optimization is a separate,
-individually revertible commit whose message carries its benchmark delta.
+individually revertible commit whose message carries its benchmark delta; the
+bit-exact guarantees are enforced by tests (`InteropTest`, `GraphicsAlphaRoiTest`).
