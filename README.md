@@ -1,8 +1,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
-  <img src="docs/assets/logo.svg" alt="scalacv" width="140" height="140">
+  <source media="(prefers-color-scheme: dark)" srcset="website/static/img/logo-dark.svg">
+  <img src="website/static/img/logo.svg" alt="scalacv" width="140" height="140">
 </picture>
 
 # scalacv

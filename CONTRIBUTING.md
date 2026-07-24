@@ -66,6 +66,32 @@ pixel-exact regression key: an optimized path must hash identically to the basel
 deviation is intentional and documented. Absolute `µs` are machine-specific — quote the
 delta, and put it in the commit message. See `PERF-scalacv.md` for the standing report.
 
+## Documentation
+
+The site is [Docusaurus](https://docusaurus.io) in `website/`, but you almost never edit that
+directory. **The source of truth is `docs/mdoc/`** — plain Markdown where every ```` ```scala mdoc ````
+block is type-checked (and where headless, run) against the real library by mdoc. Prose can lie; a
+compiled snippet cannot, so a change that breaks an example fails the build.
+
+`website/docs/` and `website/static/api/` are **generated and git-ignored** — do not edit them by
+hand; your changes would be overwritten and never committed. Edit `docs/mdoc/` instead.
+
+Build the site inputs, then run Docusaurus:
+
+```sh
+./scripts/assemble-docs.sh          # mdoc type-check + splice, unified Scaladoc, API-link check
+cd website && npm ci && npm run build
+```
+
+For a live dev loop, two terminals: re-run `./scripts/assemble-docs.sh` after editing a page
+(`SKIP_SCALADOC=1` skips the slow Scaladoc step — API links won't resolve, but pages rebuild fast),
+and `npm start` in `website/` for hot reload. The full `docs.mdocCheck` also runs on every PR, so a
+broken snippet is caught at review, not at deploy.
+
+Two things Docusaurus 3 will bite you on: guide pages are CommonMark (`.md`), so bare `<:`/`=>`/`{`
+in prose are fine, but a page that needs React components (e.g. `Tabs`) must be `.mdx`; and links
+into the Scaladoc under `/api/` are checked by the assemble script, not by Docusaurus.
+
 ## Commits
 
 Conventional commits (`feat:`, `fix:`, `build:`, `docs:`, `test:`, `chore:`).

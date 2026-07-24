@@ -1,9 +1,9 @@
 name: Docs
 
-# Builds the VitePress site and deploys it to GitHub Pages. Every scala snippet is type-checked by
-# mdoc first, so a code change that breaks a doc example fails here rather than shipping a wrong
-# example. The mdoc check also runs on PRs (in ci.yml), so drift is caught before merge, not only
-# at deploy time.
+# Builds the Docusaurus site and deploys it to GitHub Pages. mdoc type-checks every Scala snippet
+# first (via scripts/assemble-docs.sh), so a code change that breaks a doc example fails here rather
+# than shipping a wrong example. The mdoc check also runs on PRs (in ci.yml), so drift is caught
+# before merge, not only at deploy time.
 on:
   push:
     branches: [master]
@@ -28,39 +28,29 @@ jobs:
       - uses: coursier/cache-action@v8
       - uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: website/package-lock.json
 
-      - name: mdoc — type-check and splice the snippets
-        run: ./mill show docs.mdoc
+      # mdoc (type-checks + splices snippets) -> copy pages into website/docs; unified Scaladoc
+      # (core+vision+graphs) + zio -> website/static/api; then verify every in-content /api/ link
+      # resolves to a generated Scaladoc file. Same script as the local dev loop, so CI and local
+      # builds cannot diverge.
+      - name: Assemble docs (mdoc + Scaladoc + API-link check)
+        run: ./scripts/assemble-docs.sh
 
-      - name: Scaladoc for core and zio
-        run: ./mill core.docJar zio.docJar
-
-      - name: Assemble the VitePress root
-        run: |
-          set -euo pipefail
-          # mdoc wrote the processed pages under the task's dest; copy them next to the config.
-          cp -r out/docs/mdoc.dest/site/*.md docs/vitepress/
-          # Scaladoc into public/api so the nav "API" link resolves on the published site.
-          mkdir -p docs/vitepress/public/api/core docs/vitepress/public/api/zio
-          unzip -o -q "$(find out/core -name '*-javadoc.jar' | head -1)" -d docs/vitepress/public/api/core || true
-          unzip -o -q "$(find out/zio  -name '*-javadoc.jar' | head -1)" -d docs/vitepress/public/api/zio  || true
-
-      - name: Build the site
-        working-directory: docs
+      - name: Build the Docusaurus site
+        working-directory: website
         run: |
           npm ci
           npm run build
 
-      # ONE-TIME OWNER ACTION before the first deploy: in the repository's
-      # Settings -> Pages, set Source to "GitHub Actions". The default GITHUB_TOKEN cannot
-      # create a Pages site itself ("Resource not accessible by integration"), so this cannot
-      # be done from the workflow. Everything above -- mdoc, scaladoc, the VitePress build --
-      # runs regardless; only this deploy step waits on the setting.
+      # ONE-TIME OWNER ACTION before the first deploy: Settings -> Pages -> Source: "GitHub Actions".
+      # The default GITHUB_TOKEN cannot create the Pages site itself; everything above still runs.
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: docs/vitepress/.vitepress/dist
+          path: website/build
 
   deploy:
     needs: build
