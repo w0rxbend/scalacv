@@ -36,6 +36,11 @@ abstract class scalacv.CascadeName
   implements scala.Product, scala.reflect.Enum
   def <init>(java.lang.String): void
   def fileName(): java.lang.String
+abstract class scalacv.Codec
+  extends java.lang.Object
+  implements scala.Product, scala.reflect.Enum
+  def <init>(int): void
+  def fourcc(): int
 abstract class scalacv.ColorConversion
   extends java.lang.Object
   implements scala.Product, scala.reflect.Enum
@@ -133,6 +138,24 @@ final class scalacv.ArucoMarker
   def productElementName(int): java.lang.String
   def productPrefix(): java.lang.String
   def toString(): java.lang.String
+final class scalacv.Camera
+  extends java.lang.Object
+  implements java.lang.AutoCloseable
+  def <init>(scalacv.Managed<org.opencv.videoio.VideoCapture>): void
+  def capture(): org.opencv.videoio.VideoCapture
+  def close(): void
+  def foreach$default$1(): int
+  def foreach(int, scala.Function1<scalacv.Image, scala.runtime.BoxedUnit>): void
+  def fps(): double
+  def info(): scalacv.CaptureInfo
+  def recordTo$default$2(): double
+  def recordTo$default$3(): scalacv.Codec
+  def recordTo(java.lang.String, double, scalacv.Codec, scala.Function1<scalacv.Image, scalacv.Image>): scala.util.Either<scalacv.CvError, java.lang.Object>
+  def size(): scalacv.Size
+  def snapshot$default$1(): int
+  def snapshot(int): scala.util.Either<scalacv.CvError, scalacv.Image>
+  def take$default$2(): int
+  def take(int, int): scala.collection.immutable.List<scalacv.Image>
 final class scalacv.CaptureInfo
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -535,6 +558,14 @@ final class scalacv.QrCode
   def productPrefix(): java.lang.String
   def text(): java.lang.String
   def toString(): java.lang.String
+final class scalacv.Recorder
+  extends java.lang.Object
+  implements java.lang.AutoCloseable
+  def <init>(scalacv.Managed<org.opencv.videoio.VideoWriter>, scalacv.Size): void
+  def close(): void
+  def size(): scalacv.Size
+  def write(scalacv.Image): scala.util.Either<scalacv.CvError, scala.runtime.BoxedUnit>
+  def writer(): org.opencv.videoio.VideoWriter
 final class scalacv.Rect
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -786,6 +817,17 @@ object scalacv.Build
   implements java.io.Serializable
   def openCvVersion(): java.lang.String
   def scalaVersion(): java.lang.String
+object scalacv.Camera
+  extends java.lang.Object
+  implements java.io.Serializable
+  def open$default$2(): scalacv.CaptureOptions
+  def open(int, scalacv.CaptureOptions): scala.util.Either<scalacv.CvError, scalacv.Camera>
+  def openFile$default$2(): scalacv.CaptureOptions
+  def openFile(java.lang.String, scalacv.CaptureOptions): scala.util.Either<scalacv.CvError, scalacv.Camera>
+  def using$default$2<A>(): scalacv.CaptureOptions
+  def using<A>(int, scalacv.CaptureOptions, scala.Function1<scalacv.Camera, A>): scala.util.Either<scalacv.CvError, A>
+  def usingFile$default$2<A>(): scalacv.CaptureOptions
+  def usingFile<A>(java.lang.String, scalacv.CaptureOptions, scala.Function1<scalacv.Camera, A>): scala.util.Either<scalacv.CvError, A>
 object scalacv.CaptureBackend
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Sum
@@ -855,6 +897,18 @@ object scalacv.Cascades.package
   def detect$default$4(org.opencv.core.Mat): int
   def detect$default$5(org.opencv.core.Mat): scala.Option<scalacv.Size>
   def detect(org.opencv.core.Mat, org.opencv.objdetect.CascadeClassifier, double, int, scala.Option<scalacv.Size>): scala.collection.immutable.Seq<scalacv.Rect>
+object scalacv.Codec
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Sum
+  def fromOrdinal(int): scalacv.Codec
+  def ordinal(scalacv.Codec): int
+  def scalacv$Codec$$$of(char, char, char, char): int
+  def valueOf(java.lang.String): scalacv.Codec
+  def values(): scalacv.Codec[]
+  static val Avc1: scalacv.Codec
+  static val Mjpg: scalacv.Codec
+  static val Mp4v: scalacv.Codec
+  static val Xvid: scalacv.Codec
 object scalacv.ColorConversion
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Sum
@@ -1357,6 +1411,17 @@ object scalacv.QrCode
   def fromProduct(scala.Product): scalacv.QrCode
   def toString(): java.lang.String
   def unapply(scalacv.QrCode): scalacv.QrCode
+object scalacv.Recorder
+  extends java.lang.Object
+  implements java.io.Serializable
+  def open$default$3(): double
+  def open$default$4(): scalacv.Codec
+  def open$default$5(): boolean
+  def open(java.lang.String, scalacv.Size, double, scalacv.Codec, boolean): scala.util.Either<scalacv.CvError, scalacv.Recorder>
+  def using$default$3(): double
+  def using$default$4<A>(): scalacv.Codec
+  def using$default$5(): boolean
+  def using<A>(java.lang.String, scalacv.Size, double, scalacv.Codec, boolean, scala.Function1<scalacv.Recorder, A>): scala.util.Either<scalacv.CvError, A>
 object scalacv.Rect
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
