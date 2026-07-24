@@ -37,9 +37,46 @@ final case class Color(red: Int, green: Int, blue: Int, alpha: Int = 255):
   /** Toward black. */
   def darken(amount: Double): Color = blend(Color.Black, amount)
 
+  /** Rotates the hue by `degrees` around the colour wheel, keeping saturation, lightness and alpha. */
+  def spin(degrees: Double): Color =
+    val (h, s, l) = hsl
+    Color.hsl(h + degrees, s, l, alpha)
+
+  /** The colour opposite on the wheel — [[spin]] by 180°. */
+  def complement: Color = spin(180)
+
+  /** More vivid: pushes saturation up by `amount` in `[0, 1]`. */
+  def saturate(amount: Double): Color =
+    val (h, s, l) = hsl
+    Color.hsl(h, s + (1 - s) * clampUnit(amount), l, alpha)
+
+  /** Less vivid: pulls saturation down by `amount` in `[0, 1]`. `desaturate(1)` is grey. */
+  def desaturate(amount: Double): Color =
+    val (h, s, l) = hsl
+    Color.hsl(h, s * (1 - clampUnit(amount)), l, alpha)
+
+  /** This colour's hue (degrees), saturation and lightness (`[0, 1]`). */
+  def hsl: (Double, Double, Double) =
+    val r = red / 255.0
+    val g = green / 255.0
+    val b = blue / 255.0
+    val max = math.max(r, math.max(g, b))
+    val min = math.min(r, math.min(g, b))
+    val l = (max + min) / 2
+    if max == min then (0.0, 0.0, l)
+    else
+      val d = max - min
+      val s = if l > 0.5 then d / (2 - max - min) else d / (max + min)
+      val h =
+        if max == r then (g - b) / d + (if g < b then 6 else 0)
+        else if max == g then (b - r) / d + 2
+        else (r - g) / d + 4
+      (h * 60, s, l)
+
   private[scalacv] def toBgr: Scalar = Scalar(blue.toDouble, green.toDouble, red.toDouble)
 
   private def clamp(v: Int): Int = math.max(0, math.min(255, v))
+  private def clampUnit(v: Double): Double = math.max(0.0, math.min(1.0, v))
   private def mix(a: Int, b: Int, t: Double): Int = (a + (b - a) * t).round.toInt
 
 object Color:
@@ -68,6 +105,24 @@ object Color:
           else p
         (v * 255).round.toInt
       Color(channel(h + 1.0 / 3), channel(h), channel(h - 1.0 / 3), alpha)
+
+  /** A categorical palette: `n` colours spaced evenly around the hue wheel — distinct labels for distinct
+    * series, tracks or classes.
+    */
+  def wheel(n: Int, saturation: Double = 0.65, lightness: Double = 0.55): Seq[Color] =
+    require(n >= 0, s"a palette cannot have a negative size, got $n")
+    (0 until n).map(i => hsl(360.0 * i / math.max(1, n), saturation, lightness))
+
+  /** A sequential palette: `n` colours blended evenly from `from` to `to` — the honest choice for ordered
+    * data (a heat scale, a gradient fill).
+    */
+  def ramp(from: Color, to: Color, n: Int): Seq[Color] =
+    require(n >= 0, s"a palette cannot have a negative size, got $n")
+    if n <= 1 then Seq(from).take(n)
+    else (0 until n).map(i => from.blend(to, i.toDouble / (n - 1)))
+
+  /** A ready-made set of eight distinct hues — a sensible default for categorical charts. */
+  val categorical: Seq[Color] = wheel(8)
 
   val Transparent: Color = Color(0, 0, 0, 0)
   val Black: Color = Color(0, 0, 0)

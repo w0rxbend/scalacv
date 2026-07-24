@@ -197,6 +197,36 @@ final class scalacv.ArucoMarker
   def productElementName(int): java.lang.String
   def productPrefix(): java.lang.String
   def toString(): java.lang.String
+final class scalacv.Bounds
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(double, double, double, double): void
+  def _1(): double
+  def _2(): double
+  def _3(): double
+  def _4(): double
+  def canEqual(java.lang.Object): boolean
+  def centerX(): double
+  def centerY(): double
+  def copy$default$1(): double
+  def copy$default$2(): double
+  def copy$default$3(): double
+  def copy$default$4(): double
+  def copy(double, double, double, double): scalacv.Bounds
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def height(): double
+  def maxX(): double
+  def maxY(): double
+  def minX(): double
+  def minY(): double
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def toString(): java.lang.String
+  def union(scalacv.Bounds): scalacv.Bounds
+  def width(): double
 final class scalacv.Camera
   extends java.lang.Object
   implements java.lang.AutoCloseable
@@ -320,16 +350,19 @@ final class scalacv.Color
   def blend(scalacv.Color, double): scalacv.Color
   def blue(): int
   def canEqual(java.lang.Object): boolean
+  def complement(): scalacv.Color
   def copy$default$1(): int
   def copy$default$2(): int
   def copy$default$3(): int
   def copy$default$4(): int
   def copy(int, int, int, int): scalacv.Color
   def darken(double): scalacv.Color
+  def desaturate(double): scalacv.Color
   def equals(java.lang.Object): boolean
   def fadeOut(double): scalacv.Color
   def green(): int
   def hashCode(): int
+  def hsl(): scala.Tuple3<java.lang.Object, java.lang.Object, java.lang.Object>
   def lighten(double): scalacv.Color
   def opaque(): boolean
   def productArity(): int
@@ -337,6 +370,8 @@ final class scalacv.Color
   def productElementName(int): java.lang.String
   def productPrefix(): java.lang.String
   def red(): int
+  def saturate(double): scalacv.Color
+  def spin(double): scalacv.Color
   def toBgr(): scalacv.Scalar
   def toString(): java.lang.String
   def withAlpha(int): scalacv.Color
@@ -1667,6 +1702,10 @@ object scalacv.Animation
   implements java.io.Serializable
   def frames$default$4(): scalacv.Color
   def frames(int, int, int, scalacv.Color, scala.Function1<java.lang.Object, scalacv.Picture>): scala.collection.immutable.LazyList<scalacv.Image>
+  def gif$default$5(): double
+  def gif$default$6(): scalacv.Color
+  def gif$default$7(): boolean
+  def gif(java.lang.String, int, int, int, double, scalacv.Color, boolean, scala.Function1<java.lang.Object, scalacv.Picture>): scala.util.Either<scalacv.CvError, java.lang.Object>
   def record$default$5(): double
   def record$default$6(): scalacv.Color
   def record$default$7(): scalacv.Codec
@@ -1738,6 +1777,13 @@ object scalacv.BorderType
   static val Reflect: scalacv.BorderType
   static val Replicate: scalacv.BorderType
   static val Wrap: scalacv.BorderType
+object scalacv.Bounds
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def apply(double, double, double, double): scalacv.Bounds
+  def fromProduct(scala.Product): scalacv.Bounds
+  def toString(): java.lang.String
+  def unapply(scalacv.Bounds): scalacv.Bounds
 object scalacv.Build
   extends java.lang.Object
   implements java.io.Serializable
@@ -1840,12 +1886,19 @@ object scalacv.Cascades.package
 object scalacv.Chart
   extends java.lang.Object
   implements java.io.Serializable
+  def area$default$4(): scalacv.Color
+  def area$default$5(): int
+  def area(scala.collection.immutable.Seq<java.lang.Object>, int, int, scalacv.Color, int): scalacv.Picture
   def bars$default$4(): scalacv.Color
   def bars$default$5(): int
   def bars(scala.collection.immutable.Seq<java.lang.Object>, int, int, scalacv.Color, int): scalacv.Picture
+  def histogram$default$5(): scalacv.Color
+  def histogram(scala.collection.immutable.Seq<java.lang.Object>, int, int, int, scalacv.Color): scalacv.Picture
   def line$default$4(): scalacv.Color
   def line$default$5(): int
   def line(scala.collection.immutable.Seq<java.lang.Object>, int, int, scalacv.Color, int): scalacv.Picture
+  def pie$default$4(): scala.collection.immutable.Seq<scalacv.Color>
+  def pie(scala.collection.immutable.Seq<java.lang.Object>, int, int, scala.collection.immutable.Seq<scalacv.Color>): scalacv.Picture
   def scatter$default$4(): scalacv.Color
   def scatter$default$5(): double
   def scatter(scala.collection.immutable.Seq<scala.Tuple2<java.lang.Object, java.lang.Object>>, int, int, scalacv.Color, double): scalacv.Picture
@@ -1881,13 +1934,18 @@ object scalacv.Color
   def White(): scalacv.Color
   def Yellow(): scalacv.Color
   def apply(int, int, int, int): scalacv.Color
+  def categorical(): scala.collection.immutable.Seq<scalacv.Color>
   def fromProduct(scala.Product): scalacv.Color
   def gray(int): scalacv.Color
   def hsl$default$4(): int
   def hsl(double, double, double, int): scalacv.Color
+  def ramp(scalacv.Color, scalacv.Color, int): scala.collection.immutable.Seq<scalacv.Color>
   def rgb(int, int, int): scalacv.Color
   def rgba(int, int, int, int): scalacv.Color
   def unapply(scalacv.Color): scalacv.Color
+  def wheel$default$2(): double
+  def wheel$default$3(): double
+  def wheel(int, double, double): scala.collection.immutable.Seq<scalacv.Color>
 object scalacv.ColorConversion
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Sum
@@ -2181,6 +2239,7 @@ object scalacv.GestureRecognizer
 object scalacv.Graphics
   extends java.lang.Object
   implements java.io.Serializable
+  def boundsOf(scalacv.Picture, scalacv.Affine, scalacv.Style): scala.Option<scalacv.Bounds>
   def renderTo(scalacv.Picture, org.opencv.core.Mat): void
 object scalacv.Guidance
   extends java.lang.Object
@@ -2642,15 +2701,31 @@ object scalacv.Picture
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Sum
   def all(scala.collection.immutable.Seq<scalacv.Picture>): scalacv.Picture
+  def arc$default$6(): double
+  def arc$default$7(): int
+  def arc(scalacv.Point, double, double, double, double, double, int): scalacv.Picture
   def arrow$default$3(): double
   def arrow$default$4(): double
   def arrow(scalacv.Point, scalacv.Point, double, double): scalacv.Picture
   def circle(scalacv.Point, double): scalacv.Picture
   def cross$default$2(): double
   def cross(scalacv.Point, double): scalacv.Picture
+  def curve$default$5(): int
+  def curve(scalacv.Point, scalacv.Point, scalacv.Point, scalacv.Point, int): scalacv.Picture
   def dot$default$2(): double
   def dot(scalacv.Point, double): scalacv.Picture
+  def ellipse$default$4(): double
+  def ellipse$default$5(): int
+  def ellipse(scalacv.Point, double, double, double, int): scalacv.Picture
   def empty(): scalacv.Picture
+  def grid$default$3(): double
+  def grid(scala.collection.immutable.Seq<scalacv.Picture>, int, double): scalacv.Picture
+  def label$default$3(): scalacv.Color
+  def label$default$4(): scalacv.Color
+  def label$default$5(): int
+  def label$default$6(): double
+  def label$default$7(): scalacv.Font
+  def label(java.lang.String, scalacv.Point, scalacv.Color, scalacv.Color, int, double, scalacv.Font): scalacv.Picture
   def line(scalacv.Point, scalacv.Point): scalacv.Picture
   def marker$default$3(): double
   def marker(scalacv.Point, scalacv.Color, double): scalacv.Picture
@@ -2658,9 +2733,15 @@ object scalacv.Picture
   def polygon(scala.collection.immutable.Seq<scalacv.Point>): scalacv.Picture
   def polyline$default$2(): boolean
   def polyline(scala.collection.immutable.Seq<scalacv.Point>, boolean): scalacv.Picture
+  def quadraticCurve$default$4(): int
+  def quadraticCurve(scalacv.Point, scalacv.Point, scalacv.Point, int): scalacv.Picture
   def rectangle(scalacv.Rect): scalacv.Picture
   def regularPolygon$default$4(): double
   def regularPolygon(scalacv.Point, int, double, double): scalacv.Picture
+  def roundedRectangle(scalacv.Rect, double): scalacv.Picture
+  def sector$default$6(): double
+  def sector$default$7(): int
+  def sector(scalacv.Point, double, double, double, double, double, int): scalacv.Picture
   def star$default$5(): double
   def star(scalacv.Point, int, double, double, double): scalacv.Picture
   def text(java.lang.String, scalacv.Point): scalacv.Picture
@@ -3062,7 +3143,12 @@ trait scalacv.MotionDetector
 trait scalacv.OcrEngine
   abstract def recognize(scalacv.Image): scalacv.OcrResult
 trait scalacv.Picture
+  def above$default$2(): double
+  def above(scalacv.Picture, double): scalacv.Picture
   def at(scalacv.Point): scalacv.Picture
+  def beside$default$2(): double
+  def beside(scalacv.Picture, double): scalacv.Picture
+  def bounds(): scala.Option<scalacv.Bounds>
   def dashed(): scalacv.Picture
   def dotted(): scalacv.Picture
   def fillColor(scalacv.Color): scalacv.Picture

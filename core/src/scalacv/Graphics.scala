@@ -52,6 +52,24 @@ private[scalacv] object Affine:
     val rot = Affine(math.cos(r), -math.sin(r), 0, math.sin(r), math.cos(r), 0)
     translate(about.x, about.y).compose(rot).compose(translate(-about.x, -about.y))
 
+/** The axis-aligned bounding box of a [[Picture]] — what the layout combinators ([[Picture.beside]],
+  * [[Picture.above]]) measure to place pictures next to each other.
+  */
+final case class Bounds(minX: Double, minY: Double, maxX: Double, maxY: Double):
+  def width: Double = maxX - minX
+  def height: Double = maxY - minY
+  def centerX: Double = (minX + maxX) / 2
+  def centerY: Double = (minY + maxY) / 2
+
+  /** The smallest box enclosing both this and `other`. */
+  def union(other: Bounds): Bounds =
+    Bounds(
+      math.min(minX, other.minX),
+      math.min(minY, other.minY),
+      math.max(maxX, other.maxX),
+      math.max(maxY, other.maxY)
+    )
+
 /** An immutable, composable 2D drawing — the graphics layer, inspired by Doodle and adapted to image space.
   *
   * A `Picture` is a *value*: build primitives, style them, compose them, and only then render onto an image.
@@ -80,6 +98,31 @@ sealed trait Picture:
 
   /** This picture drawn underneath `over`. */
   def under(over: Picture): Picture = Picture.Over(over, this)
+
+  /** The axis-aligned bounding box of this picture, or `None` if it draws nothing. Text is measured with its
+    * font metrics, so labels lay out correctly too.
+    */
+  def bounds: Option[Bounds] = Graphics.boundsOf(this, Affine.identity, Style())
+
+  /** Places `that` immediately to the right of this picture (centres aligned vertically), leaving `gap`
+    * pixels between their bounding boxes. The Doodle-style horizontal layout.
+    */
+  def beside(that: Picture, gap: Double = 8): Picture =
+    (bounds, that.bounds) match
+      case (Some(a), Some(b)) =>
+        Picture.all(Seq(this, that.translate(a.maxX + gap - b.minX, a.centerY - b.centerY)))
+      case (Some(_), None) => this
+      case (None, _) => that
+
+  /** Places `that` immediately below this picture (centres aligned horizontally), leaving `gap` pixels
+    * between their bounding boxes. The Doodle-style vertical layout.
+    */
+  def above(that: Picture, gap: Double = 8): Picture =
+    (bounds, that.bounds) match
+      case (Some(a), Some(b)) =>
+        Picture.all(Seq(this, that.translate(a.centerX - b.centerX, a.maxY + gap - b.minY)))
+      case (Some(_), None) => this
+      case (None, _) => that
 
   /** Translates by `(dx, dy)` pixels. */
   def translate(dx: Double, dy: Double): Picture = Picture.Transformed(this, Affine.translate(dx, dy))
@@ -149,6 +192,119 @@ object Picture:
   def polygon(points: Seq[Point]): Picture = polyline(points, closed = true)
   def text(text: String, at: Point): Picture = Leaf(Prim.Text(text, at))
 
+  /** An ellipse with semi-axes `rx`/`ry`, `rotation` degrees turned. A closed shape, so it fills and dashes
+    * like any polygon (it is drawn as a fine polyline, which keeps the styling uniform).
+    */
+  def ellipse(center: Point, rx: Double, ry: Double, rotation: Double = 0, segments: Int = 64): Picture =
+    polygon(ellipsePoints(center, rx, ry, rotation, 0, 360, segments))
+
+  /** An open elliptical arc from `startDegrees` to `endDegrees` (clockwise, since y is down). */
+  def arc(
+      center: Point,
+      rx: Double,
+      ry: Double,
+      startDegrees: Double,
+      endDegrees: Double,
+      rotation: Double = 0,
+      segments: Int = 48
+  ): Picture =
+    polyline(ellipsePoints(center, rx, ry, rotation, startDegrees, endDegrees, segments), closed = false)
+
+  /** A filled pie slice: the arc from `startDegrees` to `endDegrees` closed back through the centre. */
+  def sector(
+      center: Point,
+      rx: Double,
+      ry: Double,
+      startDegrees: Double,
+      endDegrees: Double,
+      rotation: Double = 0,
+      segments: Int = 48
+  ): Picture =
+    polygon(center +: ellipsePoints(center, rx, ry, rotation, startDegrees, endDegrees, segments))
+
+  /** A rectangle with rounded corners of the given `radius` (clamped to half the shorter side). */
+  def roundedRectangle(rect: Rect, radius: Double): Picture =
+    val r = math.min(radius, math.min(rect.width, rect.height) / 2.0)
+    val l = rect.x.toDouble
+    val t = rect.y.toDouble
+    val rt = (rect.x + rect.width).toDouble
+    val b = (rect.y + rect.height).toDouble
+    val corners = Seq(
+      (Point(rt - r, t + r), 270.0, 360.0), // top-right
+      (Point(rt - r, b - r), 0.0, 90.0), // bottom-right
+      (Point(l + r, b - r), 90.0, 180.0), // bottom-left
+      (Point(l + r, t + r), 180.0, 270.0) // top-left
+    )
+    polygon(corners.flatMap((c, s, e) => ellipsePoints(c, r, r, 0, s, e, 12)))
+
+  /** A cubic Bézier curve through the two endpoints, pulled toward the two control points. */
+  def curve(p0: Point, c0: Point, c1: Point, p1: Point, segments: Int = 32): Picture =
+    polyline((0 to segments).map { i =>
+      val t = i.toDouble / segments
+      val u = 1 - t
+      Point(
+        u * u * u * p0.x + 3 * u * u * t * c0.x + 3 * u * t * t * c1.x + t * t * t * p1.x,
+        u * u * u * p0.y + 3 * u * u * t * c0.y + 3 * u * t * t * c1.y + t * t * t * p1.y
+      )
+    })
+
+  /** A quadratic Bézier curve from `p0` to `p1`, bent toward `control`. */
+  def quadraticCurve(p0: Point, control: Point, p1: Point, segments: Int = 24): Picture =
+    polyline((0 to segments).map { i =>
+      val t = i.toDouble / segments
+      val u = 1 - t
+      Point(
+        u * u * p0.x + 2 * u * t * control.x + t * t * p1.x,
+        u * u * p0.y + 2 * u * t * control.y + t * t * p1.y
+      )
+    })
+
+  /** A text label on a filled background box — the readable way to tag a detection. `at` is the box's
+    * top-left; the box is sized to the text plus `padding` on every side.
+    */
+  def label(
+      text: String,
+      at: Point,
+      textColor: Color = Color.White,
+      background: Color = Color.Black,
+      padding: Int = 4,
+      fontScale: Double = 0.5,
+      font: Font = Font.Simplex
+  ): Picture =
+    val m = Draw.textSize(text, font, fontScale)
+    val w = m.size.width.round.toInt + 2 * padding
+    val h = m.size.height.round.toInt + m.baseline + 2 * padding
+    val box = Rect(at.x.round.toInt, at.y.round.toInt, w, h)
+    val baseline = Point(at.x + padding, at.y + padding + m.size.height)
+    Picture
+      .text(text, baseline)
+      .strokeColor(textColor)
+      .fontScale(fontScale)
+      .font(font)
+      .under(rectangle(box).fillColor(background).noStroke)
+
+  /** Points along an elliptical arc from `startDegrees` to `endDegrees`, rotated `rotation` degrees. */
+  private def ellipsePoints(
+      center: Point,
+      rx: Double,
+      ry: Double,
+      rotation: Double,
+      startDegrees: Double,
+      endDegrees: Double,
+      segments: Int
+  ): Seq[Point] =
+    val rot = math.toRadians(rotation)
+    val cos = math.cos(rot)
+    val sin = math.sin(rot)
+    val a0 = math.toRadians(startDegrees)
+    val a1 = math.toRadians(endDegrees)
+    (0 to segments).map { i =>
+      val a = a0 + (a1 - a0) * i / segments
+      val ex = rx * math.cos(a)
+      val ey = ry * math.sin(a)
+      Point(center.x + ex * cos - ey * sin, center.y + ex * sin + ey * cos)
+    }
+
   /** A filled dot (fill it with a colour; the default is white). */
   def dot(at: Point, radius: Double = 3): Picture = circle(at, radius).fillColor(Color.White).noStroke
 
@@ -189,10 +345,65 @@ object Picture:
   /** Overlays a group of pictures, the first at the bottom. */
   def all(pictures: Seq[Picture]): Picture = pictures.foldLeft(empty)((acc, p) => Over(p, acc))
 
+  /** Lays `pictures` out in a grid of `columns` columns, row by row, with `gap` pixels between cells. Each
+    * cell is the size of the largest picture, so ragged content still aligns.
+    */
+  def grid(pictures: Seq[Picture], columns: Int, gap: Double = 8): Picture =
+    require(columns >= 1, s"a grid needs at least one column, got $columns")
+    if pictures.isEmpty then empty
+    else
+      val bounds = pictures.map(_.bounds)
+      val cellW = bounds.flatten.map(_.width).maxOption.getOrElse(0.0) + gap
+      val cellH = bounds.flatten.map(_.height).maxOption.getOrElse(0.0) + gap
+      all(pictures.zipWithIndex.map { (p, i) =>
+        val col = i % columns
+        val row = i / columns
+        p.bounds match
+          case Some(b) => p.translate(col * cellW - b.minX, row * cellH - b.minY)
+          case None => p
+      })
+
 /** Renders a [[Picture]] onto a Mat. Package-private — the entry point is [[Image.draw]]. */
 private[scalacv] object Graphics:
 
   def renderTo(picture: Picture, mat: Mat): Unit = draw(picture, mat, Style(), Affine.identity)
+
+  /** The bounding box of `picture` under `tf` and `style` (text needs the style's font to be measured). */
+  private[scalacv] def boundsOf(picture: Picture, tf: Affine, style: Style): Option[Bounds] = picture match
+    case Picture.Empty => None
+    case Picture.Over(top, bottom) => union(boundsOf(top, tf, style), boundsOf(bottom, tf, style))
+    case Picture.Styled(child, fn) => boundsOf(child, tf, fn(style))
+    case Picture.Transformed(child, affn) => boundsOf(child, tf.compose(affn), style)
+    case Picture.Leaf(prim) => Some(primBounds(prim, tf, style))
+
+  private def union(a: Option[Bounds], b: Option[Bounds]): Option[Bounds] = (a, b) match
+    case (Some(x), Some(y)) => Some(x.union(y))
+    case (some, None) => some
+    case (None, some) => some
+
+  private def primBounds(prim: Picture.Prim, tf: Affine, style: Style): Bounds =
+    import Picture.Prim.*
+    val local = prim match
+      case Circle(center, radius) =>
+        Seq(
+          Point(center.x - radius, center.y - radius),
+          Point(center.x + radius, center.y + radius)
+        )
+      case Quad(rect) =>
+        Seq(
+          Point(rect.x.toDouble, rect.y.toDouble),
+          Point((rect.x + rect.width).toDouble, (rect.y + rect.height).toDouble)
+        )
+      case Path(points, _) => points
+      case Text(txt, at) =>
+        val m = Draw.textSize(txt, style.font, style.fontScale)
+        Seq(Point(at.x, at.y - m.size.height), Point(at.x + m.size.width, at.y + m.baseline))
+    extentOf(local.map(tf.apply))
+
+  private def extentOf(points: Seq[Point]): Bounds =
+    val xs = points.map(_.x)
+    val ys = points.map(_.y)
+    Bounds(xs.min, ys.min, xs.max, ys.max)
 
   private def draw(picture: Picture, mat: Mat, style: Style, tf: Affine): Unit = picture match
     case Picture.Empty => ()
