@@ -41,7 +41,7 @@ line to add for your OS — the message is meant to be copy-pasted into your bui
 
 ```scala mdoc:compile-only
 def report(e: CvError): String = e match
-  case CvError.NativesMissing(details) => details // the dependency line to add
+  case CvError.NativesMissing(details, _) => details // the dependency line to add
   case other                           => other.getMessage
 ```
 
