@@ -68,6 +68,12 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
     */
   def mat: Mat = handle.get
 
+  /** A copy of this image as a `java.awt.image.BufferedImage` — for AWT/Swing interop and, notably, automatic
+    * display in a notebook (Almond renders a `BufferedImage`). Borrows this image, which stays alive. The
+    * image must be 8-bit; a 4-channel image is flattened to BGR.
+    */
+  def toBufferedImage: java.awt.image.BufferedImage = Interop.toBufferedImage(handle.get)
+
   // -- Detection: borrow, return plain immutable data ----------------------------------------------
 
   /** Every QR code in the image, decoded. Self-contained — builds and frees its own detector. */
@@ -535,6 +541,11 @@ object Image:
     * `Managed` yourself.
     */
   def wrap(handle: Managed[Mat]): Image = apply(handle)
+
+  /** Builds an `Image` from a `java.awt.image.BufferedImage` — the reverse of [[Image.toBufferedImage]], for
+    * pulling a frame in from AWT/Swing, `ImageIO`, or a notebook. Always produces a 3-channel BGR image.
+    */
+  def fromBufferedImage(image: java.awt.image.BufferedImage): Image = wrap(Managed(Interop.toMat(image)))
 
   /** A blank canvas, filled with `color`. `channels` is 1, 3 or 4. */
   def blank(width: Int, height: Int, color: Scalar = Scalar.Black, channels: Int = 3): Image =

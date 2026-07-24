@@ -823,6 +823,7 @@ final class scalacv.Image
   def threshold$default$2(): double
   def threshold$default$3(): scalacv.Threshold
   def threshold(double, double, scalacv.Threshold): scalacv.Image
+  def toBufferedImage(): java.awt.image.BufferedImage
   def toHsv(): scalacv.Image
   def toString(): java.lang.String
   def width(): int
@@ -969,6 +970,28 @@ final class scalacv.MarkerPose
   def productElementName(int): java.lang.String
   def productPrefix(): java.lang.String
   def toString(): java.lang.String
+final class scalacv.ModelSpec
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(java.lang.String, scala.collection.immutable.Seq<java.lang.String>, scala.Option<java.lang.String>): void
+  def _1(): java.lang.String
+  def _2(): scala.collection.immutable.Seq<java.lang.String>
+  def _3(): scala.Option<java.lang.String>
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): java.lang.String
+  def copy$default$2(): scala.collection.immutable.Seq<java.lang.String>
+  def copy$default$3(): scala.Option<java.lang.String>
+  def copy(java.lang.String, scala.collection.immutable.Seq<java.lang.String>, scala.Option<java.lang.String>): scalacv.ModelSpec
+  def equals(java.lang.Object): boolean
+  def fileName(): java.lang.String
+  def hashCode(): int
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def sha256(): scala.Option<java.lang.String>
+  def toString(): java.lang.String
+  def urls(): scala.collection.immutable.Seq<java.lang.String>
 final class scalacv.Motion
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -2381,6 +2404,7 @@ object scalacv.Image
   def blank(int, int, scalacv.Scalar, int): scalacv.Image
   def decode$default$2(): scalacv.ImreadFlags
   def decode(byte[], scalacv.ImreadFlags): scala.util.Either<scalacv.CvError, scalacv.Image>
+  def fromBufferedImage(java.awt.image.BufferedImage): scalacv.Image
   def read$default$2(): scalacv.ImreadFlags
   def read(java.lang.String, scalacv.ImreadFlags): scala.util.Either<scalacv.CvError, scalacv.Image>
   def reading$default$2<A>(): scalacv.ImreadFlags
@@ -2431,6 +2455,11 @@ object scalacv.ImreadFlags.Modifier
   static val IgnoreOrientation: scalacv.ImreadFlags$Modifier
   static val ReducedHalf: scalacv.ImreadFlags$Modifier
   static val ReducedQuarter: scalacv.ImreadFlags$Modifier
+object scalacv.Interop
+  extends java.lang.Object
+  implements java.io.Serializable
+  def toBufferedImage(org.opencv.core.Mat): java.awt.image.BufferedImage
+  def toMat(java.awt.image.BufferedImage): org.opencv.core.Mat
 object scalacv.Interpolation
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Sum
@@ -2520,6 +2549,20 @@ object scalacv.Mats
   def chain(org.opencv.core.Mat, scala.collection.immutable.Seq<scala.Function1<org.opencv.core.Mat, scalacv.Managed<org.opencv.core.Mat>>>): scalacv.Managed<org.opencv.core.Mat>
   def produce(java.lang.String, scala.Function1<org.opencv.core.Mat, scala.runtime.BoxedUnit>): scalacv.Managed<org.opencv.core.Mat>
   def requireKernel(java.lang.String, scalacv.Size, boolean): void
+object scalacv.ModelSpec
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def <init>$default$3(): scala.Option<java.lang.String>
+  def apply(java.lang.String, scala.collection.immutable.Seq<java.lang.String>, scala.Option<java.lang.String>): scalacv.ModelSpec
+  def fromProduct(scala.Product): scalacv.ModelSpec
+  def toString(): java.lang.String
+  def unapply(scalacv.ModelSpec): scalacv.ModelSpec
+object scalacv.Models
+  extends java.lang.Object
+  implements java.io.Serializable
+  def SFace(): scalacv.ModelSpec
+  def YuNet(): scalacv.ModelSpec
+  def fetch(scalacv.ModelSpec, java.nio.file.Path): scala.util.Either<scalacv.CvError, java.nio.file.Path>
 object scalacv.MorphOp
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Sum

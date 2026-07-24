@@ -75,6 +75,7 @@ export default defineConfig({
         { text: 'Working with the raw OpenCV API', link: '/low-level' }
       ]},
       { text: 'Integrations', items: [
+        { text: 'Notebooks & interop', link: '/notebooks' },
         { text: 'ZIO', link: '/zio' }
       ]}
     ],
