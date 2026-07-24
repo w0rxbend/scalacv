@@ -11,6 +11,12 @@ Scala 3 wrapper for OpenCV 4.13 (official Java API via bytedeco javacpp-presets)
   breaks the build.
 - JDK 17+. Natives: `OpenCv.load()` → `cacheResources` + `loadGlobal` + `System.load` (see `OpenCv.scala`).
   `Loader.load(classOf[opencv_java])` does **not** work headless — do not "simplify" to it.
+- Unpublished modules: `examples`/`examples-gui` (headless / JavaFX demos), and **`benchmarks`** — a
+  JNI-aware perf harness (`./mill benchmarks.runMain scalacv.bench.<Name>`). Not JMH (its annotation
+  processor is awkward under Mill 1.1.7 + natives): `Bench` does warmup + many iterations + 95% CI +
+  blackhole; `BenchImages.hash` is the pixel-exact regression key. See `PERF-scalacv.md`. The perf rule:
+  **no optimization without a benchmark delta and a bit-identical output hash** — micro `µs` are
+  machine-specific, deltas reproduce.
 
 ## Conventions
 - Scala 3.3.x LTS (currently 3.3.8) — deliberately **not** "latest": TASTy is not forward-compatible, so a

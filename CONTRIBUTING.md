@@ -49,6 +49,23 @@ keeps image licensing out of the project entirely, which is why `Lena.png` is go
 **Nothing GUI in `core`.** No `highgui`, no JavaFX, no AWT. `examples-gui` is the one place
 a toolkit may appear, and it is never built in CI or published.
 
+## Benchmarking
+
+Performance work lives in the unpublished `benchmarks` module and follows one rule: **no
+optimization ships without a benchmark that shows it wins and a hash that shows the output
+did not change.**
+
+```sh
+./mill benchmarks.runMain scalacv.bench.ToMatBench   # and ToBufferedImageBench, GrayBlurCloneBench, …
+```
+
+`Bench` warms the JIT, measures many iterations, and reports a mean with a 95% CI (it is a
+plain-JVM harness, not JMH — the annotation processor is awkward under Mill 1.1.7 + the
+natives, and the wins here are large next to timer noise). `BenchImages.hash` is the
+pixel-exact regression key: an optimized path must hash identically to the baseline unless a
+deviation is intentional and documented. Absolute `µs` are machine-specific — quote the
+delta, and put it in the commit message. See `PERF-scalacv.md` for the standing report.
+
 ## Commits
 
 Conventional commits (`feat:`, `fix:`, `build:`, `docs:`, `test:`, `chore:`).
