@@ -25,7 +25,8 @@
 - **Resource-safe by construction.** `Managed[A]` releases exactly once and throws on use-after-release, in Scala, before anything reaches JNI — where the same mistake is a SIGSEGV with no stack trace.
 - **Genuinely headless.** `OpenCv.load()` needs no GUI toolkit and no `apt-get` on any runner.
 - **Errors as values where they belong.** `Either[CvError, A]` for the failures you can expect; exceptions for the bugs you cannot.
-- **Two levels, one library.** A high-level `Image` pipeline for the common cases, and the full typed `org.opencv.*` surface underneath — ArUco, QR, YuNet face detection, ONNX inference, and everything else — never hidden.
+- **Two levels, one library.** A high-level `Image` pipeline for the common cases, and the full typed `org.opencv.*` surface underneath — never hidden.
+- **Batteries included.** Filters and morphology, geometric transforms, drawing, contours and Hough, colour segmentation; Haar/YuNet faces, QR, ArUco, ONNX inference; a high-level `Camera`/`Recorder`; **motion detection** for a static/MJPEG cam; and **pose estimation** — skeletons, hands, and head pose.
 
 ## 🚀 Quick start
 

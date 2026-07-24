@@ -47,6 +47,8 @@ export default defineConfig({
       ]},
       { text: 'Detection & deep learning', items: [
         { text: 'Object detection', link: '/object-detection' },
+        { text: 'Motion detection', link: '/motion-detection' },
+        { text: 'Pose estimation', link: '/pose-estimation' },
         { text: 'Deep learning (DNN)', link: '/dnn' }
       ]},
       { text: 'Video & runtime', items: [
