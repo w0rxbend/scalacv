@@ -263,6 +263,26 @@ object examples extends ScalacvModule {
   }
 }
 
+/** Performance benchmarks. Never published and never a CI gate — a developer-facing harness for
+  * measuring the wins the perf work claims. Depends on all three published modules plus the natives,
+  * and reuses the same JVM flags as `examples`. Run with `./mill benchmarks.runMain scalacv.bench.<Name>`.
+  *
+  * Deliberately a plain-JVM harness rather than JMH: JMH's compile-time annotation processor is
+  * awkward to wire into Mill 1.1.7 alongside the JNI natives, and the wins measured here (whole-Mat
+  * allocations and full-image pixel copies eliminated) are large relative to timer noise. The harness
+  * does proper warmup, many measurement iterations, steady-state coefficient-of-variation reporting and
+  * blackhole consumption to defeat dead-code elimination — see `Bench.scala`.
+  */
+object benchmarks extends ScalacvModule {
+  def moduleDeps = Seq(core, vision, graphs)
+  def mvnDeps    = Deps.opencvNatives
+  def forkArgs = Task {
+    // -Djava.awt.headless keeps toBufferedImage benchmarks from opening a window; the GC/JIT flags
+    // below are printed by the harness so a run is reproducible.
+    Deps.runtimeJvmArgs(jvmMajor()) :+ "-Djava.awt.headless=true"
+  }
+}
+
 /** JavaFX examples. Deliberately excluded from CI and never published: OpenJFX resolves
   * per-host through the `<os>` profile in its parent POM, so this module only ever builds
   * for the machine it is built on.
