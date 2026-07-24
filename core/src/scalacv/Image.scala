@@ -461,6 +461,15 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
         val pts = Ar.project(Ar.cubeCorners(cube), mp.pose, intrinsics)
         Ar.cubeEdges.foreach((a, b) => m.drawLine(pts(a), pts(b), color, Thickness.Stroke(2)))
 
+  /** Annotates [[ObjectTrack]]s: a box and an `#id` label per track — the one-call "show me what the tracker
+    * is following". Consumes this image and returns the annotated one.
+    */
+  def drawTracks(tracks: Seq[ObjectTrack], color: Scalar = Scalar.Green): Image =
+    paint: m =>
+      tracks.foreach: t =>
+        m.drawRect(t.box, color)
+        m.drawText(s"#${t.id}", Point(t.box.x.toDouble, (t.box.y - 5).toDouble), color, scale = 0.5)
+
   // -- Terminals: consume this Image and release ---------------------------------------------------
 
   /** Writes to `path`, choosing the encoder from its extension, then releases. */

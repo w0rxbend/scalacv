@@ -140,6 +140,10 @@ abstract class scalacv.Threshold.Mode
   implements scala.Product, scala.reflect.Enum
   def <init>(int): void
   def cvValue(): int
+abstract class scalacv.TrackerKind
+  extends java.lang.Object
+  implements scala.Product, scala.reflect.Enum
+  def <init>(): void
 final class scalacv.Affine
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -658,6 +662,8 @@ final class scalacv.Image
   def drawText$default$3(): scalacv.Scalar
   def drawText$default$4(): double
   def drawText(java.lang.String, scalacv.Point, scalacv.Scalar, double): scalacv.Image
+  def drawTracks$default$2(): scalacv.Scalar
+  def drawTracks(scala.collection.immutable.Seq<scalacv.ObjectTrack>, scalacv.Scalar): scalacv.Image
   def edgePreserving$default$1(): float
   def edgePreserving$default$2(): float
   def edgePreserving(float, float): scalacv.Image
@@ -784,6 +790,13 @@ final class scalacv.Intrinsics
   def productElementName(int): java.lang.String
   def productPrefix(): java.lang.String
   def toString(): java.lang.String
+final class scalacv.Kalman
+  extends java.lang.Object
+  implements java.lang.AutoCloseable
+  def <init>(scalacv.Managed<org.opencv.video.KalmanFilter>): void
+  def close(): void
+  def correct(scalacv.Point): scalacv.Point
+  def predict(): scalacv.Point
 final class scalacv.Keypoint
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -907,6 +920,53 @@ final class scalacv.MotionDetector.FrameDiff
   def close(): void
   def detect(scalacv.Image): scalacv.Motion
   def reset(): void
+final class scalacv.ObjectTrack
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(int, scalacv.Rect, int, int): void
+  def _1(): int
+  def _2(): scalacv.Rect
+  def _3(): int
+  def _4(): int
+  def age(): int
+  def box(): scalacv.Rect
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): int
+  def copy$default$2(): scalacv.Rect
+  def copy$default$3(): int
+  def copy$default$4(): int
+  def copy(int, scalacv.Rect, int, int): scalacv.ObjectTrack
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def hits(): int
+  def id(): int
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def toString(): java.lang.String
+final class scalacv.ObjectTracker
+  extends java.lang.Object
+  implements java.lang.AutoCloseable
+  def <init>(double, int, int): void
+  def close(): void
+  def count(): int
+  def update(scala.collection.immutable.Seq<scalacv.Rect>): scala.collection.immutable.Seq<scalacv.ObjectTrack>
+final class scalacv.ObjectTracker.Trk
+  extends java.lang.Object
+  def <init>(int, scalacv.Kalman, scala.Tuple2<java.lang.Object, java.lang.Object>, scalacv.Rect, int, int, int): void
+  def age(): int
+  def age_$eq(int): void
+  def box(): scalacv.Rect
+  def box_$eq(scalacv.Rect): void
+  def hits(): int
+  def hits_$eq(int): void
+  def id(): int
+  def kalman(): scalacv.Kalman
+  def size(): scala.Tuple2<java.lang.Object, java.lang.Object>
+  def size_$eq(scala.Tuple2<java.lang.Object, java.lang.Object>): void
+  def timeSinceUpdate(): int
+  def timeSinceUpdate_$eq(int): void
 final class scalacv.Obstacle
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -1569,6 +1629,13 @@ final class scalacv.Track
   def productPrefix(): java.lang.String
   def to(): scalacv.Point
   def toString(): java.lang.String
+final class scalacv.Tracker
+  extends java.lang.Object
+  implements java.lang.AutoCloseable
+  def <init>(scalacv.Managed<org.opencv.video.Tracker>): void
+  def close(): void
+  def init(scalacv.Image, scalacv.Rect): void
+  def update(scalacv.Image): scala.Option<scalacv.Rect>
 final class scalacv.Video.FrameIterator
   extends java.lang.Object
   implements scala.collection.Iterator<org.opencv.core.Mat>
@@ -2250,6 +2317,12 @@ object scalacv.Intrinsics
   def approx(scalacv.Size, double): scalacv.Intrinsics
   def fromProduct(scala.Product): scalacv.Intrinsics
   def unapply(scalacv.Intrinsics): scalacv.Intrinsics
+object scalacv.Kalman
+  extends java.lang.Object
+  implements java.io.Serializable
+  def point$default$2(): double
+  def point$default$3(): double
+  def point(scalacv.Point, double, double): scalacv.Kalman
 object scalacv.Keypoint
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -2372,6 +2445,22 @@ object scalacv.Navigator
   def steer$default$2(): double
   def steer$default$3(): double
   def steer(scalacv.Image, double, double): scalacv.Guidance
+object scalacv.ObjectTrack
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def apply(int, scalacv.Rect, int, int): scalacv.ObjectTrack
+  def fromProduct(scala.Product): scalacv.ObjectTrack
+  def toString(): java.lang.String
+  def unapply(scalacv.ObjectTrack): scalacv.ObjectTrack
+object scalacv.ObjectTracker
+  extends java.lang.Object
+  implements java.io.Serializable
+  def <init>$default$1(): double
+  def <init>$default$2(): int
+  def <init>$default$3(): int
+  def iou(scalacv.Rect, scalacv.Rect): double
+  def scalacv$ObjectTracker$$$center(scalacv.Rect): scalacv.Point
+  def scalacv$ObjectTracker$$$centeredRect(scalacv.Point, scala.Tuple2<java.lang.Object, java.lang.Object>): scalacv.Rect
 object scalacv.Obstacle
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -2934,6 +3023,20 @@ object scalacv.Track
   def fromProduct(scala.Product): scalacv.Track
   def toString(): java.lang.String
   def unapply(scalacv.Track): scalacv.Track
+object scalacv.Tracker
+  extends java.lang.Object
+  implements java.io.Serializable
+  def create(scalacv.TrackerKind): scalacv.Tracker
+object scalacv.TrackerKind
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Sum
+  def fromOrdinal(int): scalacv.TrackerKind
+  def ordinal(scalacv.TrackerKind): int
+  def valueOf(java.lang.String): scalacv.TrackerKind
+  def values(): scalacv.TrackerKind[]
+  static val Csrt: scalacv.TrackerKind
+  static val Kcf: scalacv.TrackerKind
+  static val Mil: scalacv.TrackerKind
 object scalacv.Video
   extends java.lang.Object
   implements java.io.Serializable
