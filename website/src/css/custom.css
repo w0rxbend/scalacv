@@ -1,30 +1,70 @@
 /**
- * Any CSS included here will be global. The classic template
- * bundles Infima by default. Infima is a CSS framework designed to
- * work well for content-centric websites.
+ * Global styles. Docusaurus bundles Infima; this file works WITH Infima's `--ifm-*` custom
+ * properties rather than against them, and defines `--scv-*` tokens for what Infima doesn't cover.
+ * Every decision here is recorded with a rationale in DESIGN.md.
  */
 
-/* You can override the default Infima variables here. */
 :root {
-  --ifm-color-primary: #2e8555;
-  --ifm-color-primary-dark: #29784c;
-  --ifm-color-primary-darker: #277148;
-  --ifm-color-primary-darkest: #205d3b;
-  --ifm-color-primary-light: #33925d;
-  --ifm-color-primary-lighter: #359962;
-  --ifm-color-primary-lightest: #3cad6e;
-  --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  /* Brand red, from the logo (Solarized red #DC322F), darkened to #bb2a22 so link text clears
+     WCAG AA (6.06:1 on white) instead of the borderline 4.63:1 of the raw brand red. */
+  --ifm-color-primary: #bb2a22;
+  --ifm-color-primary-dark: #a8261f;
+  --ifm-color-primary-darker: #9e241d;
+  --ifm-color-primary-darkest: #821e18;
+  --ifm-color-primary-light: #ce322a;
+  --ifm-color-primary-lighter: #d43c33;
+  --ifm-color-primary-lightest: #dd6a64;
+
+  /* Code is the dominant visual element on this site; 92% keeps dense signatures readable without
+     dwarfing prose. */
+  --ifm-code-font-size: 92%;
+  --docusaurus-highlighted-code-line-bg: rgba(187, 42, 34, 0.08);
+
+  /* ~68ch measure for body prose — within the 65–75ch legibility band. */
+  --scv-content-measure: 46rem;
 }
 
-/* For readability concerns, you should choose a lighter palette in dark mode. */
 [data-theme='dark'] {
-  --ifm-color-primary: #25c2a0;
-  --ifm-color-primary-dark: #21af90;
-  --ifm-color-primary-darker: #1fa588;
-  --ifm-color-primary-darkest: #1a8870;
-  --ifm-color-primary-light: #29d5b0;
-  --ifm-color-primary-lighter: #32d8b4;
-  --ifm-color-primary-lightest: #4fddbf;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+  /* Lightened brand red for dark surfaces: 6.36:1 on Infima's #1b1b1d. */
+  --ifm-color-primary: #ef7b76;
+  --ifm-color-primary-dark: #ec605a;
+  --ifm-color-primary-darker: #ea534c;
+  --ifm-color-primary-darkest: #e42f26;
+  --ifm-color-primary-light: #f29692;
+  --ifm-color-primary-lighter: #f4a39f;
+  --ifm-color-primary-lightest: #f8c8c6;
+
+  --docusaurus-highlighted-code-line-bg: rgba(239, 123, 118, 0.12);
+}
+
+/* Keep long-form prose within a comfortable measure; wide elements (tables, code, diagrams)
+   are exempt so they can use the full column and scroll on their own. */
+.markdown > p,
+.markdown > ul,
+.markdown > ol,
+.markdown > blockquote {
+  max-width: var(--scv-content-measure);
+}
+
+/* Code blocks: a touch more vertical breathing room. Horizontal scroll stays inside the block,
+   never the page. */
+div[class^='codeBlockContainer'] {
+  --ifm-pre-padding: 0.9rem 1rem;
+}
+
+/* Inline code should read as code, not as a red button — mute it against the brand link color. */
+:not(pre) > code {
+  border: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-color-emphasis-100);
+  color: inherit;
+}
+
+/* Motion: keep transitions short and respect reduced-motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }
