@@ -13,7 +13,8 @@ scope. Knowing where that line falls is half the battle:
 | **Localization** | [`Localizer`](#localization-against-a-map) — absolute pose via `solvePnP`; [`Features`](#features--matching) to match a map | a map to localize against |
 | **Obstacle detection** | [`StereoDepth`](#stereo-depth--obstacles) + `Obstacles` | — |
 | **Navigation** | [`Navigator`](#reactive-navigation) — reactive obstacle-avoidance steering | a map, a goal, a planner |
-| **Full SLAM** | all of the above as the front end | keyframe graph, loop closure, bundle adjustment |
+| **Mapping** | [`LoopDetector`](#mapping-loop-closure--occupancy) — revisit detection; [`OccupancyGrid`](#mapping-loop-closure--occupancy) | — |
+| **Full SLAM** | all of the above as the front end | pose-graph optimisation, bundle adjustment |
 
 ```scala mdoc:invisible
 import scalacv.*
@@ -148,10 +149,46 @@ try Camera.usingFile("drive.mp4")(_.foreach()(frame => odometry.update(frame).fo
 finally odometry.close()
 ```
 
+## Mapping: loop closure & occupancy
+
+Two pieces move the front end toward an actual map.
+
+**Loop closure.** `LoopDetector` keeps each keyframe's [`Features`](#features--matching) and flags when a new
+frame revisits an old place — the cue that lets a back end cancel accumulated drift:
+
+```scala mdoc
+{
+  def place(seed: Int): Image =
+    val r = new scala.util.Random(seed)
+    Image.blank(220, 180, Scalar(30, 30, 30)).drawRects(
+      Seq.fill(7)(Rect(10 + r.nextInt(170), 10 + r.nextInt(130), 18 + r.nextInt(16), 18 + r.nextInt(16))),
+      Scalar.White, Thickness.Filled)
+  val loops = LoopDetector(minMatches = 25, recentExclusion = 2)
+  try
+    (1 to 5).foreach(s => { val p = place(s); try loops.process(p) finally p.close() })
+    val revisit = place(1) // revisit the very first place
+    val closure = try loops.detect(revisit).map(l => s"loop to keyframe ${l.keyframe}, ${l.matches} matches") finally revisit.close()
+    closure.getOrElse("no loop")
+  finally loops.close()
+}
+```
+
+**Occupancy grid.** `OccupancyGrid` accumulates free/occupied evidence into a top-down log-odds map. A range
+reading marks the ray to an obstacle as free and its endpoint as occupied; `toImage` renders the map:
+
+```scala mdoc
+{
+  val grid = OccupancyGrid(cols = 60, rows = 60, resolution = 0.1)
+  grid.observe(0.0, 0.0, 2.0, 0.0) // sensor at origin, obstacle 2m ahead
+  s"ahead occupied ${grid.isOccupied(2.0, 0.0)}, 1m out free ${!grid.isOccupied(1.0, 0.0)}"
+}
+```
+
 ## Where OpenCV ends
 
-Everything above is per-frame or per-pair — no memory of the world. A real SLAM system adds a **back end**:
-keyframes and a pose graph, loop-closure detection to recognise revisited places, and bundle adjustment to
-optimise the whole trajectory and map jointly. Those belong to dedicated libraries. scalacv gives you the
-visual front end that feeds them — clean, typed, and resource-safe — which is exactly the part that has to run
-on every frame.
+The front end now reaches quite far: it tracks, estimates motion, localizes against a map, detects revisited
+places, and builds an occupancy grid. What remains is the **global optimisation** — taking the keyframes, the
+loop closures, and the odometry constraints and solving for the trajectory and map that best fit them all
+(pose-graph optimisation, bundle adjustment). That is a nonlinear-least-squares back end (g2o, GTSAM,
+Ceres), not computer vision, and belongs to those libraries. scalacv gives you every per-frame piece that
+feeds them — clean, typed, and resource-safe.
