@@ -590,6 +590,8 @@ final class scalacv.Image
   def adjust$default$2(): double
   def adjust(double, double): scalacv.Image
   def applyMask(scalacv.Image): scalacv.Image
+  def arMarkers$default$3(): scalacv.ArucoDictionary
+  def arMarkers(scalacv.Intrinsics, double, scalacv.ArucoDictionary): scala.collection.immutable.Seq<scalacv.MarkerPose>
   def arucoMarkers$default$1(): scalacv.ArucoDictionary
   def arucoMarkers(scalacv.ArucoDictionary): scala.collection.immutable.Seq<scalacv.ArucoMarker>
   def bilateralFilter$default$1(): int
@@ -636,6 +638,13 @@ final class scalacv.Image
   def drawContours$default$2(): scalacv.Scalar
   def drawContours$default$3(): scalacv.Thickness
   def drawContours(scala.collection.immutable.Seq<scalacv.Contour>, scalacv.Scalar, scalacv.Thickness): scalacv.Image
+  def drawMarkerAxes$default$3(): scalacv.ArucoDictionary
+  def drawMarkerAxes$default$4(): double
+  def drawMarkerAxes(scalacv.Intrinsics, double, scalacv.ArucoDictionary, double): scalacv.Image
+  def drawMarkerCube$default$3(): scalacv.ArucoDictionary
+  def drawMarkerCube$default$4(): scalacv.Scalar
+  def drawMarkerCube$default$5(): double
+  def drawMarkerCube(scalacv.Intrinsics, double, scalacv.ArucoDictionary, scalacv.Scalar, double): scalacv.Image
   def drawRect$default$2(): scalacv.Scalar
   def drawRect$default$3(): scalacv.Thickness
   def drawRect(scalacv.Rect, scalacv.Scalar, scalacv.Thickness): scalacv.Image
@@ -745,6 +754,36 @@ final class scalacv.ImreadFlags
   def productElementName(int): java.lang.String
   def productPrefix(): java.lang.String
   def toString(): java.lang.String
+final class scalacv.Intrinsics
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(double, double, double, double, scala.collection.immutable.Seq<java.lang.Object>): void
+  def _1(): double
+  def _2(): double
+  def _3(): double
+  def _4(): double
+  def _5(): scala.collection.immutable.Seq<java.lang.Object>
+  def cameraMatrix(): org.opencv.core.Mat
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): double
+  def copy$default$2(): double
+  def copy$default$3(): double
+  def copy$default$4(): double
+  def copy$default$5(): scala.collection.immutable.Seq<java.lang.Object>
+  def copy(double, double, double, double, scala.collection.immutable.Seq<java.lang.Object>): scalacv.Intrinsics
+  def cx(): double
+  def cy(): double
+  def distCoeffs(): org.opencv.core.MatOfDouble
+  def distortion(): scala.collection.immutable.Seq<java.lang.Object>
+  def equals(java.lang.Object): boolean
+  def fx(): double
+  def fy(): double
+  def hashCode(): int
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def toString(): java.lang.String
 final class scalacv.Keypoint
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -809,6 +848,27 @@ final class scalacv.Managed<A>
   def take(): A
   def toString(): java.lang.String
   def use<B>(scala.Function1<A, B>): B
+final class scalacv.MarkerPose
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(scalacv.ArucoMarker, scalacv.Pose3D): void
+  def _1(): scalacv.ArucoMarker
+  def _2(): scalacv.Pose3D
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): scalacv.ArucoMarker
+  def copy$default$2(): scalacv.Pose3D
+  def copy(scalacv.ArucoMarker, scalacv.Pose3D): scalacv.MarkerPose
+  def distance(): double
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def id(): int
+  def marker(): scalacv.ArucoMarker
+  def pose(): scalacv.Pose3D
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def toString(): java.lang.String
 final class scalacv.Motion
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -1097,6 +1157,29 @@ final class scalacv.Point
   def toString(): java.lang.String
   def x(): double
   def y(): double
+final class scalacv.Point3
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(double, double, double): void
+  def _1(): double
+  def _2(): double
+  def _3(): double
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): double
+  def copy$default$2(): double
+  def copy$default$3(): double
+  def copy(double, double, double): scalacv.Point3
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def toCv(): org.opencv.core.Point3
+  def toString(): java.lang.String
+  def x(): double
+  def y(): double
+  def z(): double
 final class scalacv.PolarLine
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -1164,6 +1247,28 @@ final class scalacv.Pose
   def productPrefix(): java.lang.String
   def toString(): java.lang.String
   def topology(): scalacv.PoseTopology
+final class scalacv.Pose3D
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(scala.collection.immutable.Seq<java.lang.Object>, scala.collection.immutable.Seq<java.lang.Object>): void
+  def _1(): scala.collection.immutable.Seq<java.lang.Object>
+  def _2(): scala.collection.immutable.Seq<java.lang.Object>
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): scala.collection.immutable.Seq<java.lang.Object>
+  def copy$default$2(): scala.collection.immutable.Seq<java.lang.Object>
+  def copy(scala.collection.immutable.Seq<java.lang.Object>, scala.collection.immutable.Seq<java.lang.Object>): scalacv.Pose3D
+  def distance(): double
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def rvec(): scala.collection.immutable.Seq<java.lang.Object>
+  def rvecMat(): org.opencv.core.Mat
+  def toString(): java.lang.String
+  def tvec(): scala.collection.immutable.Seq<java.lang.Object>
+  def tvecMat(): org.opencv.core.Mat
 final class scalacv.PoseTopology
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -1499,6 +1604,13 @@ object scalacv.Animation
   def record$default$6(): scalacv.Color
   def record$default$7(): scalacv.Codec
   def record(java.lang.String, int, int, int, double, scalacv.Color, scalacv.Codec, scala.Function1<java.lang.Object, scalacv.Picture>): scala.util.Either<scalacv.CvError, java.lang.Object>
+object scalacv.Ar
+  extends java.lang.Object
+  implements java.io.Serializable
+  def cubeCorners(double): scala.collection.immutable.Seq<scalacv.Point3>
+  def cubeEdges(): scala.collection.immutable.Seq<scala.Tuple2<java.lang.Object, java.lang.Object>>
+  def estimatePose(scalacv.ArucoMarker, double, scalacv.Intrinsics): scala.Option<scalacv.Pose3D>
+  def project(scala.collection.immutable.Seq<scalacv.Point3>, scalacv.Pose3D, scalacv.Intrinsics): scala.collection.immutable.Seq<scalacv.Point>
 object scalacv.Aruco
   extends java.lang.Object
   implements java.io.Serializable
@@ -2129,6 +2241,15 @@ object scalacv.Interpolation
   static val Lanczos4: scalacv.Interpolation
   static val Linear: scalacv.Interpolation
   static val Nearest: scalacv.Interpolation
+object scalacv.Intrinsics
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def <init>$default$5(): scala.collection.immutable.Seq<java.lang.Object>
+  def apply(double, double, double, double, scala.collection.immutable.Seq<java.lang.Object>): scalacv.Intrinsics
+  def approx$default$2(): double
+  def approx(scalacv.Size, double): scalacv.Intrinsics
+  def fromProduct(scala.Product): scalacv.Intrinsics
+  def unapply(scalacv.Intrinsics): scalacv.Intrinsics
 object scalacv.Keypoint
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -2178,6 +2299,13 @@ object scalacv.Managed
   implements java.io.Serializable
   def apply<A>(A, scalacv.Releasable<A>): scalacv.Managed<A>
   def use<A, B>(scala.Function0<A>, scala.Function1<A, B>, scalacv.Releasable<A>): B
+object scalacv.MarkerPose
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def apply(scalacv.ArucoMarker, scalacv.Pose3D): scalacv.MarkerPose
+  def fromProduct(scala.Product): scalacv.MarkerPose
+  def toString(): java.lang.String
+  def unapply(scalacv.MarkerPose): scalacv.MarkerPose
 object scalacv.Mats
   extends java.lang.Object
   implements java.io.Serializable
@@ -2545,6 +2673,13 @@ object scalacv.Point
   def from(org.opencv.core.Point): scalacv.Point
   def fromProduct(scala.Product): scalacv.Point
   def unapply(scalacv.Point): scalacv.Point
+object scalacv.Point3
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def apply(double, double, double): scalacv.Point3
+  def from(org.opencv.core.Point3): scalacv.Point3
+  def fromProduct(scala.Product): scalacv.Point3
+  def unapply(scalacv.Point3): scalacv.Point3
 object scalacv.PolarLine
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -2566,6 +2701,13 @@ object scalacv.Pose
   def fromProduct(scala.Product): scalacv.Pose
   def toString(): java.lang.String
   def unapply(scalacv.Pose): scalacv.Pose
+object scalacv.Pose3D
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def apply(scala.collection.immutable.Seq<java.lang.Object>, scala.collection.immutable.Seq<java.lang.Object>): scalacv.Pose3D
+  def fromProduct(scala.Product): scalacv.Pose3D
+  def toString(): java.lang.String
+  def unapply(scalacv.Pose3D): scalacv.Pose3D
 object scalacv.PoseEstimator
   extends java.lang.Object
   implements java.io.Serializable

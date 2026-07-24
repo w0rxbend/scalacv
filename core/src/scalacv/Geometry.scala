@@ -13,6 +13,12 @@ import org.opencv.core as cv
 final case class Point(x: Double, y: Double):
   private[scalacv] def toCv: cv.Point = cv.Point(x, y)
 
+/** A point in 3D space — a model coordinate for [[Ar]] pose work, in the same units you give a marker's side
+  * length (metres is the usual choice). `z` points out of the marker plane toward the camera.
+  */
+final case class Point3(x: Double, y: Double, z: Double):
+  private[scalacv] def toCv: cv.Point3 = cv.Point3(x, y, z)
+
 final case class Size(width: Double, height: Double):
   require(width >= 0 && height >= 0, s"a Size cannot be negative: ${width}x$height")
   private[scalacv] def toCv: cv.Size = cv.Size(width, height)
@@ -30,6 +36,9 @@ final case class Scalar(v0: Double, v1: Double = 0, v2: Double = 0, v3: Double =
 
 object Point:
   private[scalacv] def from(p: cv.Point): Point = Point(p.x, p.y)
+
+object Point3:
+  private[scalacv] def from(p: cv.Point3): Point3 = Point3(p.x, p.y, p.z)
 
 object Size:
   private[scalacv] def from(s: cv.Size): Size = Size(s.width, s.height)

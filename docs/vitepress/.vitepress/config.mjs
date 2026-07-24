@@ -60,7 +60,8 @@ export default defineConfig({
         { text: 'OCR', link: '/ocr' }
       ]},
       { text: 'Robotics & 3D vision', items: [
-        { text: 'Visual navigation & SLAM', link: '/navigation' }
+        { text: 'Visual navigation & SLAM', link: '/navigation' },
+        { text: 'Marker AR', link: '/marker-ar' }
       ]},
       { text: 'Video & runtime', items: [
         { text: 'Video & the camera', link: '/video' },

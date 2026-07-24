@@ -77,6 +77,19 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
   def arucoMarkers(dictionary: ArucoDictionary = ArucoDictionary.Dict4x4_50): Seq[ArucoMarker] =
     Aruco.detect(handle.get, dictionary)
 
+  /** Detects every marker and recovers its 3D [[Pose3D]] in one step — the query behind marker AR.
+    * `markerLength` is the tag's real side length (metres, conventionally); `intrinsics` is the camera model
+    * ([[Intrinsics.approx]] if you have not calibrated). Markers whose pose fails to solve are dropped.
+    */
+  def arMarkers(
+      intrinsics: Intrinsics,
+      markerLength: Double,
+      dictionary: ArucoDictionary = ArucoDictionary.Dict4x4_50
+  ): Seq[MarkerPose] =
+    Aruco
+      .detect(handle.get, dictionary)
+      .flatMap(m => Ar.estimatePose(m, markerLength, intrinsics).map(MarkerPose(m, _)))
+
   /** Contours of a binary image — see the mid-level `findContours` for the retrieval/approximation knobs. */
   def contours(
       retrieval: ContourRetrieval = ContourRetrieval.External,
@@ -407,6 +420,46 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
     paint: m =>
       pose.bones(minScore).foreach((a, b) => m.drawLine(a, b, color, Thickness.Stroke(2)))
       pose.confident(minScore).foreach(kp => m.drawCircle(kp.point, 3, jointColor, Thickness.Filled))
+
+  /** Draws a 3D coordinate frame at every marker's pose — the classic "is my pose right?" overlay. X is red,
+    * Y green, Z blue (pointing out of the tag toward the camera). `markerLength` is the tag's real side; the
+    * axes are drawn at `axisLength` (defaulting to half the side).
+    */
+  def drawMarkerAxes(
+      intrinsics: Intrinsics,
+      markerLength: Double,
+      dictionary: ArucoDictionary = ArucoDictionary.Dict4x4_50,
+      axisLength: Double = Double.NaN
+  ): Image =
+    val len = if axisLength.isNaN then markerLength / 2.0 else axisLength
+    val poses = arMarkers(intrinsics, markerLength, dictionary)
+    paint: m =>
+      poses.foreach: mp =>
+        val pts = Ar.project(
+          Seq(Point3(0, 0, 0), Point3(len, 0, 0), Point3(0, len, 0), Point3(0, 0, len)),
+          mp.pose,
+          intrinsics
+        )
+        m.drawLine(pts(0), pts(1), Scalar.Red, Thickness.Stroke(2)) // X
+        m.drawLine(pts(0), pts(2), Scalar.Green, Thickness.Stroke(2)) // Y
+        m.drawLine(pts(0), pts(3), Scalar.Blue, Thickness.Stroke(2)) // Z
+
+  /** Draws a wireframe cube standing on every marker, sized to the marker's side by default — the "hello
+    * world" of marker AR. Consumes this image and returns the annotated one.
+    */
+  def drawMarkerCube(
+      intrinsics: Intrinsics,
+      markerLength: Double,
+      dictionary: ArucoDictionary = ArucoDictionary.Dict4x4_50,
+      color: Scalar = Scalar.Green,
+      size: Double = Double.NaN
+  ): Image =
+    val cube = if size.isNaN then markerLength else size
+    val poses = arMarkers(intrinsics, markerLength, dictionary)
+    paint: m =>
+      poses.foreach: mp =>
+        val pts = Ar.project(Ar.cubeCorners(cube), mp.pose, intrinsics)
+        Ar.cubeEdges.foreach((a, b) => m.drawLine(pts(a), pts(b), color, Thickness.Stroke(2)))
 
   // -- Terminals: consume this Image and release ---------------------------------------------------
 
