@@ -42,15 +42,38 @@ if [ "${SKIP_SCALADOC:-0}" = "1" ]; then
   exit 0
 fi
 
-echo "==> Scaladoc for core and zio -> $API"
-# `docJar` emits a single doc jar; resolve its path from Mill rather than globbing a name
-# (the jar is <module>/docJar.dest/out.jar, not a *-javadoc.jar).
+echo "==> Scaladoc -> $API (unified core+vision+graphs at /core, zio at /zio)"
+# `apidocs` is a unified doc over core+vision+graphs (all package scalacv), served at /api/core so
+# the content's /api/core/scalacv/*.html links to vision/graphs types (FaceRecognizer, Color, …)
+# resolve. `docJar` emits <module>/docJar.dest/out.jar (not a *-javadoc.jar), so resolve the path
+# from Mill rather than globbing a name.
 resolve_jar() { ./mill show "$1.docJar" | tr -d '"' | sed 's/^ref:v0:[0-9a-f]*://'; }
-CORE_JAR="$(resolve_jar core)"
+CORE_JAR="$(resolve_jar apidocs)"
 ZIO_JAR="$(resolve_jar zio)"
 rm -rf "$API"
 mkdir -p "$API/core" "$API/zio"
 unzip -o -q "$CORE_JAR" -d "$API/core"
 unzip -o -q "$ZIO_JAR" -d "$API/zio"
+
+# Separate link check for /api/ (Scaladoc) links: Docusaurus's onBrokenLinks can't see static/, and
+# pathname:// links are emitted unchecked, so verify here that every API deep-link in the generated
+# pages resolves to a real Scaladoc file. This is what catches a doc pointing at a type that moved
+# or never existed.
+echo "==> verify in-content /api/ links resolve to generated Scaladoc"
+missing=0
+while IFS= read -r link; do
+  rel="${link#/api/}"
+  # strip any #anchor
+  rel="${rel%%#*}"
+  if [ ! -f "website/static/api/$rel" ]; then
+    echo "  BROKEN API LINK: $link" >&2
+    missing=$((missing + 1))
+  fi
+done < <(grep -rhoE 'pathname:///api/[A-Za-z0-9$._/-]+\.html' "$DOCS" | sed 's#pathname://##' | sort -u)
+if [ "$missing" -gt 0 ]; then
+  echo "==> $missing broken API link(s) — failing." >&2
+  exit 1
+fi
+echo "   all API links resolve."
 
 echo "==> done. Next: (cd website && npm run build)"
