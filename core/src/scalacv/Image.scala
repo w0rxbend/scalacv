@@ -258,6 +258,23 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
     require(weight >= 0 && weight <= 1, s"blend weight must be in [0, 1], got $weight")
     transform(_.addWeighted(weight, other.mat, 1 - weight))
 
+  /** Video-conferencing blur: keeps the person (where `mask` is white) sharp and blurs the background,
+    * feathering the edge. `mask` is a borrowed `CV_8UC1` foreground mask (from [[Segmenter]] or any keying).
+    * See [[BackgroundEffect]].
+    */
+  def blurBackground(mask: Image, strength: Int = 15, feather: Int = 7): Image =
+    val out = BackgroundEffect.blur(handle.get, mask.mat, strength, feather)
+    try Image(out)
+    finally handle.release()
+
+  /** Replaces the background (where `mask` is black) with `background`, resized to fit and feathered at the
+    * edge — a virtual background. `mask` and `background` are borrowed.
+    */
+  def replaceBackground(mask: Image, background: Image, feather: Int = 7): Image =
+    val out = BackgroundEffect.replace(handle.get, mask.mat, background.mat, feather)
+    try Image(out)
+    finally handle.release()
+
   // -- Drawing: mutate in place (we own the Mat), consume this Image -------------------------------
 
   /** Draws an axis-aligned rectangle. Pass [[Thickness.Filled]] for a solid block. */

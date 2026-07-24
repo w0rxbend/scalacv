@@ -69,6 +69,10 @@ abstract class scalacv.Font
   implements scala.Product, scala.reflect.Enum
   def <init>(int): void
   def cvValue(): int
+abstract class scalacv.HandGesture
+  extends java.lang.Object
+  implements scala.Product, scala.reflect.Enum
+  def <init>(): void
 abstract class scalacv.ImreadFlags.Mode
   extends java.lang.Object
   implements scala.Product, scala.reflect.Enum
@@ -389,6 +393,9 @@ final class scalacv.Image
   def blend$default$2(): double
   def blend(scalacv.Image, double): scalacv.Image
   def blur(int): scalacv.Image
+  def blurBackground$default$2(): int
+  def blurBackground$default$3(): int
+  def blurBackground(scalacv.Image, int, int): scalacv.Image
   def border$default$5(): scalacv.BorderType
   def border$default$6(): scalacv.Scalar
   def border(int, int, int, int, scalacv.BorderType, scalacv.Scalar): scalacv.Image
@@ -461,6 +468,8 @@ final class scalacv.Image
   def pad$default$3(): scalacv.Scalar
   def pad(int, scalacv.BorderType, scalacv.Scalar): scalacv.Image
   def qrCodes(): scala.collection.immutable.Seq<scalacv.QrCode>
+  def replaceBackground$default$3(): int
+  def replaceBackground(scalacv.Image, scalacv.Image, int): scalacv.Image
   def resize(int, int): scalacv.Image
   def resizeTo$default$2(): scalacv.Interpolation
   def resizeTo(scalacv.Size, scalacv.Interpolation): scalacv.Image
@@ -807,6 +816,25 @@ final class scalacv.Size
   def toCv(): org.opencv.core.Size
   def toString(): java.lang.String
   def width(): double
+final class scalacv.TemplateMatch
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(scalacv.Rect, double): void
+  def _1(): scalacv.Rect
+  def _2(): double
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): scalacv.Rect
+  def copy$default$2(): double
+  def copy(scalacv.Rect, double): scalacv.TemplateMatch
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def location(): scalacv.Rect
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def score(): double
+  def toString(): java.lang.String
 final class scalacv.TextMetrics
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -938,6 +966,12 @@ object scalacv.ArucoMarker
   def fromProduct(scala.Product): scalacv.ArucoMarker
   def toString(): java.lang.String
   def unapply(scalacv.ArucoMarker): scalacv.ArucoMarker
+object scalacv.BackgroundEffect
+  extends java.lang.Object
+  implements java.io.Serializable
+  def alphaBlend(org.opencv.core.Mat, org.opencv.core.Mat, org.opencv.core.Mat, int): scalacv.Managed<org.opencv.core.Mat>
+  def blur(org.opencv.core.Mat, org.opencv.core.Mat, int, int): scalacv.Managed<org.opencv.core.Mat>
+  def replace(org.opencv.core.Mat, org.opencv.core.Mat, org.opencv.core.Mat, int): scalacv.Managed<org.opencv.core.Mat>
 object scalacv.BorderType
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Sum
@@ -1270,6 +1304,24 @@ object scalacv.Font
   static val Script: scalacv.Font
   static val Simplex: scalacv.Font
   static val Triplex: scalacv.Font
+object scalacv.GestureRecognizer
+  extends java.lang.Object
+  implements java.io.Serializable
+  def recognize$default$2(): float
+  def recognize(scalacv.Pose, float): scalacv.HandGesture
+object scalacv.HandGesture
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Sum
+  def fromOrdinal(int): scalacv.HandGesture
+  def ordinal(scalacv.HandGesture): int
+  def valueOf(java.lang.String): scalacv.HandGesture
+  def values(): scalacv.HandGesture[]
+  static val Fist: scalacv.HandGesture
+  static val OpenPalm: scalacv.HandGesture
+  static val Pointing: scalacv.HandGesture
+  static val ThumbsUp: scalacv.HandGesture
+  static val Unknown: scalacv.HandGesture
+  static val Victory: scalacv.HandGesture
 object scalacv.HeadPose
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -1667,6 +1719,17 @@ object scalacv.Scalar
   def from(org.opencv.core.Scalar): scalacv.Scalar
   def fromProduct(scala.Product): scalacv.Scalar
   def unapply(scalacv.Scalar): scalacv.Scalar
+object scalacv.Screen
+  extends java.lang.Object
+  implements java.io.Serializable
+  def diff$default$3(): int
+  def diff$default$4(): int
+  def diff(scalacv.Image, scalacv.Image, int, int): scala.collection.immutable.Seq<scalacv.Rect>
+  def findAll$default$3(): double
+  def findAll$default$4(): int
+  def findAll(scalacv.Image, scalacv.Image, double, int): scala.collection.immutable.Seq<scalacv.TemplateMatch>
+  def locate$default$3(): double
+  def locate(scalacv.Image, scalacv.Image, double): scala.Option<scalacv.TemplateMatch>
 object scalacv.Segment
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -1674,6 +1737,11 @@ object scalacv.Segment
   def fromProduct(scala.Product): scalacv.Segment
   def toString(): java.lang.String
   def unapply(scalacv.Segment): scalacv.Segment
+object scalacv.Segmenter
+  extends java.lang.Object
+  implements java.io.Serializable
+  def decodeMask$default$3(): float
+  def decodeMask(org.opencv.core.Mat, scalacv.Size, float): scalacv.Image
 object scalacv.Size
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -1681,6 +1749,13 @@ object scalacv.Size
   def from(org.opencv.core.Size): scalacv.Size
   def fromProduct(scala.Product): scalacv.Size
   def unapply(scalacv.Size): scalacv.Size
+object scalacv.TemplateMatch
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def apply(scalacv.Rect, double): scalacv.TemplateMatch
+  def fromProduct(scala.Product): scalacv.TemplateMatch
+  def toString(): java.lang.String
+  def unapply(scalacv.TemplateMatch): scalacv.TemplateMatch
 object scalacv.TextMetrics
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
