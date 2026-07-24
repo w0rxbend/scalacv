@@ -8,10 +8,11 @@ scope. Knowing where that line falls is half the battle:
 
 | Task | scalacv provides (OpenCV front end) | Needs a back end beyond OpenCV |
 |---|---|---|
-| **Tracking / navigation** | [`OpticalFlow`](#optical-flow) — follow points frame to frame | — |
-| **Visual odometry** | [`VisualOdometry`](#visual-odometry) — relative motion per frame pair | scale, drift correction |
-| **Localization / relocalization** | [`Features`](#features--matching) — ORB detect + match; `solvePnP` | a map to localize against |
+| **Tracking** | [`OpticalFlow`](#optical-flow) — follow points frame to frame | — |
+| **Visual odometry** | [`VisualOdometry`](#visual-odometry) per pair; [`Odometry`](#the-odometry-pipeline) — the running loop | scale, drift correction |
+| **Localization** | [`Localizer`](#localization-against-a-map) — absolute pose via `solvePnP`; [`Features`](#features--matching) to match a map | a map to localize against |
 | **Obstacle detection** | [`StereoDepth`](#stereo-depth--obstacles) + `Obstacles` | — |
+| **Navigation** | [`Navigator`](#reactive-navigation) — reactive obstacle-avoidance steering | a map, a goal, a planner |
 | **Full SLAM** | all of the above as the front end | keyframe graph, loop closure, bundle adjustment |
 
 ```scala mdoc:invisible
@@ -98,14 +99,53 @@ path and not wrapped here.
 
 ## Localization against a map
 
-Once you have a map of known 3D points and can match this frame's features to them, `solvePnP` gives the
-camera's absolute pose — the same routine [head pose](/pose-estimation) uses, at map scale. The 3D↔2D
-correspondences come from [`Features`](#features--matching):
+`Localizer` gives the camera's **absolute** pose from correspondences between a map's known 3D points and their
+matches in this frame, via `solvePnP` (the same routine [head pose](/pose-estimation) uses, at map scale).
+Unlike odometry it does not drift — it is what a map is *for*. Here the correspondences are synthetic, from a
+camera two units to the side of the world origin:
+
+```scala mdoc
+{
+  val world = Seq((-1.0, -1.0, 6.0), (1.0, -1.0, 6.5), (-1.0, 1.0, 7.0), (1.0, 1.0, 5.5), (0.0, 0.0, 8.0), (0.6, -0.4, 7.2))
+  def seen(p: (Double, Double, Double)): Point =
+    val (x, y, z) = p
+    Point(600 * (x - 2.0) / z + 320, 600 * y / z + 240)
+  Localizer.locate(world, world.map(seen), focal = 600, principalPoint = Point(320, 240))
+    .map(pose => f"camera at world (${pose.position(0)}%.1f, ${pose.position(1)}%.1f, ${pose.position(2)}%.1f)")
+    .getOrElse("could not localize")
+}
+```
+
+In practice the 3D↔2D pairs come from matching this frame's [`Features`](#features--matching) to the map; the
+recovered pose then anchors the drifting odometry.
+
+## Reactive navigation
+
+The shortest path from "where are the obstacles" to "what do I do" is `Navigator`: read a disparity map, split
+the view into thirds, and pick a `Steering` toward the clearest — obstacle avoidance with no map at all:
+
+```scala mdoc
+{
+  // Something near, filling the right two-thirds of the view ahead.
+  val disparity = Image.blank(300, 150, Scalar.Black, channels = 1).drawRect(Rect(120, 0, 180, 150), Scalar(220), Thickness.Filled)
+  val guidance = Navigator.steer(disparity)
+  disparity.close()
+  s"${guidance.steering}, clearance ahead ${(guidance.clearanceAhead * 100).round}%"
+}
+```
+
+A planner — a map, a goal, a path — layers on top; the reflex keeps you off the walls while it thinks.
+
+## The odometry pipeline
+
+`Odometry` wires the primitives into the running loop: feed it frames and it tracks features and estimates
+each step's motion for you, keeping the previous frame internally. It is `AutoCloseable`, and monocular (each
+step's translation is up to scale). Drive it straight off a [`Camera`](/video):
 
 ```scala mdoc:compile-only
-// worldPoints: the map's 3D points; imagePoints: their matched 2D projections in this frame.
-// org.opencv.calib3d.Calib3d.solvePnP(worldPoints, imagePoints, cameraMatrix, distCoeffs, rvec, tvec)
-Features.detect(scene(0, 0)) // → match against the map, then solvePnP for the pose
+val odometry = Odometry.monocular(focal = 500, principalPoint = Point(320, 240))
+try Camera.usingFile("drive.mp4")(_.foreach()(frame => odometry.update(frame).foreach(step => println(step.inliers))))
+finally odometry.close()
 ```
 
 ## Where OpenCV ends
