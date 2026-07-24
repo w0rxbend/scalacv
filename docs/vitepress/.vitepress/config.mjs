@@ -49,6 +49,7 @@ export default defineConfig({
       ]},
       { text: 'Detection & deep learning', items: [
         { text: 'Object detection', link: '/object-detection' },
+        { text: 'Face recognition', link: '/face-recognition' },
         { text: 'Object tracking', link: '/tracking' },
         { text: 'Motion detection', link: '/motion-detection' },
         { text: 'Pose estimation', link: '/pose-estimation' },

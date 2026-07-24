@@ -537,6 +537,49 @@ final class scalacv.Face
   def rightMouthCorner(): scalacv.Point
   def score(): float
   def toString(): java.lang.String
+final class scalacv.FaceEmbedding
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(scala.collection.immutable.Vector<java.lang.Object>): void
+  def _1(): scala.collection.immutable.Vector<java.lang.Object>
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): scala.collection.immutable.Vector<java.lang.Object>
+  def copy(scala.collection.immutable.Vector<java.lang.Object>): scalacv.FaceEmbedding
+  def cosineSimilarity(scalacv.FaceEmbedding): double
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def l2Distance(scalacv.FaceEmbedding): double
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def toString(): java.lang.String
+  def values(): scala.collection.immutable.Vector<java.lang.Object>
+final class scalacv.FaceMatch
+  extends java.lang.Object
+  implements java.io.Serializable, scala.Product
+  def <init>(java.lang.String, double): void
+  def _1(): java.lang.String
+  def _2(): double
+  def canEqual(java.lang.Object): boolean
+  def copy$default$1(): java.lang.String
+  def copy$default$2(): double
+  def copy(java.lang.String, double): scalacv.FaceMatch
+  def equals(java.lang.Object): boolean
+  def hashCode(): int
+  def name(): java.lang.String
+  def productArity(): int
+  def productElement(int): java.lang.Object
+  def productElementName(int): java.lang.String
+  def productPrefix(): java.lang.String
+  def similarity(): double
+  def toString(): java.lang.String
+final class scalacv.FaceRecognizer
+  extends java.lang.Object
+  implements java.lang.AutoCloseable
+  def <init>(scalacv.Managed<org.opencv.objdetect.FaceRecognizerSF>): void
+  def close(): void
+  def embed(scalacv.Image, scalacv.Face): scalacv.FaceEmbedding
 final class scalacv.FeatureMatch
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -566,6 +609,15 @@ final class scalacv.Filter
   def apply(scalacv.Image): scalacv.Image
   def name(): java.lang.String
   def toString(): java.lang.String
+final class scalacv.Gallery
+  extends java.lang.Object
+  def <init>(scala.collection.immutable.Vector<scala.Tuple2<java.lang.String, scalacv.FaceEmbedding>>): void
+  def enroll(java.lang.String, scalacv.FaceEmbedding): scalacv.Gallery
+  def identify$default$2(): double
+  def identify(scalacv.FaceEmbedding, double): scala.Option<scalacv.FaceMatch>
+  def isEmpty(): boolean
+  def names(): scala.collection.immutable.Seq<java.lang.String>
+  def size(): int
 final class scalacv.Guidance
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -2172,6 +2224,25 @@ object scalacv.FaceDetect
   def detect(org.opencv.objdetect.FaceDetectorYN, org.opencv.core.Mat): scala.collection.immutable.Seq<scalacv.Face>
   def downloadModel(java.nio.file.Path): scala.util.Either<scalacv.CvError, java.nio.file.Path>
   def given_Releasable_FaceDetectorYN(): scalacv.Releasable<org.opencv.objdetect.FaceDetectorYN>
+object scalacv.FaceEmbedding
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def apply(scala.collection.immutable.Vector<java.lang.Object>): scalacv.FaceEmbedding
+  def fromProduct(scala.Product): scalacv.FaceEmbedding
+  def toString(): java.lang.String
+  def unapply(scalacv.FaceEmbedding): scalacv.FaceEmbedding
+object scalacv.FaceMatch
+  extends java.lang.Object
+  implements java.io.Serializable, scala.deriving.Mirror$Product
+  def apply(java.lang.String, double): scalacv.FaceMatch
+  def fromProduct(scala.Product): scalacv.FaceMatch
+  def toString(): java.lang.String
+  def unapply(scalacv.FaceMatch): scalacv.FaceMatch
+object scalacv.FaceRecognizer
+  extends java.lang.Object
+  implements java.io.Serializable
+  def load(java.lang.String): scala.util.Either<scalacv.CvError, scalacv.FaceRecognizer>
+  def scalacv$FaceRecognizer$$$faceRow(scalacv.Face): org.opencv.core.Mat
 object scalacv.FeatureMatch
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -2231,6 +2302,11 @@ object scalacv.Font
   static val Script: scalacv.Font
   static val Simplex: scalacv.Font
   static val Triplex: scalacv.Font
+object scalacv.Gallery
+  extends java.lang.Object
+  implements java.io.Serializable
+  def CosineThreshold(): double
+  def empty(): scalacv.Gallery
 object scalacv.GestureRecognizer
   extends java.lang.Object
   implements java.io.Serializable
