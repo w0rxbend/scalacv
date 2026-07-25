@@ -80,11 +80,13 @@ class ImagesTest extends munit.FunSuite:
     Files.write(junk, "this is text, not a PNG".getBytes("UTF-8"))
     assert(Images.read(junk.toString).isLeft)
 
-  test("encode with an extension OpenCV has no encoder for is a Left, not a throw"):
+  test("encode with an extension OpenCV has no encoder for is EncodeFailed, not a throw"):
     Managed.use(fixture()): src =>
-      // imencode throws CvException here. The point of the test is that nothing escapes.
-      val r = Images.encode(src, ".notaformat")
-      assert(r.isLeft, s"expected a Left, got $r")
+      // imencode would throw CvException here; haveImageWriter catches it first. The failure must be the
+      // same EncodeFailed a caller matches for the unwritable-path case, not a leaked-through NativeCall.
+      Images.encode(src, ".notaformat") match
+        case Left(_: CvError.EncodeFailed) => ()
+        case other => fail(s"expected EncodeFailed, got $other")
 
   test("encode adds the leading period imencode requires"):
     Managed.use(fixture()): src =>
@@ -102,9 +104,12 @@ class ImagesTest extends munit.FunSuite:
         case Right(_) => fail("writing under a missing directory must not report success")
         case Left(e) => assert(e.getMessage.contains(bad), e.getMessage)
 
-  test("write with an unknown extension is a Left — the throwing failure mode"):
+  test("write with an unknown extension is EncodeFailed — the throwing failure mode"):
     val bad = tempDir().resolve("out.notaformat").toString
-    Managed.use(fixture())(src => assert(Images.write(bad, src).isLeft))
+    Managed.use(fixture()): src =>
+      Images.write(bad, src) match
+        case Left(_: CvError.EncodeFailed) => ()
+        case other => fail(s"expected EncodeFailed, got $other")
 
   test("decode of garbage is a Left"):
     val garbage = Array.tabulate(64)(i => (i * 7).toByte)

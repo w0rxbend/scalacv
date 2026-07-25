@@ -15,9 +15,12 @@ import org.opencv.imgcodecs.Imgcodecs
   *      operation that had nothing to do with the mistake.
   *   1. `imwrite` returns `false` when the destination cannot be written — a missing parent directory, no
   *      permission.
-  *   1. `imwrite` and `imencode` **throw `CvException`** when the extension names no known encoder.
+  *   1. `imwrite` and `imencode` **throw `CvException`** when the extension names no known encoder — so
+  *      `haveImageWriter` is consulted first and that case is returned as [[CvError.EncodeFailed]] before the
+  *      throw can happen, rather than being recovered from OpenCV's error text.
   *
-  * Every function here returns `Either[CvError, ?]` covering all three.
+  * Every function here returns `Either[CvError, ?]` covering all three. The two encode failures share the one
+  * [[CvError.EncodeFailed]] type, so `case EncodeFailed(...)` catches both.
   *
   * ==Ownership==
   * A returned [[Managed]]`[Mat]` is **caller-owned**: nothing else holds a reference and nothing else will
@@ -44,23 +47,28 @@ object Images:
 
   /** Writes `mat` to `path`, choosing the encoder from the path's extension.
     *
-    * Both of `imwrite`'s failure modes are handled: an unwritable destination, which it reports by returning
-    * `false`, and an extension it has no encoder for, which it reports by throwing. The second is why this
-    * cannot simply be a boolean-to-`Either` lift.
+    * Both of `imwrite`'s failure modes surface as [[CvError.EncodeFailed]], so a caller matching that one
+    * case handles them all: an unwritable destination, which `imwrite` reports by returning `false`, and an
+    * extension it has no encoder for, which it would otherwise report by throwing a `CvException`. The latter
+    * is caught before it is raised — `haveImageWriter` is asked first — rather than parsed out of OpenCV's
+    * error text afterwards.
     *
     * The receiver is not modified and not released.
     */
   def write(path: String, mat: Mat): Either[CvError, Unit] =
-    Cv.attempt(s"imwrite('$path')")(Imgcodecs.imwrite(path, mat)).flatMap {
-      case true => Right(())
-      case false =>
-        Left(
-          CvError.EncodeFailed(
-            path,
-            "imwrite returned false — the parent directory may not exist, or may not be writable"
+    if !Imgcodecs.haveImageWriter(path) then
+      Left(CvError.EncodeFailed(path, "no encoder is registered for this extension"))
+    else
+      Cv.attempt(s"imwrite('$path')")(Imgcodecs.imwrite(path, mat)).flatMap {
+        case true => Right(())
+        case false =>
+          Left(
+            CvError.EncodeFailed(
+              path,
+              "imwrite returned false — the parent directory may not exist, or may not be writable"
+            )
           )
-        )
-    }
+      }
 
   /** Encodes `mat` into an in-memory image file, without touching the filesystem.
     *
@@ -74,11 +82,15 @@ object Images:
     */
   def encode(mat: Mat, ext: String = ".png"): Either[CvError, Array[Byte]] =
     val dotted = if ext.startsWith(".") then ext else s".$ext"
-    Managed.use(MatOfByte()): buffer =>
-      Cv.attempt(s"imencode('$dotted')")(Imgcodecs.imencode(dotted, mat, buffer)).flatMap {
-        case true => Right(buffer.toArray)
-        case false => Left(CvError.EncodeFailed(dotted, "imencode returned false"))
-      }
+    // haveImageWriter keys off the filename's extension, so hand it a name, not a bare ".png".
+    if !Imgcodecs.haveImageWriter(s"x$dotted") then
+      Left(CvError.EncodeFailed(dotted, "no encoder is registered for this extension"))
+    else
+      Managed.use(MatOfByte()): buffer =>
+        Cv.attempt(s"imencode('$dotted')")(Imgcodecs.imencode(dotted, mat, buffer)).flatMap {
+          case true => Right(buffer.toArray)
+          case false => Left(CvError.EncodeFailed(dotted, "imencode returned false"))
+        }
 
   /** Decodes an image from bytes already in memory — an HTTP response body, a BLOB, a test fixture.
     *
