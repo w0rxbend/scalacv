@@ -123,6 +123,17 @@ def frameStream(capture: VideoCapture): ZStream[Any, Throwable, Mat] =
   * The safe-but-costlier counterpart to [[frameStream]]: every element is a caller-owned copy, so the usual
   * `ZStream` combinators behave as expected. Each clone must still be released — pair it with
   * `.mapZIO(m => m.use(...))` or acquire it into a scope.
+  *
+  * ==Consume each clone in the same fiber that pulls it==
+  *
+  * Ownership of a clone transfers to the consumer, so the consuming stage must release it — and it must do so
+  * on the same fiber, promptly. A clone that is produced but then dropped because the fiber is **interrupted**
+  * before a downstream `use`/scope takes it over leaks, exactly as a `Managed` dropped in synchronous code
+  * would: the clone is a caller-owned resource the stream can no longer see. So map straight into a releasing
+  * stage — `.mapZIO(m => m.use(process))` — rather than buffering the `Managed`s (`.buffer`, `.grouped`,
+  * `runCollect` without prior release) across an interruptible boundary. When you want the stream itself to own
+  * and release each frame, reduce it inside the stream on [[frameStream]] instead, whose one reused buffer is
+  * tied to the stream's scope and released on interruption.
   */
 def framesCopied(capture: VideoCapture)(using Releasable[Mat]): ZStream[Any, Throwable, Managed[Mat]] =
   frameStream(capture).map(frame => Managed(frame.clone()))
