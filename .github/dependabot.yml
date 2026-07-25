@@ -1,5 +1,8 @@
-# GitHub Actions only. Library dependencies are handled by Scala Steward, which understands the
-# Mill build; Dependabot does not, and would churn against pins it cannot read.
+# Dependabot covers the two ecosystems it understands: GitHub Actions, and the docs site's npm
+# packages under website/. Scala library dependencies are deliberately NOT here — Scala Steward
+# handles those, because it reads the Mill build and its version pins, which Dependabot cannot and
+# would churn against. Nothing watched the website/ npm deps before, which is how four build-time
+# advisories accumulated there (see the overrides in website/package.json); this closes that gap.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -8,3 +11,16 @@ updates:
       interval: weekly
     commit-message:
       prefix: "ci"
+
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: weekly
+    # One grouped PR rather than a stream of them: this is the Docusaurus toolchain, not a shipped
+    # dependency, so batching keeps the noise down while still surfacing security fixes promptly.
+    groups:
+      docusaurus:
+        patterns: ["*"]
+    commit-message:
+      prefix: "docs"
+    open-pull-requests-limit: 5
