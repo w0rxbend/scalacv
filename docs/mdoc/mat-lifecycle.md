@@ -88,18 +88,23 @@ frame (and is freed when the loop ends).
 There is no `row`/`col`/`submat` view API to trip over here — `Image.crop` returns an independent
 copy, not a view. This borrowed frame is the only alias you have to reason about.
 
+:::danger Use-after-free
+`frames` yields a **borrowed** Mat — one buffer, refilled each step. Collecting the iterator keeps N
+references to that single buffer (all showing the last frame), freed when the block returns.
+
 ```scala mdoc:compile-only
 import scalacv.*
 
-// WRONG — `frames` yields a BORROWED Mat (one buffer, refilled each step). Collecting the iterator
-// keeps N references to that single buffer; after the block they alias freed memory.
+// WRONG — .toList captures the same reused buffer N times: a use-after-free in waiting.
 Video.open(0).map { capture =>
   capture.use { c =>
-    Video.frames(c) { it => it.toList } // every element is the same buffer — a use-after-free in waiting
+    Video.frames(c) { it => it.toList }
   }
 }
 ```
+:::
 
+:::tip Right
 ```scala mdoc:compile-only
 import scalacv.*
 
@@ -118,6 +123,7 @@ Video.open(0).map { capture =>
   }
 }
 ```
+:::
 
 The ZIO module mirrors this exactly: `frameStream` borrows one buffer (same contract), `framesCopied`
 gives you owned `Managed[Mat]` per frame.
