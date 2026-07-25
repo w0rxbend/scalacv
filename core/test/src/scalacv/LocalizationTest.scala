@@ -26,7 +26,7 @@ class LocalizationTest extends munit.FunSuite:
 
   test("localizer recovers the identity pose when world and camera frames coincide"):
     val image = world.map((x, y, z) => project(x, y, z))
-    Localizer.locate(world, image, focal, Point(cx, cy)) match
+    Localizer.locate(world, image, Intrinsics(focal, focal, cx, cy)) match
       case None => fail("solvePnP should converge on six good correspondences")
       case Some(pose) =>
         assert(
@@ -41,7 +41,7 @@ class LocalizationTest extends munit.FunSuite:
   test("localizer recovers a translated camera's position"):
     // Camera moved to world (2,0,0), still looking +Z: a world point (X,Y,Z) sits at camera (X-2,Y,Z).
     val image = world.map((x, y, z) => project(x - 2.0, y, z))
-    Localizer.locate(world, image, focal, Point(cx, cy)) match
+    Localizer.locate(world, image, Intrinsics(focal, focal, cx, cy)) match
       case None => fail("solvePnP should converge")
       case Some(pose) =>
         val pos = pose.position
@@ -51,7 +51,7 @@ class LocalizationTest extends munit.FunSuite:
   test("localizer needs at least four correspondences"):
     val three = world.take(3)
     assertEquals(
-      Localizer.locate(three, three.map((x, y, z) => project(x, y, z)), focal, Point(cx, cy)),
+      Localizer.locate(three, three.map((x, y, z) => project(x, y, z)), Intrinsics(focal, focal, cx, cy)),
       None
     )
 
@@ -92,7 +92,7 @@ class LocalizationTest extends munit.FunSuite:
       )
 
   test("the odometry pipeline reports None on the first frame and then runs frame by frame"):
-    val odometry = Odometry.monocular(focal = 500, principalPoint = Point(100, 80))
+    val odometry = Odometry.monocular(Intrinsics(fx = 500, fy = 500, cx = 100, cy = 80))
     try
       val frame0 = scene(0, 0)
       val frame1 = scene(4, 3)

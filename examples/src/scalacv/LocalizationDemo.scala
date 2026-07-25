@@ -18,7 +18,7 @@ package scalacv
   )
   // Project them as seen from a camera at world (2,0,0), then localize from the correspondences.
   val seen = landmarks.map((x, y, z) => Point(focal * (x - 2.0) / z + cx, focal * y / z + cy))
-  Localizer.locate(landmarks, seen, focal, Point(cx, cy)) match
+  Localizer.locate(landmarks, seen, Intrinsics(focal, focal, cx, cy)) match
     case Some(pose) =>
       println(
         f"localized at world position (${pose.position(0)}%.2f, ${pose.position(1)}%.2f, ${pose.position(2)}%.2f)"

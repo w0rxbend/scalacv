@@ -121,7 +121,7 @@ class SlamPropertiesTest extends munit.FunSuite:
     Image.blank(220, 180, Scalar(25, 25, 25)).drawRects(blocks, Scalar.White, Thickness.Filled)
 
   test("the first frame is a reference (None) and framesProcessed counts every update"):
-    val odo = Odometry.monocular(focal = 500, principalPoint = Point(110, 90))
+    val odo = Odometry.monocular(Intrinsics(fx = 500, fy = 500, cx = 110, cy = 90))
     try
       val f0 = scene(0)
       try
@@ -138,7 +138,7 @@ class SlamPropertiesTest extends munit.FunSuite:
     finally odo.close()
 
   test("close is idempotent"):
-    val odo = Odometry.monocular(focal = 400, principalPoint = Point(50, 50))
+    val odo = Odometry.monocular(Intrinsics(fx = 400, fy = 400, cx = 50, cy = 50))
     val f = scene(0)
     try odo.update(f)
     finally f.close()

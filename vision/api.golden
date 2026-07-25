@@ -551,7 +551,7 @@ final class scalacv.OcrWord
 final class scalacv.Odometry
   extends java.lang.Object
   implements java.lang.AutoCloseable
-  def <init>(double, scalacv.Point): void
+  def <init>(scalacv.Intrinsics): void
   def close(): void
   def framesProcessed(): int
   def update(scalacv.Image): scala.Option<scalacv.CameraMotion>
@@ -966,6 +966,7 @@ object scalacv.HeadPose
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
   def apply(double, double, double): scalacv.HeadPose
+  def estimate(scalacv.Face, scalacv.Intrinsics): scala.Option<scalacv.HeadPose>
   def estimate(scalacv.Face, scalacv.Size): scala.Option<scalacv.HeadPose>
   def fromProduct(scala.Product): scalacv.HeadPose
   def unapply(scalacv.HeadPose): scalacv.HeadPose
@@ -994,7 +995,7 @@ object scalacv.KeypointLayout
 object scalacv.Localizer
   extends java.lang.Object
   implements java.io.Serializable
-  def locate(scala.collection.immutable.Seq<scala.Tuple3<java.lang.Object, java.lang.Object, java.lang.Object>>, scala.collection.immutable.Seq<scalacv.Point>, double, scalacv.Point): scala.Option<scalacv.CameraPose>
+  def locate(scala.collection.immutable.Seq<scala.Tuple3<java.lang.Object, java.lang.Object, java.lang.Object>>, scala.collection.immutable.Seq<scalacv.Point>, scalacv.Intrinsics): scala.Option<scalacv.CameraPose>
 object scalacv.LoopClosure
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
@@ -1111,7 +1112,7 @@ object scalacv.OcrWord
 object scalacv.Odometry
   extends java.lang.Object
   implements java.io.Serializable
-  def monocular(double, scalacv.Point): scalacv.Odometry
+  def monocular(scalacv.Intrinsics): scalacv.Odometry
 object scalacv.OpticalFlow
   extends java.lang.Object
   implements java.io.Serializable
@@ -1240,7 +1241,7 @@ object scalacv.Tracking.package
 object scalacv.VisualOdometry
   extends java.lang.Object
   implements java.io.Serializable
-  def estimate(scala.collection.immutable.Seq<scalacv.Point>, scala.collection.immutable.Seq<scalacv.Point>, double, scalacv.Point): scala.Option<scalacv.CameraMotion>
+  def estimate(scala.collection.immutable.Seq<scalacv.Point>, scala.collection.immutable.Seq<scalacv.Point>, scalacv.Intrinsics): scala.Option<scalacv.CameraMotion>
 trait scalacv.MotionDetector
   implements java.lang.AutoCloseable
   abstract def detect(scalacv.Image): scalacv.Motion

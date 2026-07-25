@@ -22,17 +22,14 @@ final case class CameraMotion(rotation: Seq[Seq[Double]], translation: Seq[Doubl
 object VisualOdometry:
 
   /** Estimates the camera motion that carries the `from` points to the `to` points (same length, matched
-    * order), given the pinhole intrinsics. `None` when there are too few correspondences (< 5) or the
+    * order), given the camera [[Intrinsics]]. `None` when there are too few correspondences (< 5) or the
     * geometry is degenerate.
     *
-    * @param focal
-    *   focal length in pixels.
-    * @param principalPoint
-    *   the optical centre, usually the image centre.
+    * @param intrinsics
+    *   the pinhole camera model — use [[Intrinsics.approx]] when the camera is uncalibrated.
     */
-  def estimate(from: Seq[Point], to: Seq[Point], focal: Double, principalPoint: Point): Option[CameraMotion] =
+  def estimate(from: Seq[Point], to: Seq[Point], intrinsics: Intrinsics): Option[CameraMotion] =
     require(from.size == to.size, s"from and to must be the same length, got ${from.size} and ${to.size}")
-    require(focal > 0, s"focal length must be positive, got $focal")
     if from.size < 5 then None
     else
       // Every native Mat is acquired through Managed.use — a throw from any constructor or from
@@ -40,7 +37,7 @@ object VisualOdometry:
       // pts2/camera when findEssentialMat threw on degenerate input, since it ran before the try.
       Managed.use(MatOfPoint2f(from.map(p => CvPoint(p.x, p.y))*)): pts1 =>
         Managed.use(MatOfPoint2f(to.map(p => CvPoint(p.x, p.y))*)): pts2 =>
-          Managed.use(intrinsics(focal, principalPoint)): camera =>
+          Managed.use(intrinsics.cameraMatrix): camera =>
             Managed.use(Calib3d.findEssentialMat(pts1, pts2, camera, Calib3d.RANSAC, 0.999, 1.0)):
               essential =>
                 if essential.empty || essential.rows < 3 || essential.cols < 3 then None
@@ -48,20 +45,10 @@ object VisualOdometry:
                   Managed.use(Mat()): rotation =>
                     Managed.use(Mat()): translation =>
                       val inliers = Calib3d.recoverPose(essential, pts1, pts2, camera, rotation, translation)
-                      Some(CameraMotion(rows(rotation, 3, 3), column(translation, 3), inliers))
-
-  /** The pinhole camera matrix `[[f,0,cx],[0,f,cy],[0,0,1]]`, caller-owned. */
-  private def intrinsics(focal: Double, principal: Point): Mat =
-    val m = Mat.zeros(3, 3, org.opencv.core.CvType.CV_64F)
-    m.put(0, 0, focal)
-    m.put(1, 1, focal)
-    m.put(0, 2, principal.x)
-    m.put(1, 2, principal.y)
-    m.put(2, 2, 1.0)
-    m
-
-  private def rows(mat: Mat, r: Int, c: Int): Seq[Seq[Double]] =
-    (0 until r).map(i => (0 until c).map(j => mat.get(i, j)(0)))
-
-  private def column(mat: Mat, r: Int): Seq[Double] =
-    (0 until r).map(i => mat.get(i, 0)(0))
+                      Some(
+                        CameraMotion(
+                          Mats.readMatrix(rotation, 3, 3),
+                          Mats.readColumn(translation, 3),
+                          inliers
+                        )
+                      )

@@ -1,6 +1,6 @@
 package scalacv
 
-import org.opencv.core.{Mat, MatOfDouble, MatOfPoint2f, MatOfPoint3f, Point as CvPoint, Point3}
+import org.opencv.core.{Mat, MatOfPoint2f, MatOfPoint3f, Point as CvPoint, Point3}
 import org.opencv.dnn.Net
 
 /** One named landmark of a [[Pose]] — a point in image pixels and the model's confidence in it. */
@@ -232,26 +232,21 @@ object HeadPose:
     Point3(30, 35, 22) // left mouth corner
   )
 
-  /** Estimates the head orientation for `face` in an image of `imageSize`, or `None` if `solvePnP` fails to
-    * converge (degenerate landmarks).
+  /** Estimates the head orientation for `face` under the given camera [[Intrinsics]], or `None` if `solvePnP`
+    * fails to converge (degenerate landmarks). Pass a calibrated model for a sharper result; for a quick
+    * uncalibrated guess use the [[Size]] overload.
     */
-  def estimate(face: Face, imageSize: Size): Option[HeadPose] =
-    // Every native Mat is acquired through Managed.use, so a throw from any constructor or `put` frees the
-    // ones already allocated — the plain val-before-try form leaked them. The whole solvePnP block runs in
+  def estimate(face: Face, intrinsics: Intrinsics): Option[HeadPose] =
+    // Every native Mat is acquired through Managed.use, so a throw from any constructor frees the ones
+    // already allocated — the plain val-before-try form leaked them. The whole solvePnP block runs in
     // Cv.attempt: degenerate landmarks can make OpenCV *throw* rather than return `ok = false`, and the
     // documented contract here is `None` on failure, not a raw CvException.
     Managed.use(MatOfPoint3f(model*)): objectPoints =>
       Managed.use(MatOfPoint2f(face.landmarks.map(p => CvPoint(p.x, p.y))*)): imagePoints =>
-        // A crude but standard pinhole guess: focal length ≈ image width, principal point at the centre, no
-        // lens distortion. Enough for orientation.
-        Managed.use(Mat.zeros(3, 3, org.opencv.core.CvType.CV_64F)): camera =>
-          Managed.use(MatOfDouble(0.0, 0.0, 0.0, 0.0)): distortion =>
+        Managed.use(intrinsics.cameraMatrix): camera =>
+          Managed.use(intrinsics.distCoeffs): distortion =>
             Managed.use(Mat()): rvec =>
               Managed.use(Mat()): tvec =>
-                val focal = imageSize.width
-                camera.put(0, 0, focal); camera.put(1, 1, focal)
-                camera.put(0, 2, imageSize.width / 2); camera.put(1, 2, imageSize.height / 2)
-                camera.put(2, 2, 1.0)
                 Cv.attempt("solvePnP") {
                   val ok = org.opencv.calib3d.Calib3d.solvePnP(
                     objectPoints,
@@ -273,6 +268,13 @@ object HeadPose:
                           val euler = org.opencv.calib3d.Calib3d.RQDecomp3x3(rotation, mtxR, mtxQ)
                           Some(HeadPose(yaw = euler(1), pitch = euler(0), roll = euler(2)))
                 }.getOrElse(None)
+
+  /** Estimates the head orientation for `face` in an image of `imageSize`, using an uncalibrated pinhole
+    * guess — focal length ≈ image width, principal point at the centre, no lens distortion. Enough for
+    * "looking left / up / tilted"; pass real [[Intrinsics]] when you have them.
+    */
+  def estimate(face: Face, imageSize: Size): Option[HeadPose] =
+    estimate(face, Intrinsics(imageSize.width, imageSize.width, imageSize.width / 2, imageSize.height / 2))
 
 /** The high-level pose overlay on [[Image]] — an extension method so it lives beside the pose types rather
   * than in the image class. `import scalacv.*` gives `image.drawSkeleton(pose)`.

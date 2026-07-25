@@ -125,7 +125,8 @@ final class scalacv.Camera
   def info(): scalacv.CaptureInfo
   def recordTo$default$2(): double
   def recordTo$default$3(): scalacv.Codec
-  def recordTo(java.lang.String, double, scalacv.Codec, scala.Function1<scalacv.Image, scalacv.Image>): scala.util.Either<scalacv.CvError, java.lang.Object>
+  def recordTo$default$4(): int
+  def recordTo(java.lang.String, double, scalacv.Codec, int, scala.Function1<scalacv.Image, scalacv.Image>): scala.util.Either<scalacv.CvError, java.lang.Object>
   def size(): scalacv.Size
   def snapshot$default$1(): int
   def snapshot(int): scala.util.Either<scalacv.CvError, scalacv.Image>
@@ -631,7 +632,7 @@ final class scalacv.Rect
   def _2(): int
   def _3(): int
   def _4(): int
-  def area(): int
+  def area(): long
   def bottomRight(): scalacv.Point
   def canEqual(java.lang.Object): boolean
   def copy$default$1(): int
@@ -1256,6 +1257,8 @@ object scalacv.Mats
   implements java.io.Serializable
   def chain(org.opencv.core.Mat, scala.collection.immutable.Seq<scala.Function1<org.opencv.core.Mat, scalacv.Managed<org.opencv.core.Mat>>>): scalacv.Managed<org.opencv.core.Mat>
   def produce(java.lang.String, scala.Function1<org.opencv.core.Mat, scala.runtime.BoxedUnit>): scalacv.Managed<org.opencv.core.Mat>
+  def readColumn(org.opencv.core.Mat, int): scala.collection.immutable.Seq<java.lang.Object>
+  def readMatrix(org.opencv.core.Mat, int, int): scala.collection.immutable.Seq<scala.collection.immutable.Seq<java.lang.Object>>
   def requireKernel(java.lang.String, scalacv.Size, boolean): void
 object scalacv.ModelSpec
   extends java.lang.Object
@@ -1561,6 +1564,7 @@ object scalacv.Threshold
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
   def <init>$default$2(): scala.Option<scalacv.Threshold$Auto>
+  def Binary(): scalacv.Threshold
   def apply(scalacv.Threshold$Mode, scala.Option<scalacv.Threshold$Auto>): scalacv.Threshold
   def fromProduct(scala.Product): scalacv.Threshold
   def otsu$default$1(): scalacv.Threshold$Mode

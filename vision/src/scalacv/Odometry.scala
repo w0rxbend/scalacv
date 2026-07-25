@@ -11,14 +11,14 @@ package scalacv
   * pipeline retains a frame's worth of native memory between calls, so it is `AutoCloseable` — [[close]] it.
   *
   * {{{
-  * val odometry = Odometry.monocular(focal = 500, principalPoint = Point(320, 240))
+  * val odometry = Odometry.monocular(Intrinsics(fx = 500, fy = 500, cx = 320, cy = 240))
   * try camera.foreach(frame => odometry.update(frame).foreach(step => track(step)))
   * finally odometry.close()
   * }}}
   *
   * Not thread-safe: feed one frame at a time.
   */
-final class Odometry private (focal: Double, principalPoint: Point) extends AutoCloseable:
+final class Odometry private (intrinsics: Intrinsics) extends AutoCloseable:
 
   private var previous: Image | Null = null
   private var previousPoints: Seq[Point] = Seq.empty
@@ -40,7 +40,7 @@ final class Odometry private (focal: Double, principalPoint: Point) extends Auto
         val tracked = OpticalFlow.track(prev, frame, previousPoints).filter(_.found)
         val motion =
           if tracked.size >= 8 then
-            VisualOdometry.estimate(tracked.map(_.from), tracked.map(_.to), focal, principalPoint)
+            VisualOdometry.estimate(tracked.map(_.from), tracked.map(_.to), intrinsics)
           else None
         // Compute the new baseline first (prev still valid, no field mutated); only then swap it in as a
         // pair, so a throw in copy/goodFeatures cannot strand `previous` on a closed handle or leave
@@ -76,7 +76,5 @@ final class Odometry private (focal: Double, principalPoint: Point) extends Auto
 
 object Odometry:
 
-  /** A monocular odometry pipeline for a camera with the given pinhole intrinsics. */
-  def monocular(focal: Double, principalPoint: Point): Odometry =
-    require(focal > 0, s"focal length must be positive, got $focal")
-    new Odometry(focal, principalPoint)
+  /** A monocular odometry pipeline for a camera with the given pinhole [[Intrinsics]]. */
+  def monocular(intrinsics: Intrinsics): Odometry = new Odometry(intrinsics)

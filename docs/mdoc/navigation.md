@@ -72,7 +72,7 @@ scale). Here the correspondences come from projecting known 3D points before and
   def project(p: (Double, Double, Double), camX: Double): Point =
     val (x, y, z) = p
     Point(500 * (x - camX) / z + 320, 500 * y / z + 240)
-  val motion = VisualOdometry.estimate(world.map(project(_, 0.0)), world.map(project(_, 0.4)), focal = 500, principalPoint = Point(320, 240))
+  val motion = VisualOdometry.estimate(world.map(project(_, 0.0)), world.map(project(_, 0.4)), Intrinsics(fx = 500, fy = 500, cx = 320, cy = 240))
   motion.map(m => s"${m.inliers} inliers, unit translation, rotation ~identity").getOrElse("degenerate")
 }
 ```
@@ -111,7 +111,7 @@ camera two units to the side of the world origin:
   def seen(p: (Double, Double, Double)): Point =
     val (x, y, z) = p
     Point(600 * (x - 2.0) / z + 320, 600 * y / z + 240)
-  Localizer.locate(world, world.map(seen), focal = 600, principalPoint = Point(320, 240))
+  Localizer.locate(world, world.map(seen), Intrinsics(fx = 600, fy = 600, cx = 320, cy = 240))
     .map(pose => f"camera at world (${pose.position(0)}%.1f, ${pose.position(1)}%.1f, ${pose.position(2)}%.1f)")
     .getOrElse("could not localize")
 }
@@ -144,7 +144,7 @@ each step's motion for you, keeping the previous frame internally. It is `AutoCl
 step's translation is up to scale). Drive it straight off a [`Camera`](/video):
 
 ```scala mdoc:compile-only
-val odometry = Odometry.monocular(focal = 500, principalPoint = Point(320, 240))
+val odometry = Odometry.monocular(Intrinsics(fx = 500, fy = 500, cx = 320, cy = 240))
 try Camera.usingFile("drive.mp4")(_.foreach()(frame => odometry.update(frame).foreach(step => println(step.inliers))))
 finally odometry.close()
 ```

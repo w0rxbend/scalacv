@@ -580,6 +580,18 @@ object Mats:
         dst.release()
         throw e
 
+  /** Reads the top-left `r`×`c` block of a `CV_64F` Mat into plain Scala rows — for lifting a small solver
+    * result (a rotation, a camera matrix) out of native memory into immutable data. The Mat is borrowed.
+    */
+  private[scalacv] def readMatrix(mat: Mat, r: Int, c: Int): Seq[Seq[Double]] =
+    (0 until r).map(i => (0 until c).map(j => mat.get(i, j)(0)))
+
+  /** Reads the first `r` entries of a `CV_64F` column vector into a plain Scala `Seq` — the companion to
+    * [[readMatrix]] for a translation or similar single-column result. The Mat is borrowed.
+    */
+  private[scalacv] def readColumn(mat: Mat, r: Int): Seq[Double] =
+    (0 until r).map(i => mat.get(i, 0)(0))
+
   /** Shared kernel validation. OpenCV's own check lives in native code and aborts with a `CvException`
     * quoting a C++ expression; failing here names the parameter the caller actually passed.
     */

@@ -83,7 +83,10 @@ class NavigationTest extends munit.FunSuite:
 
   test("visual odometry needs at least five correspondences"):
     val four = Seq.fill(4)(Point(1, 1))
-    assertEquals(VisualOdometry.estimate(four, four, focal = 500, principalPoint = Point(100, 100)), None)
+    assertEquals(
+      VisualOdometry.estimate(four, four, Intrinsics(fx = 500, fy = 500, cx = 100, cy = 100)),
+      None
+    )
 
   test("visual odometry recovers a sideways camera translation"):
     val focal = 500.0
@@ -105,7 +108,7 @@ class NavigationTest extends munit.FunSuite:
       Point(focal * (x - camX) / z + cx, focal * y / z + cy)
     val from = world.map(project(_, 0.0))
     val to = world.map(project(_, 0.4))
-    VisualOdometry.estimate(from, to, focal, Point(cx, cy)) match
+    VisualOdometry.estimate(from, to, Intrinsics(focal, focal, cx, cy)) match
       case None => fail("odometry should recover a motion from eight good correspondences")
       case Some(motion) =>
         // recoverPose returns a UNIT translation direction (monocular scale is unobservable)...
