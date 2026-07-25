@@ -219,6 +219,13 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
 
   /** Adaptive threshold — a per-neighbourhood threshold that holds up under uneven lighting (document scans,
     * OCR prep). `CV_8UC1` only, so usually after [[gray]].
+    *
+    * The parameter order here leads with the two you actually tune (`blockSize`, `c`); the mid-level
+    * `Ops.adaptiveThreshold` instead mirrors OpenCV's own `(maxValue, method, blockSize, c)` order. The
+    * divergence is deliberate, and it cannot bite silently: the leading parameters have different types
+    * across the tiers (`blockSize: Int` here vs `maxValue: Double` there), so a positional call meant for one
+    * tier does not compile against the other. Use named arguments —
+    * `adaptiveThreshold(blockSize = 15, c = 4)` — and the order stops mattering entirely.
     */
   def adaptiveThreshold(
       blockSize: Int = 11,

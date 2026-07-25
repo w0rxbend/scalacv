@@ -71,7 +71,7 @@ val srcBlur = bgr()
 val soft: Either[CvError, Array[Byte]] =
   srcBlur.gaussianBlur(Size(5, 5), sigmaX = 1.5).use(Images.encode(_, ".png"))
 val boxed: Either[CvError, Array[Byte]] =
-  srcBlur.blur(Size(3, 3)).use(Images.encode(_, ".png"))
+  srcBlur.boxBlur(Size(3, 3)).use(Images.encode(_, ".png"))
 srcBlur.release()
 ```
 

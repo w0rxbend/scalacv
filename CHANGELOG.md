@@ -34,8 +34,12 @@ All notable changes to scalacv are recorded here. The format follows
     matching, change detection).
   - **Navigation / visual SLAM front end**: `OpticalFlow`, ORB `Features`, `StereoDepth` and obstacle
     detection, `VisualOdometry`/`Odometry`, `Localizer`, `Navigator`, `OccupancyGrid`, `LoopDetector`.
-- `Camera`/`Recorder` (high-level capture), `Video` interop, and `BufferedImage` interop
-  (`Image.fromBufferedImage`/`toBufferedImage`, for AWT/Swing and notebook display).
+- `Camera`/`Recorder` (high-level capture) — including `Camera.taking`, a scoped batch that closes its
+  frames for you, and a borrowing `Recorder.write(Mat)` so `Video.frames` records with no per-frame copy —
+  `Video` interop, and `BufferedImage` interop (`Image.fromBufferedImage`/`toBufferedImage`, for AWT/Swing
+  and notebook display).
+- `Contour` geometry beyond area/perimeter/boundingRect: `centroid` (image moments), `convexHull`, and
+  `approx` (Ramer–Douglas–Peucker polygon simplification).
 - A `Models` registry + verifying downloader (`Models.fetch`); model specs live with their detectors
   (`FaceDetect.modelSpec`, `FaceRecognizer.modelSpec`).
 - `scalacv-zio`: native ownership as ZIO `Scope`, plus a non-memoizing frame `ZStream`, typed-`CvError`

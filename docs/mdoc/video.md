@@ -103,14 +103,22 @@ Camera.usingFile("clip.mp4") { cam =>
 `foreach` takes `attemptsPerFrame` as a leading parameter list; the default of `3` suits a camera.
 For a file, where the first failed read is genuinely end-of-file, `cam.foreach(1)(...)` is exact.
 
-### take — collect owned frames
+### take / taking — collect a batch of frames
 
 `take(n)` returns the next `n` frames as owned `Image`s — **each is yours to close**. Frames beyond
-the end of the stream are simply absent, so the list may be shorter than `n`:
+the end of the stream are simply absent, so the result may be shorter than `n`. The type cannot warn
+you that the elements are live resources, so prefer `taking(n) { … }`, which hands you the batch and
+closes every frame when the block returns — on success, failure, and exception:
 
 ```scala mdoc:compile-only
 Camera.usingFile("clip.mp4") { cam =>
-  val firstFive: List[Image] = cam.take(5)
+  // Scoped: the frames are released for you when the block ends.
+  cam.taking(5) { frames =>
+    frames.foreach(img => println(img.width))
+  }
+
+  // Unscoped: only when you need to hold the frames past a scope — then you must close them.
+  val firstFive: Seq[Image] = cam.take(5)
   try firstFive.foreach(img => println(img.width))
   finally firstFive.foreach(_.close())
 }

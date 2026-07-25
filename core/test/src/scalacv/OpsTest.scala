@@ -80,10 +80,10 @@ class OpsTest extends munit.FunSuite:
       val e = intercept[IllegalArgumentException](colour.gaussianBlur(Size(4, 4), 1.0))
       assert(e.getMessage.contains("odd"), e.getMessage)
 
-  test("blur keeps size and type"):
+  test("boxBlur keeps size and type"):
     withImages: (colour, _) =>
       scoped: use =>
-        val b = use(colour.blur(Size(3, 3)))
+        val b = use(colour.boxBlur(Size(3, 3)))
         assertEquals(b.get.size(), colour.size())
         assertEquals(b.get.`type`(), colour.`type`())
         assertOwnership(colour, b)

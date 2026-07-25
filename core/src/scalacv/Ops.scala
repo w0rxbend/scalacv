@@ -82,14 +82,19 @@ extension (self: Mat)
       Imgproc.GaussianBlur(self, _, kernel.toCv, sigmaX, sigmaY, border.cvValue)
 
   /** Normalised box filter. `anchor` defaults to `Point(-1, -1)`, OpenCV's spelling of "the kernel centre".
+    *
+    * Named `boxBlur`, not `blur`, on purpose: the high-level [[Image.blur]] is a radius-based *Gaussian*, and
+    * a mid-level method sharing that name would silently switch filter families (and output hash) the moment
+    * a caller drops from `image.blur(2)` to `image.mat.blur(...)`. The two are different algorithms; the
+    * names say so.
     */
-  def blur(
+  def boxBlur(
       kernel: Size,
       anchor: Point = Point(-1, -1),
       border: BorderType = BorderType.Reflect101
   ): Managed[Mat] =
-    Mats.requireKernel("blur", kernel, allowZero = false)
-    Mats.produce("blur")(Imgproc.blur(self, _, kernel.toCv, anchor.toCv, border.cvValue))
+    Mats.requireKernel("boxBlur", kernel, allowZero = false)
+    Mats.produce("boxBlur")(Imgproc.blur(self, _, kernel.toCv, anchor.toCv, border.cvValue))
 
   /** Canny edge detection. The result is always `CV_8UC1` regardless of the source type.
     *
@@ -467,12 +472,12 @@ extension (self: Mat)
     binarised.use: bin =>
       val coords = Mat()
       try
-        Core.findNonZero(bin, coords)
+        Cv.orThrow("deskew")(Core.findNonZero(bin, coords))
         if coords.rows == 0 then Managed(self.clone()) // a blank page — nothing to straighten
         else
           Managed.use(org.opencv.core.MatOfPoint2f()): pts =>
-            coords.convertTo(pts, CvType.CV_32F)
-            val skew = normalizeSkew(Imgproc.minAreaRect(pts).angle)
+            Cv.orThrow("deskew")(coords.convertTo(pts, CvType.CV_32F))
+            val skew = normalizeSkew(Cv.orThrow("deskew")(Imgproc.minAreaRect(pts)).angle)
             if math.abs(skew) < 0.1 || math.abs(skew) > maxAngle then Managed(self.clone())
             else deskewRotate(self, skew)
       finally coords.release()

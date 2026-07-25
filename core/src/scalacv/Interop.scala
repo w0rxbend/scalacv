@@ -14,7 +14,12 @@ private[scalacv] object Interop:
 
   /** Copies `mat` (8-bit, 1/3/4 channels) into a `BufferedImage`. A 4-channel image is flattened to BGR. */
   def toBufferedImage(mat: Mat): BufferedImage =
-    require(mat.depth == CvType.CV_8U, s"toBufferedImage needs an 8-bit image, got depth ${mat.depth}")
+    require(
+      mat.depth == CvType.CV_8U,
+      s"toBufferedImage needs an 8-bit image, got depth ${mat.depth}. A 16-bit or float image — a depth or " +
+        "disparity map, a raw filter response — has to be brought to 8-bit first: `normalize` rescales it to " +
+        "0–255 grey, `colorMap` renders it in false colour."
+    )
     require(!mat.empty(), "toBufferedImage needs a non-empty image")
     require(
       mat.channels == 1 || mat.channels == 3 || mat.channels == 4,
@@ -38,23 +43,31 @@ private[scalacv] object Interop:
     val w = image.getWidth
     val h = image.getHeight
     val mat = Mat(h, w, CvType.CV_8UC3)
-    // A TYPE_3BYTE_BGR source already stores bytes in exactly the B,G,R interleaving CV_8UC3 wants —
-    // that is the very layout the general path below draws *into* — so its backing array copies straight
-    // in, skipping a second BufferedImage and a full Graphics2D redraw. This is the round-trip out of
-    // toBufferedImage, and the common ImageIO-JPEG case. The exact-length guard keeps it to the simple,
-    // contiguous raster: a translated or padded sub-raster (getSubimage) fails it and takes the safe path.
-    val fastData = image.getType match
-      case BufferedImage.TYPE_3BYTE_BGR =>
-        val d = image.getRaster.getDataBuffer.asInstanceOf[DataBufferByte].getData
-        if d.length == w * h * 3 then d else null
-      case _ => null
-    if fastData != null then mat.put(0, 0, fastData)
-    else
-      // Any other type (ARGB, indexed, custom, or an unusual raster) → normalise through a known BGR
-      // layout so every source is handled uniformly.
-      val bgr = BufferedImage(w, h, BufferedImage.TYPE_3BYTE_BGR)
-      val g = bgr.getGraphics
-      try g.drawImage(image, 0, 0, null)
-      finally g.dispose()
-      mat.put(0, 0, bgr.getRaster.getDataBuffer.asInstanceOf[DataBufferByte].getData)
-    mat
+    // Guard the fill: this is the one raw native allocation in the read path with no Managed wrapping it, so a
+    // broken raster, an oversized `put`, or a failing `drawImage` between allocating the Mat and returning it
+    // would otherwise strand a native buffer with no owner. Free it on any throw before it escapes.
+    try
+      // A TYPE_3BYTE_BGR source already stores bytes in exactly the B,G,R interleaving CV_8UC3 wants —
+      // that is the very layout the general path below draws *into* — so its backing array copies straight
+      // in, skipping a second BufferedImage and a full Graphics2D redraw. This is the round-trip out of
+      // toBufferedImage, and the common ImageIO-JPEG case. The exact-length guard keeps it to the simple,
+      // contiguous raster: a translated or padded sub-raster (getSubimage) fails it and takes the safe path.
+      val fastData = image.getType match
+        case BufferedImage.TYPE_3BYTE_BGR =>
+          val d = image.getRaster.getDataBuffer.asInstanceOf[DataBufferByte].getData
+          if d.length == w * h * 3 then d else null
+        case _ => null
+      if fastData != null then mat.put(0, 0, fastData)
+      else
+        // Any other type (ARGB, indexed, custom, or an unusual raster) → normalise through a known BGR
+        // layout so every source is handled uniformly.
+        val bgr = BufferedImage(w, h, BufferedImage.TYPE_3BYTE_BGR)
+        val g = bgr.getGraphics
+        try g.drawImage(image, 0, 0, null)
+        finally g.dispose()
+        mat.put(0, 0, bgr.getRaster.getDataBuffer.asInstanceOf[DataBufferByte].getData)
+      mat
+    catch
+      case e: Throwable =>
+        mat.release()
+        throw e

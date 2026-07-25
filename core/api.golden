@@ -130,7 +130,9 @@ final class scalacv.Camera
   def snapshot$default$1(): int
   def snapshot(int): scala.util.Either<scalacv.CvError, scalacv.Image>
   def take$default$2(): int
-  def take(int, int): scala.collection.immutable.List<scalacv.Image>
+  def take(int, int): scala.collection.immutable.Seq<scalacv.Image>
+  def taking$default$2(): int
+  def taking<A>(int, int, scala.Function1<scala.collection.immutable.Seq<scalacv.Image>, A>): A
 final class scalacv.CaptureInfo
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -187,9 +189,13 @@ final class scalacv.Contour
   implements java.io.Serializable, scala.Product
   def <init>(scala.collection.immutable.Seq<scalacv.Point>): void
   def _1(): scala.collection.immutable.Seq<scalacv.Point>
+  def approx$default$2(): boolean
+  def approx(double, boolean): scalacv.Contour
   def area(): double
   def boundingRect(): scalacv.Rect
   def canEqual(java.lang.Object): boolean
+  def centroid(): scala.Option<scalacv.Point>
+  def convexHull(): scalacv.Contour
   def copy$default$1(): scala.collection.immutable.Seq<scalacv.Point>
   def copy(scala.collection.immutable.Seq<scalacv.Point>): scalacv.Contour
   def equals(java.lang.Object): boolean
@@ -614,6 +620,7 @@ final class scalacv.Recorder
   def <init>(scalacv.Managed<org.opencv.videoio.VideoWriter>, scalacv.Size): void
   def close(): void
   def size(): scalacv.Size
+  def write(org.opencv.core.Mat): scala.util.Either<scalacv.CvError, scala.runtime.BoxedUnit>
   def write(scalacv.Image): scala.util.Either<scalacv.CvError, scala.runtime.BoxedUnit>
   def writer(): org.opencv.videoio.VideoWriter
 final class scalacv.Rect
@@ -1312,12 +1319,12 @@ object scalacv.Ops.package
   def addWeighted(org.opencv.core.Mat, double, org.opencv.core.Mat, double, double): scalacv.Managed<org.opencv.core.Mat>
   def bilateralFilter(org.opencv.core.Mat, int, double, double): scalacv.Managed<org.opencv.core.Mat>
   def bitwiseNot(org.opencv.core.Mat): scalacv.Managed<org.opencv.core.Mat>
-  def blur$default$3(org.opencv.core.Mat): scalacv.Point
-  def blur$default$4(org.opencv.core.Mat): scalacv.BorderType
-  def blur(org.opencv.core.Mat, scalacv.Size, scalacv.Point, scalacv.BorderType): scalacv.Managed<org.opencv.core.Mat>
   def border$default$6(org.opencv.core.Mat): scalacv.BorderType
   def border$default$7(org.opencv.core.Mat): scalacv.Scalar
   def border(org.opencv.core.Mat, int, int, int, int, scalacv.BorderType, scalacv.Scalar): scalacv.Managed<org.opencv.core.Mat>
+  def boxBlur$default$3(org.opencv.core.Mat): scalacv.Point
+  def boxBlur$default$4(org.opencv.core.Mat): scalacv.BorderType
+  def boxBlur(org.opencv.core.Mat, scalacv.Size, scalacv.Point, scalacv.BorderType): scalacv.Managed<org.opencv.core.Mat>
   def canny$default$4(org.opencv.core.Mat): int
   def canny$default$5(org.opencv.core.Mat): boolean
   def canny(org.opencv.core.Mat, double, double, int, boolean): scalacv.Managed<org.opencv.core.Mat>

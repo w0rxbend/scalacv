@@ -1,5 +1,6 @@
 package scalacv
 
+import org.opencv.core.Mat
 import org.opencv.videoio.{VideoCapture, VideoWriter}
 
 /** A video container/codec, as a FOURCC.
@@ -101,11 +102,23 @@ final class Camera private (private val handle: Managed[VideoCapture]) extends A
         finally image.close()
 
   /** The next `count` frames as owned [[Image]]s — **each is yours to close** (or take them into a
-    * `Using.Manager`). Frames beyond the end of the stream are simply absent, so the list may be shorter.
+    * `Using.Manager`). Frames beyond the end of the stream are simply absent, so the result may be shorter.
+    *
+    * These are live resources in a bare collection, which the type cannot warn you about: prefer [[taking]],
+    * which closes them for you, unless you specifically need to hold the frames past a scope.
     */
-  def take(count: Int, attemptsPerFrame: Int = 3): List[Image] =
+  def take(count: Int, attemptsPerFrame: Int = 3): Seq[Image] =
     require(count >= 0, s"take count cannot be negative, got $count")
     Video.framesCopied(handle.get, attemptsPerFrame)(_.take(count).map(Image.wrap).toList)
+
+  /** Grabs the next `count` frames, runs `use` over them, and closes every one afterwards — on success, on
+    * failure, and on exception. The scoped counterpart to [[take]]: reach for this when you need several
+    * frames at once (to compare or composite them) without owning their lifetimes.
+    */
+  def taking[A](count: Int, attemptsPerFrame: Int = 3)(use: Seq[Image] => A): A =
+    val images = take(count, attemptsPerFrame)
+    try use(images)
+    finally images.foreach(_.close())
 
   /** Reads every frame, applies `transform`, and writes the results to `path` as a video; returns the number
     * of frames written.
@@ -179,8 +192,14 @@ final class Recorder private (private val handle: Managed[VideoWriter], val size
   /** Appends `image` as the next frame. The image is **borrowed**, not consumed. `Left` if OpenCV rejects the
     * write; throws [[IllegalArgumentException]] if the frame size does not match the recorder's.
     */
-  def write(image: Image): Either[CvError, Unit] =
-    val frame = image.mat
+  def write(image: Image): Either[CvError, Unit] = write(image.mat)
+
+  /** Appends a raw `Mat` as the next frame — the borrowing overload, so the zero-copy frames from
+    * `Video.frames` can be recorded without the per-frame clone an [[Image]] would require. The Mat is
+    * **borrowed**, not consumed. `Left` if OpenCV rejects the write; throws [[IllegalArgumentException]] if
+    * the frame size does not match the recorder's.
+    */
+  def write(frame: Mat): Either[CvError, Unit] =
     require(
       frame.cols == size.width.toInt && frame.rows == size.height.toInt,
       s"frame ${frame.cols}x${frame.rows} does not match the recorder's ${size.width.toInt}x${size.height.toInt}"

@@ -2,7 +2,7 @@ package scalacv
 
 import scala.jdk.CollectionConverters.ListHasAsScala
 
-import org.opencv.core.{Mat, MatOfPoint, MatOfPoint2f}
+import org.opencv.core.{Mat, MatOfInt, MatOfPoint, MatOfPoint2f}
 import org.opencv.imgproc.Imgproc
 
 /** One connected outline, copied out of native memory.
@@ -58,6 +58,44 @@ final case class Contour(points: Seq[Point]):
       // arcLength takes MatOfPoint2f specifically, not the MatOfPoint the other two accept.
       Managed(MatOfPoint2f(cvPoints*))
         .use(m => Cv.orThrow("arcLength")(Imgproc.arcLength(m, true)))
+
+  /** The centroid (centre of mass) from image moments, or `None` where it is undefined: an empty contour, or
+    * a zero-area one (`m00 == 0` — a single point or a collinear run) where the division would be by zero.
+    * `Moments` is plain data (public `double` fields, no native handle), so nothing to free here.
+    */
+  lazy val centroid: Option[Point] =
+    if isEmpty then None
+    else
+      withPointMat: m =>
+        val mo = Cv.orThrow("moments")(Imgproc.moments(m))
+        if mo.m00 == 0.0 then None
+        else Some(Point(mo.m10 / mo.m00, mo.m01 / mo.m00))
+
+  /** The convex hull as a new [[Contour]] — the tightest convex outline enclosing these points. `convexHull`
+    * returns indices into this contour, which are mapped back to the original points (so the hull's vertices
+    * are exactly points of this contour, not re-derived).
+    */
+  lazy val convexHull: Contour =
+    if isEmpty then this
+    else
+      withPointMat: m =>
+        Managed(MatOfInt()).use: idx =>
+          Cv.orThrow("convexHull")(Imgproc.convexHull(m, idx))
+          Contour(idx.toArray.iterator.map(i => points(i)).toIndexedSeq)
+
+  /** Ramer–Douglas–Peucker simplification: fewer vertices, none more than `epsilon` pixels off the original
+    * outline. `epsilon` is usually a small fraction of the [[perimeter]] — `contour.approx(0.02 * perimeter)`
+    * turns a noisy quadrilateral back into four corners. `closed` treats the outline as a closed curve, the
+    * right default for a `findContours` result.
+    */
+  def approx(epsilon: Double, closed: Boolean = true): Contour =
+    require(epsilon >= 0, s"approx epsilon cannot be negative, got $epsilon")
+    if isEmpty then this
+    else
+      Managed(MatOfPoint2f(cvPoints*)).use: src =>
+        Managed(MatOfPoint2f()).use: dst =>
+          Cv.orThrow("approxPolyDP")(Imgproc.approxPolyDP(src, dst, epsilon, closed))
+          Contour(dst.toArray.toIndexedSeq.map(Point.from))
 
   /** The points converted to OpenCV's own type, once. Shared by all three metrics so reading two or three off
     * the same contour does not re-materialise the conversion each time. Lazy, so a `Contour` a caller never
