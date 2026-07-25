@@ -35,26 +35,20 @@ object VisualOdometry:
     require(focal > 0, s"focal length must be positive, got $focal")
     if from.size < 5 then None
     else
-      val pts1 = MatOfPoint2f(from.map(p => CvPoint(p.x, p.y))*)
-      val pts2 = MatOfPoint2f(to.map(p => CvPoint(p.x, p.y))*)
-      val camera = intrinsics(focal, principalPoint)
-      val essential = Calib3d.findEssentialMat(pts1, pts2, camera, Calib3d.RANSAC, 0.999, 1.0)
-      try
-        if essential.empty || essential.rows < 3 || essential.cols < 3 then None
-        else
-          val rotation = Mat()
-          val translation = Mat()
-          try
-            val inliers = Calib3d.recoverPose(essential, pts1, pts2, camera, rotation, translation)
-            Some(CameraMotion(rows(rotation, 3, 3), column(translation, 3), inliers))
-          finally
-            rotation.release()
-            translation.release()
-      finally
-        pts1.release()
-        pts2.release()
-        camera.release()
-        essential.release()
+      // Every native Mat is acquired through Managed.use — a throw from any constructor or from
+      // findEssentialMat frees the ones already allocated. The plain val-before-try form leaked pts1/
+      // pts2/camera when findEssentialMat threw on degenerate input, since it ran before the try.
+      Managed.use(MatOfPoint2f(from.map(p => CvPoint(p.x, p.y))*)): pts1 =>
+        Managed.use(MatOfPoint2f(to.map(p => CvPoint(p.x, p.y))*)): pts2 =>
+          Managed.use(intrinsics(focal, principalPoint)): camera =>
+            Managed.use(Calib3d.findEssentialMat(pts1, pts2, camera, Calib3d.RANSAC, 0.999, 1.0)):
+              essential =>
+                if essential.empty || essential.rows < 3 || essential.cols < 3 then None
+                else
+                  Managed.use(Mat()): rotation =>
+                    Managed.use(Mat()): translation =>
+                      val inliers = Calib3d.recoverPose(essential, pts1, pts2, camera, rotation, translation)
+                      Some(CameraMotion(rows(rotation, 3, 3), column(translation, 3), inliers))
 
   /** The pinhole camera matrix `[[f,0,cx],[0,f,cy],[0,0,1]]`, caller-owned. */
   private def intrinsics(focal: Double, principal: Point): Mat =

@@ -43,26 +43,21 @@ object Localizer:
     require(focal > 0, s"focal length must be positive, got $focal")
     if worldPoints.size < 4 then None
     else
-      val objectPoints = MatOfPoint3f(worldPoints.map((x, y, z) => Point3(x, y, z))*)
-      val imgPoints = MatOfPoint2f(imagePoints.map(p => CvPoint(p.x, p.y))*)
-      val camera = intrinsics(focal, principalPoint)
-      val distortion = MatOfDouble(0.0, 0.0, 0.0, 0.0)
-      val rvec = Mat()
-      val tvec = Mat()
-      try
-        val ok = Calib3d.solvePnP(objectPoints, imgPoints, camera, distortion, rvec, tvec)
-        if !ok then None
-        else
-          Managed.use(Mat()): rotation =>
-            Calib3d.Rodrigues(rvec, rotation)
-            Some(CameraPose(rows(rotation), column(tvec)))
-      finally
-        objectPoints.release()
-        imgPoints.release()
-        camera.release()
-        distortion.release()
-        rvec.release()
-        tvec.release()
+      // Every native Mat is acquired through Managed.use, so a throw from any constructor frees the ones
+      // already allocated — the plain val-before-try form leaked the earlier Mats when a later constructor
+      // threw before the try began. Mirrors HeadPose.estimate in Pose.scala.
+      Managed.use(MatOfPoint3f(worldPoints.map((x, y, z) => Point3(x, y, z))*)): objectPoints =>
+        Managed.use(MatOfPoint2f(imagePoints.map(p => CvPoint(p.x, p.y))*)): imgPoints =>
+          Managed.use(intrinsics(focal, principalPoint)): camera =>
+            Managed.use(MatOfDouble(0.0, 0.0, 0.0, 0.0)): distortion =>
+              Managed.use(Mat()): rvec =>
+                Managed.use(Mat()): tvec =>
+                  val ok = Calib3d.solvePnP(objectPoints, imgPoints, camera, distortion, rvec, tvec)
+                  if !ok then None
+                  else
+                    Managed.use(Mat()): rotation =>
+                      Calib3d.Rodrigues(rvec, rotation)
+                      Some(CameraPose(rows(rotation), column(tvec)))
 
   private def intrinsics(focal: Double, principal: Point): Mat =
     val m = Mat.zeros(3, 3, org.opencv.core.CvType.CV_64F)
