@@ -48,6 +48,31 @@ class BackgroundEffectTest extends munit.FunSuite:
       finally out.close()
     finally mask.close()
 
+  test("blurBackground closes the receiver even when compositing throws (no leak on the error path)"):
+    // A wrong-size mask trips alphaBlend's require. The compositing runs inside blurBackground's try,
+    // so the receiver is consumed on the throw path too — before the fix it leaked, staying alive.
+    val img = scene()
+    val badMask = Image.blank(2, 2, Scalar.Black, channels = 1)
+    try
+      intercept[IllegalArgumentException](img.blurBackground(badMask))
+      // The receiver was spent, so touching it now must fail rather than read a leaked Mat.
+      intercept[IllegalStateException](img.width): Unit
+    finally
+      badMask.close()
+      img.close() // idempotent; frees it if the fix regressed and it is still alive
+
+  test("replaceBackground closes the receiver even when compositing throws"):
+    val img = scene()
+    val badMask = Image.blank(2, 2, Scalar.Black, channels = 1)
+    val bg = Image.blank(W, H, Scalar(0, 255, 0))
+    try
+      intercept[IllegalArgumentException](img.replaceBackground(badMask, bg))
+      intercept[IllegalStateException](img.width): Unit
+    finally
+      badMask.close()
+      bg.close()
+      img.close()
+
   test("Segmenter.decodeMask thresholds a probability plane into a scaled person mask"):
     val h = 8
     val w = 10

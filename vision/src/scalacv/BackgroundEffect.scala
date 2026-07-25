@@ -54,9 +54,10 @@ object BackgroundEffect:
         Core.multiply(bgF, inv3, bgP)
         val sumF = use(Managed(Mat())).get
         Core.add(fgP, bgP, sumF)
-        val out = Mat()
-        sumF.convertTo(out, CvType.CV_8U)
-        Managed(out) // not registered with `use`, so it escapes the scope alive
+        // The result escapes the Using.Manager alive, so it must be allocated under its own guard:
+        // if convertTo throws between `Mat()` and the `Managed` wrap, `out` would otherwise be a bare
+        // native buffer no `use` registered and nobody frees. `Mats.produce` releases it on any throw.
+        Mats.produce("alphaBlend")(sumF.convertTo(_, CvType.CV_8U))
       .get
 
   /** Blurs the background behind `mask`, keeping the person sharp. Borrows `image` and `mask`. */
@@ -145,14 +146,17 @@ extension (img: Image)
     * feathering the edge. `mask` is a borrowed `CV_8UC1` foreground mask (from [[Segmenter]] or any keying).
     */
   def blurBackground(mask: Image, strength: Int = 15, feather: Int = 7): Image =
-    val out = BackgroundEffect.blur(img.mat, mask.mat, strength, feather)
-    try Image(out)
+    // The compositing runs INSIDE the try: it can throw (a size-mismatched mask trips alphaBlend's
+    // require, gaussianBlur can raise a CvException), and like every Image transform this consumes the
+    // receiver, so `img` must be closed on the throw path too — not only on success.
+    try Image(BackgroundEffect.blur(img.mat, mask.mat, strength, feather))
     finally img.close()
 
   /** Replaces the background (where `mask` is black) with `background`, resized to fit and feathered at the
     * edge — a virtual background. `mask` and `background` are borrowed.
     */
   def replaceBackground(mask: Image, background: Image, feather: Int = 7): Image =
-    val out = BackgroundEffect.replace(img.mat, mask.mat, background.mat, feather)
-    try Image(out)
+    // Inside the try for the same reason as blurBackground: the compositing can throw, and the
+    // receiver is consumed either way, so close it on the throw path too.
+    try Image(BackgroundEffect.replace(img.mat, mask.mat, background.mat, feather))
     finally img.close()
