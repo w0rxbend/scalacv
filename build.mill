@@ -288,6 +288,23 @@ object examples extends ScalacvModule {
   }
 }
 
+/** Native-leak regression tests, in their own module so they run in a **dedicated forked JVM** with a
+  * single suite — process RSS is the only signal that sees scalacv's `org.opencv.core.Mat` buffers
+  * (`Pointer.totalBytes()` is blind to them; proven in docs/audit/06-profiling.md), and RSS would be
+  * contaminated if 40-odd suites shared the JVM as they do in `core.test`. Kept out of `core.test` for
+  * exactly that isolation. See docs/audit/05-leak-harness.md.
+  */
+object leaks extends ScalacvModule {
+  def moduleDeps = Seq(core, vision, graphs)
+  def mvnDeps    = Deps.opencvNatives
+  def forkArgs   = Task { Deps.runtimeJvmArgs(jvmMajor()) :+ "-Djava.awt.headless=true" }
+
+  object test extends ScalaTests with ScalacvTests {
+    def scalacOptions = Task { Deps.looseTestScalacOptions }
+    def mvnDeps       = super.mvnDeps() ++ Deps.opencvNatives
+  }
+}
+
 /** Performance benchmarks. Never published and never a CI gate — a developer-facing harness for
   * measuring the wins the perf work claims. Depends on all three published modules plus the natives,
   * and reuses the same JVM flags as `examples`. Run with `./mill benchmarks.runMain scalacv.bench.<Name>`.
