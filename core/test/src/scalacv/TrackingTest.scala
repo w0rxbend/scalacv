@@ -34,6 +34,21 @@ class TrackingTest extends munit.FunSuite:
       assert(math.abs(predicted.y) < 5, s"y should stay near 0, got ${predicted.y}")
     finally k.close()
 
+  test("Kalman survives its setup releasing the filter's own internal matrices (refcount assumption)"):
+    // Kalman.point wraps kf.get_transitionMatrix()/get_measurementMatrix()/... in Managed.use and
+    // release()s them. That is safe ONLY because the OpenCV Java binding returns a refcount-sharing
+    // header copy, so release drops the extra refcount and the filter's member survives. This pins
+    // that assumption: had a release actually freed the transition matrix, a long run would diverge.
+    val k = Kalman.point(Point(0, 0))
+    try
+      for i <- 1 to 500 do
+        k.predict()
+        k.correct(Point(i.toDouble, i * 0.5)) // a steady diagonal track
+      val p = k.predict() // one step past the last measurement (i = 500)
+      assert(math.abs(p.x - 501.0) < 15, s"x should still track the line after 500 steps, got ${p.x}")
+      assert(math.abs(p.y - 250.5) < 15, s"y should still track the line after 500 steps, got ${p.y}")
+    finally k.close()
+
   test("a CSRT tracker follows an object across frames"):
     val tracker = Tracker.create(TrackerKind.Csrt)
     val f0 = frame(50)
