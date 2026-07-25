@@ -195,6 +195,24 @@ class SlamPropertiesTest extends munit.FunSuite:
       finally revisit.close()
     finally d.close()
 
+  test("maxKeyframes bounds the live count by evicting the oldest, keeping later indices valid"):
+    val d = LoopDetector(minMatches = 25, recentExclusion = 1, maxKeyframes = 3)
+    try
+      val indices =
+        for s <- 1 to 8 yield
+          val img = place(s)
+          try d.addKeyframe(img)
+          finally img.close()
+      // Eight appended, only three kept live — the rest were evicted and their descriptors freed.
+      assertEquals(d.keyframeCount, 3, "live keyframes must be capped at maxKeyframes")
+      // Indices stayed stable and monotonic (no renumbering of survivors on eviction).
+      assertEquals(indices.toList, (0 to 7).toList, "append indices must remain absolute and stable")
+      // The store still works: detecting a recent place must not crash on the evicted (tombstoned) slots.
+      val probe = place(8)
+      try d.detect(probe): Unit // no NoSuchElement / null deref over tombstones
+      finally probe.close()
+    finally d.close()
+
   test("close is idempotent and clears the store"):
     val d = LoopDetector()
     val img = place(1)
