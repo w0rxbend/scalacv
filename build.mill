@@ -78,6 +78,24 @@ object Deps {
   def runtimeJvmArgs(jvmMajor: Int): Seq[String] =
     if (jvmMajor >= 24) Seq("--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow")
     else Seq.empty
+
+  /** Scaladoc options shared by the API doc builds (`apidocs`, `zio`). All verified to exist in
+    * scaladoc 3.3.8 via `-help` (see API-REFERENCE.md).
+    *   - `-source-links` puts a "source" link on every member, to its exact line on GitHub master.
+    *   - `-social-links` adds the GitHub icon to the Scaladoc header.
+    *   - `-project` / `-project-version` label the header.
+    * `-external-mappings` (JDK/Bytedeco) is deferred — its regexes match classpath entries and a
+    * wrong URL yields broken links, so it is done deliberately in its own change (tracked issue).
+    */
+  def scaladocOptions(version: String, sourceRoot: String): Seq[String] = Seq(
+    "-project", "scalacv",
+    "-project-version", version,
+    "-social-links:github::https://github.com/w0rxbend/scalacv",
+    // The `<local-prefix>=github://…` form strips the build's absolute path prefix so the GitHub
+    // blob links are repo-relative (core/src/…). The prefix is the workspace root, computed at
+    // build time, so it's correct locally and in CI (where the checkout dir differs).
+    s"-source-links:$sourceRoot=github://w0rxbend/scalacv/master"
+  )
 }
 
 /** Shared settings for every Scala module in the build.
@@ -234,6 +252,7 @@ object zio extends ScalacvPublishModule {
   def artifactName = "scalacv-zio"
   def moduleDeps   = Seq(core)
   def mvnDeps      = Seq(mvn"dev.zio::zio:2.1.26", mvn"dev.zio::zio-streams:2.1.26")
+  def scalaDocOptions = Task { Deps.scaladocOptions(publishVersion(), mill.api.BuildCtx.workspaceRoot.toString) }
 
   /* zio-test rather than munit here (D6): the module under test is ZIO, so its own effects are
    * the natural thing to write assertions in. Natives are still needed at run time. */
@@ -308,6 +327,7 @@ object apidocs extends ScalacvModule {
   // Document all three modules' sources as one site. docJar renders whatever docSources returns;
   // moduleDeps supplies the classpath those sources compile against.
   def docSources = Task { core.docSources() ++ vision.docSources() ++ graphs.docSources() }
+  def scalaDocOptions = Task { Deps.scaladocOptions(core.publishVersion(), mill.api.BuildCtx.workspaceRoot.toString) }
 }
 
 /** The documentation site's mdoc stage.
