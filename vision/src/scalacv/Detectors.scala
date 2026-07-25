@@ -5,15 +5,9 @@ import scala.jdk.CollectionConverters.*
 import org.opencv.core.Mat
 import org.opencv.objdetect.{ArucoDetector, Dictionary, Objdetect, QRCodeDetector}
 
-/* Fiducial and barcode detection: QR codes and ArUco markers.
- *
- * Both OpenCV detectors report their geometry through `Mat`s that the caller then owns, and neither
- * `QRCodeDetector` nor `ArucoDetector` has a public `release()` — they are two of the 185 types that only
- * expose a private `delete(long)`. So every one of them is created, used and freed inside a
- * single call here, and the results cross the boundary as ordinary immutable Scala data ([[Point]] case
- * classes) rather than as live native handles. That is what makes these signatures return `Seq` instead of
- * `Managed[…]`: there is nothing left to own.
- */
+// Fiducial and barcode detection: QR codes ([[Qr]]) and ArUco markers ([[Aruco]]). The shared ownership
+// model — detectors built, used and freed inside a single call, results crossing the boundary as plain data
+// — is documented on [[Qr]], the canonical case, and referenced from [[Aruco]].
 
 /** One decoded QR code.
   *
@@ -23,7 +17,15 @@ import org.opencv.objdetect.{ArucoDetector, Dictionary, Objdetect, QRCodeDetecto
   */
 final case class QrCode(text: String, corners: Seq[Point])
 
-/** QR code detection over `org.opencv.objdetect.QRCodeDetector`. */
+/** QR code detection over `org.opencv.objdetect.QRCodeDetector`.
+  *
+  * Both this and [[Aruco]] report their geometry through `Mat`s that the caller would otherwise own, and
+  * neither `QRCodeDetector` nor `ArucoDetector` has a public `release()` — they are two of the 185 types that
+  * only expose a private `delete(long)`. So each detector is created, used and freed inside a single call
+  * here, and the results cross the boundary as ordinary immutable Scala data ([[Point]] case classes) rather
+  * than as live native handles. That is what makes these signatures return `Seq` instead of `Managed[…]`:
+  * there is nothing left to own.
+  */
 object Qr:
 
   private given Releasable[QRCodeDetector] = Releasable.handle(_.getNativeObjAddr)
@@ -93,7 +95,9 @@ enum ArucoDictionary(val cvValue: Int):
   */
 final case class ArucoMarker(id: Int, corners: Seq[Point])
 
-/** ArUco marker detection and generation over `org.opencv.objdetect.ArucoDetector`. */
+/** ArUco marker detection and generation over `org.opencv.objdetect.ArucoDetector`. Follows the same
+  * build-use-free ownership model documented on [[Qr]] — detectors are never handed to the caller.
+  */
 object Aruco:
 
   private given Releasable[ArucoDetector] = Releasable.handle(_.getNativeObjAddr)
