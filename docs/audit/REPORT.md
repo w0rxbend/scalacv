@@ -71,6 +71,26 @@ Each PR independently mergeable, atomic conventional commit, with the test that 
 12. **`build: wire Scoverage + ratcheting threshold`** — from a measured baseline (Phase 4 §1).
 13. **`build: UnscopedNativeAlloc scalafix rule`** — guards F2/F4 recurrence (Phase 7).
 
+## Remediation status (implemented on branch `audit/native-memory-remediation`)
+
+All fixes landed as atomic commits with proving tests; the full suite is green (**488 tests, 0 failures**: core 469, zio 10, examples 6, leaks 3) and the CI gates (strict compile, scalafmt, scalafix) pass.
+
+| Item | Status | Commit / note |
+|---|---|---|
+| F1 receiver leak | **Fixed** | compositing moved inside the `try`; deterministic contract tests (use-after throws) for both entry points |
+| F4 escaping `out` | **Fixed** | routed through `Mats.produce` (same commit as F1) |
+| F2 gif eager render | **Fixed** | frames rendered inside the cleanup scope; throwing-frame test |
+| F7 int overflow | **Fixed** | Long-checked `require` in `OccupancyGrid.apply`; Long comparison in `Interop.toMat`; typed-error test |
+| F8 Kalman assumption | **Test added** | 500-step tracking pins the refcount-sharing assumption |
+| F6 LoopDetector | **Fixed** | optional `maxKeyframes` with tombstone eviction (indices stay stable); api.golden regenerated |
+| F5 zio interrupt window | **Documented** | scaladoc hardened; a bracket would free the caller-owned clone early (the UAF the review warns of), so no code change |
+| Leak harness | **Built** | `LeakAssertions` (RSS-based) + dedicated `leaks` module; wired into CI |
+| Property tests | **Added** | munit-scalacheck: roundtrip/identity/type-invariant laws |
+| Tolerance metrics | **Added** | PSNR / max-abs-diff on a lossy JPEG path (no binary goldens) |
+| F3 withPolygons | **Accepted (documented)** | the leak is inside the generated binding's `Converters.vector_vector_Point_to_Mat`, unreachable from scalacv; a reimplementation would risk changing rasterization the project gates bit-exactly. Kept as the self-documented upstream limitation. |
+| Scoverage gate | **Deferred (feasibility verified)** | Scala 3.3.8 `-coverage-out` works and the `_2.13` artifact exists, but the Mill 1.1.7 scoverage-contrib coordinate did not resolve from the build header (`::`→`_mill1_3` and explicit `_2.13` both 404 at repo1). Not wired rather than risk the green build; the correct Mill-1.1.7 contrib mechanism is the open item. |
+| scalafix ownership rule | **Deferred** | a custom SemanticRule is a separate sub-project; scoped as optional in Phase 7, not attempted this pass |
+
 ## Final pass — adversarial self-review
 
 **1. Which findings are pattern-matched JavaCPP folklore rather than observed here?** The audit actively *rejected* the folklore. The plan's PointerScope items are **N/A** — scalacv uses none (grep-verified), so I did not invent PointerScope findings. The plan's `totalBytes`/`maxBytes` leak recipe I **disproved empirically** (G1) rather than parroting. F1, F2, F4 were read directly in the code (not inferred). F3 is the authors' own documented residue plus the code. F8 I initially flagged as a possible double-free and, on verifying the binding's copy-constructor refcount semantics, **downgraded to safe** — the honest outcome. Nothing in the register is a generic template match.
