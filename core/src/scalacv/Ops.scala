@@ -398,7 +398,9 @@ extension (self: Mat)
   /** Edge-preserving smoothing — flattens texture while keeping edges (the basis of the painterly filters).
     */
   def edgePreserving(strength: Float = 60, detail: Float = 0.4f): Managed[Mat] =
-    Mats.produce("edgePreservingFilter")(Photo.edgePreservingFilter(self, _, 1, strength, detail))
+    Mats.produce("edgePreservingFilter")(
+      Photo.edgePreservingFilter(self, _, Photo.RECURS_FILTER, strength, detail)
+    )
 
   /** Inpaints the region under `mask` (`CV_8UC1`, non-zero = repair) from its surroundings — remove a
     * scratch, an object, or a watermark. `mask` is borrowed.
@@ -436,7 +438,7 @@ extension (self: Mat)
   def emboss: Managed[Mat] =
     Managed.use(Mat(3, 3, CvType.CV_32F)): k =>
       k.put(0, 0, -2.0, -1.0, 0.0, -1.0, 1.0, 1.0, 0.0, 1.0, 2.0)
-      Mats.produce("emboss")(Imgproc.filter2D(self, _, -1, k))
+      Mats.produce("emboss")(Imgproc.filter2D(self, _, OutputDepth.SameAsSource.cvValue, k))
 
   /** Adjusts saturation: `factor` > 1 is more vivid, `< 1` toward grey, `0` fully grey (still 3-channel). */
   def saturate(factor: Double): Managed[Mat] =
@@ -496,8 +498,8 @@ extension (self: Mat)
           dst,
           m,
           Size(mat.cols.toDouble, mat.rows.toDouble).toCv,
-          Imgproc.INTER_LINEAR,
-          Core.BORDER_CONSTANT,
+          Interpolation.Linear.cvValue,
+          BorderType.Constant.cvValue,
           Scalar.White.toCv
         )
 
