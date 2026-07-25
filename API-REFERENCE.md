@@ -67,10 +67,14 @@ private `-Y` options, absent from the standard `-help`; type-based Inkuire searc
 of scope rather than assumed to exist. `-doc-source-url` / `-doc-external-doc` exist only as
 deprecated Scala-2 aliases (`-source-links` / `-external-mappings` are the current forms).
 
-## Next steps for the API build
+## Status of the API build
 
-The current pipeline generates and unifies Scaladoc and verifies every inbound link. Not yet wired
-(follow-up, in dependency order): pass `-external-mappings` (JDK + Bytedeco), `-source-links`
-(GitHub), `-project-logo`, `-social-links`, `-snippet-compiler`, and `-groups` to the `apidocs` /
-`zio` docJar; align Scaladoc CSS tokens with `DESIGN.md`; inject the site header post-build; add the
-guide↔API back-links. Each lands as its own commit with the flag list above as the checklist.
+**Done:** unified Scaladoc (core+vision+graphs) generated and served at `/api/core`; every inbound
+`/api/` link verified by `assemble-docs.sh`; `-source-links` (every member → its exact GitHub line,
+verified resolving in production), `-social-links`, `-project`/`-project-version` wired into the
+`apidocs`/`zio` docJar; **every unresolved Scaladoc `@link` fixed** (cold build warns 0).
+
+**Follow-up (tracked issue), in dependency order:** `-external-mappings` (JDK + Bytedeco — deferred
+because its regexes match classpath entries and a wrong URL yields broken links, so it needs its own
+verified change); `-snippet-compiler`, `-groups`; align Scaladoc CSS tokens with `DESIGN.md`; inject
+the site header post-build to close the guide→API chrome seam; add guide↔API back-links.

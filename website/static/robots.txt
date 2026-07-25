@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://w0rxbend.github.io/scalacv/sitemap.xml

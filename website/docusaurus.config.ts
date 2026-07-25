@@ -18,7 +18,9 @@ const config: Config = {
 
   future: {
     v4: true, // ease the eventual Docusaurus v4 upgrade
-    // experimental_faster (Rspack) is enabled in a later, measured step — not by default.
+    // future.faster (Rspack + SWC + Lightning CSS) measured at ~3s vs 3s baseline with an identical
+    // 1.2M bundle on this 35-page site — negligible gain for an experimental toolchain, so left off.
+    // Revisit if the guide count grows large. See PERF-REPORT.md.
   },
 
   url: 'https://w0rxbend.github.io',

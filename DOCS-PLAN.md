@@ -123,15 +123,18 @@ All 34 guide pages port cleanly (every snippet compiles via mdoc; anchors and AP
 
 ## Remaining work tracks (dependency order)
 
-Base-path config + mdoc wiring (**done**) unblock everything. Then, roughly parallel:
+**Done:** base-path + mdoc wiring · all 34 pages ported · design tokens (`DESIGN.md`) · unified
+Scaladoc + inbound-link check · CI flip to Docusaurus (deployed, verified on `/scalacv/`) · unified
+Pagefind search (`SEARCH-REPORT.md`) · Scaladoc `-source-links`/`-social-links`/`-project-version` ·
+**all unresolved `@link`s fixed** · Memory page (ownership rule, borrowing WRONG/RIGHT, leak recipe) ·
+`future.faster` measured and decided (`PERF-REPORT.md`) · `robots.txt` + sitemap.
 
-1. **Search** (Pagefind) → `SEARCH-REPORT.md`. Owner: `website/`, CI.
-2. **Design polish**: self-hosted fonts, `memory` admonition swizzle, Tabs on install → `DESIGN.md`.
-3. **Scaladoc pass**: fix the unresolved `@link` warnings surfaced by `apidocs.docJar`
-   (`usingFile`, `FFmpeg`, `Video.frames`, `IllegalStateException`) and audit `@param`/`@return`
-   allocate/alias/mutate facts. Separate commit series.
-4. **CI + flip**: replace VitePress `docs.yml` with the Docusaurus build/deploy; delete
-   `docs/vitepress`, `docs/package*.json`; fix the `*-javadoc.jar` glob.
-5. **Perf / a11y / SEO**: Lighthouse + axe budgets, sitemap, OG images → `PERF-REPORT.md`.
+**Follow-up (filed by `scripts/create-docs-issues.sh`):**
 
-Deferred items are filed by `create-issues.sh`.
+1. **Scaladoc pass, part 2**: `-external-mappings` (JDK/Bytedeco), `-snippet-compiler`, `-groups`;
+   audit `@param`/`@return` for allocate/alias/mutate facts; CSS align + post-build header injection.
+2. **Design polish**: self-hosted fonts, `memory` admonition swizzle, Mill|sbt|scala-cli Tabs.
+3. **Bidirectional guide↔API links**.
+4. **Perf / a11y / SEO**: Lighthouse + axe in CI (need headless Chrome), per-page OG images.
+5. **Search relevance tuning** (`GaussianBlur`, `canny`).
+6. **Repo metadata** + fork detach (owner-only GitHub settings).
