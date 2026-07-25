@@ -26,16 +26,17 @@ setting is an owner action. Once set, every push to `master` rebuilds and redepl
 2. Update `CHANGELOG.md`: move `[Unreleased]` items under a new version heading with the date.
 3. Tag: `git tag v0.1.0 && git push origin v0.1.0`. `publishVersion` reads the tag through
    `VcsVersion`, so the tag *is* the version — do not hand-edit a version anywhere.
-4. The release workflow builds, signs and uploads `core` (`scalacv`) and `zio` (`scalacv-zio`)
-   as a **USER_MANAGED** deployment — it is staged, not released.
-5. Inspect the staged deployment in the Central Portal. It must show exactly two artifacts, each
-   with sources, javadoc and signatures, and the POM must declare no `<classifier>` dependency.
+4. The release workflow builds, signs and uploads the four published modules — `core` (`scalacv`),
+   `vision` (`scalacv-vision`), `graphs` (`scalacv-graphs`) and `zio` (`scalacv-zio`) — as a
+   **USER_MANAGED** deployment: it is staged, not released.
+5. Inspect the staged deployment in the Central Portal. It must show exactly those four artifacts, each
+   with sources, javadoc and signatures, and each POM must declare no `<classifier>` dependency.
 6. Publish it, or drop it and fix what was wrong. Nothing reaches consumers until you publish.
 
 ## What must never happen
 
-- `examples` and `examples-gui` must not publish. CI asserts exactly two publishable modules; if
-  that assertion ever fails, do not release.
+- `examples` and `examples-gui` must not publish. Both CI (`publish-shape`) and the release workflow
+  assert the exact set `core graphs vision zio`; if that assertion ever fails, do not release.
 - The published POM must carry no per-platform classifier (it structurally cannot — but the POM
   test guards the dependency set regardless). Consumers add their own natives line; the README
   and docs explain why.

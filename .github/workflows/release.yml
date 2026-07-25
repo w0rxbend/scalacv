@@ -10,6 +10,11 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: write # create the GitHub Release from the tag
+  id-token: write # OIDC for build-provenance attestation (when publish is enabled)
+  attestations: write
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -26,11 +31,29 @@ jobs:
           fetch-depth: 0 # VcsVersion needs tags to compute the version
       - uses: coursier/cache-action@v8
 
-      - name: Guard — exactly two modules may publish
+      - name: Guard — exactly the four published modules may publish
+        # Assert the exact *set*, not a count — the same check ci.yml's publish-shape leg runs. A count would
+        # wave through a rename or a fifth module that silently ships; a new publishable module must be a
+        # deliberate, failing-until-updated edit here (and in RELEASING.md). examples/examples-gui must never
+        # appear, which is why they do not extend PublishModule.
         run: |
-          n=$(./mill resolve "__:PublishModule.publishArtifacts" | grep -cE "^[a-z][a-zA-Z0-9-]*\.publishArtifacts$")
-          echo "publishable modules: $n"
-          test "$n" -eq 2
+          got=$(./mill resolve "__:PublishModule.publishArtifacts" \
+            | grep -E "^[a-z][a-zA-Z0-9-]*\.publishArtifacts$" \
+            | sed -E 's/\.publishArtifacts$//' \
+            | sort | paste -sd' ' -)
+          want="core graphs vision zio"
+          echo "publishable modules: $got"
+          test "$got" = "$want"
+
+      - name: Changelog has an entry for this tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        # Step 2 of RELEASING.md — moving [Unreleased] under a dated version heading — is easy to forget and
+        # silent when forgotten. The tag is the source of truth (VcsVersion), so require a matching heading.
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          esc="${v//./\\.}"
+          grep -qE "^## \[?${esc}\]?" CHANGELOG.md \
+            || { echo "CHANGELOG.md has no '## [$v]' heading — move [Unreleased] under it first (RELEASING.md step 2)"; exit 1; }
 
       - name: Report the version being released
         run: ./mill show core.publishVersion
@@ -39,3 +62,19 @@ jobs:
       # inspected in the Central Portal before it goes live (RELEASING.md).
       # - name: Publish to Central (staged)
       #   run: ./mill mill.javalib.SonatypeCentralPublishModule/publishAll --publishArtifacts __.publishArtifacts --shouldRelease false
+
+      # Attest provenance for the signed jars once publishing is live. It needs the built artifacts on disk,
+      # so it belongs immediately after the publish step above — enable both together. `subject-path` globs the
+      # jars Mill assembles under out/. Provenance lets a consumer verify the jar came from this tag and repo.
+      # - name: Attest build provenance
+      #   uses: actions/attest-build-provenance@v1
+      #   with:
+      #     subject-path: "out/**/{jar,sourceJar,docJar}.dest/*.jar"
+
+      - name: Create the GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        # Independent of the Central publish above: even before Central is wired up, a pushed tag cuts a
+        # GitHub Release with auto-generated notes, so the tag is not a silent event.
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
