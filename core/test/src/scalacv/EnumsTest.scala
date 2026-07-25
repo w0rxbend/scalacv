@@ -68,7 +68,7 @@ class EnumsTest extends munit.FunSuite:
   test("geometry round-trips across the native boundary"):
     val r = Rect(3, 4, 10, 20)
     assertEquals(Rect.from(r.toCv), r)
-    assertEquals(r.area, 200)
+    assertEquals(r.area, 200L)
     val p = Point(1.5, 2.5)
     assertEquals(Point.from(p.toCv), p)
     assertEquals(Scalar.from(Scalar.Red.toCv), Scalar(0, 0, 255, 0))

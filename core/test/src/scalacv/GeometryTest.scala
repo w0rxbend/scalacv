@@ -29,9 +29,14 @@ class GeometryTest extends munit.FunSuite:
   test("Rect round-trips, computes area, and rejects a negative extent"):
     val r = Rect(10, 20, 40, 30)
     assertEquals(Rect.from(r.toCv), r)
-    assertEquals(r.area, 40 * 30)
+    assertEquals(r.area, 40L * 30)
     assertEquals(r.topLeft, Point(10, 20))
     assertEquals(r.bottomRight, Point(50, 50))
+
+  test("Rect.area does not overflow on a large full-frame rectangle"):
+    // width * height as Int wraps negative past a ~46340 side; as Long it is exact.
+    val big = Rect(0, 0, 50_000, 50_000)
+    assertEquals(big.area, 2_500_000_000L)
     val e = intercept[IllegalArgumentException](Rect(0, 0, -5, 5))
     assert(e.getMessage.contains("negative"), e.getMessage)
 
