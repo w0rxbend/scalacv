@@ -173,6 +173,13 @@ jobs:
           echo "$out"
           echo "$out" | grep -q '^OK'
 
+      - name: Test on arm64
+        # The full suite runs only on ubuntu-x86_64 in the build matrix. This extends the same
+        # assertions to Apple-silicon arm64, where an arch-specific bug — a wrong native classifier,
+        # an endianness or alignment assumption — would otherwise ship unseen. Mill's default JDK
+        # (the build header) is enough; the point is the architecture, not another JDK rung.
+        run: ./mill core.test zio.test
+
   publish-shape:
     name: Published artifact shape
     runs-on: ubuntu-latest
