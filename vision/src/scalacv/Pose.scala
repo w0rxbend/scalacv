@@ -113,7 +113,7 @@ enum KeypointLayout:
   *
   * MediaPipe's models ship as TFLite; OpenCV's inference path — and therefore scalacv's — is ONNX, so this is
   * built the way [[FaceDetect]] and [[Dnn]] are: **you bring the model** (`Dnn.fromOnnx`), and scalacv
-  * provides the typed result and the decode. The two common output layouts are both handled ([[decode]]), so
+  * provides the typed result and the decode. The two common output layouts are both handled ([[PoseEstimator.decode]]), so
   * a MoveNet or an OpenPose export drops in by naming its [[KeypointLayout]] and [[PoseTopology]].
   *
   * {{{
@@ -259,7 +259,7 @@ object HeadPose:
   */
 extension (img: Image)
 
-  /** Runs a keypoint [[Net]] over this image and decodes a [[Pose]] — the one-call form of the blob → forward
+  /** Runs a keypoint `Net` over this image and decodes a [[Pose]] — the one-call form of the blob → forward
     * → decode dance, the pose counterpart to `image.faces(detector)`. The image is only read from (it stays
     * alive), and the network is borrowed, not released.
     *

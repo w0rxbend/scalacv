@@ -126,7 +126,7 @@ enum AdaptiveMethod(val cvValue: Int):
   case Gaussian extends AdaptiveMethod(Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C)
 
 /** A false-colour map — turns a single-channel image (a depth map, a motion field, any data) into a colour
-  * heatmap. The perceptually-uniform ones ([[Viridis]], [[Magma]], [[Inferno]], [[Plasma]], [[Turbo]]) are
+  * heatmap. The perceptually-uniform ones ([[Colormap.Viridis]], [[Magma]], [[Inferno]], [[Plasma]], [[Turbo]]) are
   * the honest choice for data; [[Jet]] is the classic-but-misleading rainbow.
   */
 enum Colormap(val cvValue: Int):

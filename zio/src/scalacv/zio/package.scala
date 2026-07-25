@@ -23,7 +23,7 @@ import scalacv.*
   * blocks in native code with no timeout of its own. Parking those on the compute executor would starve it.
   */
 
-/** Acquires any releasable native object into the current [[Scope]].
+/** Acquires any releasable native object into the current `Scope`.
   *
   * The object is freed when the scope closes, through the same [[Releasable]] the synchronous API uses — so
   * `acquireRelease(CascadeClassifier())` frees it via the `delete(long)` bridge with the finalizer disarmed,
@@ -63,7 +63,7 @@ def fromCv[A](result: => Either[CvError, A]): IO[CvError, A] = ZIO.fromEither(re
 def readImage(path: String, flags: ImreadFlags = ImreadFlags.Color): IO[CvError, Image] =
   ZIO.blocking(fromCv(Image.read(path, flags)))
 
-/** Acquires an [[Image]] into the current [[Scope]]: read on acquire, closed when the scope ends — on
+/** Acquires an [[Image]] into the current `Scope`: read on acquire, closed when the scope ends — on
   * success, failure, and interruption, which the synchronous `Image.reading` cannot promise once an interrupt
   * is in play. Its failure is the typed [[CvError]] from the read.
   *
@@ -97,7 +97,7 @@ extension (self: Mat)
   * camera is a dropped connection; the two are indistinguishable through OpenCV's API, as B9 documents.
   *
   * For the duration of the stream the capture's exception mode is forced off and its previous value restored
-  * when the stream ends, exactly as the synchronous [[Video.frames]] does: with exception mode on, plain
+  * when the stream ends, exactly as the synchronous `Video.frames` does: with exception mode on, plain
   * end-of-file surfaces as the same `CvException` a broken stream does, so a finished file would fail the
   * stream rather than complete it. The read runs on the blocking pool and is interruptible, so an interrupted
   * stream does not wedge on a dead camera.

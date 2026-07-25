@@ -4,7 +4,7 @@ import java.awt.image.{BufferedImage, DataBufferByte}
 
 import org.opencv.core.{CvType, Mat}
 
-/** Bridges between an OpenCV [[Mat]] and a `java.awt.image.BufferedImage`.
+/** Bridges between an OpenCV `Mat` and a `java.awt.image.BufferedImage`.
   *
   * This is what lets scalacv images render in a notebook (Almond/Jupyter display a `BufferedImage`
   * automatically) and interoperate with anything in the AWT/Swing world — `ImageIO`, an on-screen `JLabel`, a

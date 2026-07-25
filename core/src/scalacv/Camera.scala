@@ -49,7 +49,7 @@ object Codec:
   * Camera.using(0)(_.snapshot().flatMap(_.write("shot.png")))
   * }}}
   *
-  * The capture is **caller-owned**: [[close]] it, or acquire it through [[Camera.using]] / [[usingFile]],
+  * The capture is **caller-owned**: [[close]] it, or acquire it through [[Camera.using]] / [[Camera.usingFile]],
   * which close for you. `Camera` is `AutoCloseable`.
   */
 final class Camera private (private val handle: Managed[VideoCapture]) extends AutoCloseable:
@@ -136,7 +136,7 @@ final class Camera private (private val handle: Managed[VideoCapture]) extends A
         catch case e: CvError => Left(e)
         finally recorder.close()
 
-  /** Releases the capture. Idempotent; called for you by [[Camera.using]] / [[usingFile]] and `Using`. */
+  /** Releases the capture. Idempotent; called for you by [[Camera.using]] / [[Camera.usingFile]] and `Using`. */
   def close(): Unit = handle.release()
 
 object Camera:

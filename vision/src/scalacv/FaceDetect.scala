@@ -12,7 +12,7 @@ import org.opencv.objdetect.FaceDetectorYN
 /** One face reported by [[FaceDetect.detect]].
   *
   * Plain immutable Scala data, copied out of OpenCV's result Mat, so it stays valid after every native object
-  * involved has been freed — see [[Geometry]] for why that copy is the right trade.
+  * involved has been freed — see `Geometry` for why that copy is the right trade.
   *
   * @param box
   *   the face's bounding box. It is **not** clipped to the image: YuNet regresses boxes from anchors, so a
@@ -364,7 +364,7 @@ object FaceDetect:
   */
 extension (img: Image)
 
-  /** Faces via a YuNet [[FaceDetectorYN]] you supply — the model is yours to build (see [[FaceDetect]]). The
+  /** Faces via a YuNet `FaceDetectorYN` you supply — the model is yours to build (see [[FaceDetect]]). The
     * detector is borrowed and mutated (its input size is set to this image), never released here.
     */
   def faces(detector: FaceDetectorYN): Seq[Face] = FaceDetect.detect(detector, img.mat)

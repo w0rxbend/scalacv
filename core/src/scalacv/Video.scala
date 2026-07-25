@@ -8,8 +8,8 @@ import org.opencv.videoio.{VideoCapture, Videoio}
 /** Which videoio backend to ask for.
   *
   * [[Any]] is the right answer almost always: OpenCV tries its registered backends in priority order and uses
-  * the first that can read the source. Naming one is for when that choice is wrong — forcing [[FFmpeg]] on a
-  * file that the image-sequence reader would otherwise claim, or forcing [[V4L2]] on Linux so that a camera's
+  * the first that can read the source. Naming one is for when that choice is wrong — forcing [[CaptureBackend.FFmpeg]] on a
+  * file that the image-sequence reader would otherwise claim, or forcing [[CaptureBackend.V4L2]] on Linux so that a camera's
   * native pixel format is honoured.
   *
   * A backend that is not compiled into the OpenCV build on the classpath simply cannot open anything, so
@@ -100,7 +100,7 @@ object CaptureOptions:
   * `frameCount == 0` (or `-1`) because the question is meaningless; some containers report a `frameCount`
   * that is off by a frame or two from what actually decodes; `fps` can be `0` for a camera that has not
   * delivered a frame yet. Use these to size a [[org.opencv.videoio.VideoWriter]] or to show progress — never
-  * as a loop bound. The frame count that is true is the one [[Video.frames]] hands you.
+  * as a loop bound. The frame count that is true is the one `frames` hands you.
   */
 final case class CaptureInfo(
     width: Int,
@@ -133,8 +133,8 @@ final case class CaptureInfo(
   * This is the one place in scalacv where a `Mat` you are handed is **not** yours, and it is the exact
   * opposite of the contract in `Ops.scala`:
   *
-  *   - The `Mat` from [[frames]] is **borrowed**. It is valid from the `next()` that returned it until you
-  *     next ask the iterator for anything, and it is released when the [[frames]] block returns. The iterator
+  *   - The `Mat` from `frames` is **borrowed**. It is valid from the `next()` that returned it until you
+  *     next ask the iterator for anything, and it is released when the `frames` block returns. The iterator
   *     is retired at that point, so keeping one is inert rather than dangerous.
   *   - Do not retain it. Do not put it in a collection. `it.toList` compiles and gives you N references to
   *     one Mat holding the last frame — not N frames.
@@ -157,7 +157,7 @@ final case class CaptureInfo(
   *
   * `VideoCapture.setExceptionMode(true)` turns a silent `false` into a `CvException` carrying OpenCV's own
   * message, and [[open]] uses it: a missing file becomes `CvError.NativeCall` quoting the path instead of a
-  * bare "it did not open". [[frames]] deliberately turns it **off** for the duration of the loop, because
+  * bare "it did not open". `frames` deliberately turns it **off** for the duration of the loop, because
   * OpenCV reports end-of-file through the identical exception it uses for a broken stream —
   * `cap.cpp:533 error: (-2:Unspecified error) in function 'grab'`, measured on a clean five-frame file. With
   * exception mode on there is no way to tell "the video ended" from "the camera was unplugged", so the loop
@@ -224,7 +224,7 @@ object Video:
     * elements: `toList`, `toVector`, `sliding` and `buffered` all yield references to the same Mat.
     * [[framesCopied]] is the version that gives you frames you can keep.
     *
-    * `capture` is borrowed too: it is neither released nor rewound, so calling [[frames]] again resumes from
+    * `capture` is borrowed too: it is neither released nor rewound, so calling `frames` again resumes from
     * wherever the previous traversal stopped. That is what makes partial consumption — `_.take(10)` — behave
     * the way it reads.
     *
@@ -258,7 +258,7 @@ object Video:
         finally iterator.retire()
     finally capture.setExceptionMode(callerExceptionMode)
 
-  /** As [[frames]], but each frame is cloned into a caller-owned [[Managed]].
+  /** As `frames`, but each frame is cloned into a caller-owned [[Managed]].
     *
     * The copy is what makes the frame keepable: it has its own pixel buffer, so it stays valid after the
     * iterator moves on and after this method returns. The price is one allocation and one full-frame copy per
@@ -369,7 +369,7 @@ object Video:
       pending = false
       frame
 
-    /** Ends the traversal for good. Called when the owning [[Video.frames]] scope exits, so that an iterator
+    /** Ends the traversal for good. Called when the owning `frames` scope exits, so that an iterator
       * someone kept hold of reports "no more frames" instead of decoding into a released Mat.
       */
     def retire(): Unit =

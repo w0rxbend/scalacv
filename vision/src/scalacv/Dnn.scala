@@ -15,7 +15,7 @@ import org.opencv.dnn.{Dnn as CvDnn, Net}
   * ==Ownership==
   *
   * `Net` is one of the 185 generated types with no public `release()`, so it is freed through the
-  * `delete(long)` bridge — see [[Releasable.handle]]. Both the [[Net]] from [[fromOnnx]] and the `Mat`s from
+  * `delete(long)` bridge — see [[Releasable.handle]]. Both the `Net` from [[fromOnnx]] and the `Mat`s from
   * [[blobFromImage]] and [[forward]] are **caller-owned**: release them, or take them with [[Managed.use]].
   * Nothing here takes ownership of an argument.
   *
@@ -51,7 +51,7 @@ object Dnn:
     * `forward`, with nothing pointing back at the load.
     *
     * @return
-    *   a caller-owned [[Net]], or the reason it could not be read.
+    *   a caller-owned `Net`, or the reason it could not be read.
     */
   def fromOnnx(path: String): Either[CvError, Managed[Net]] =
     val file = File(path)

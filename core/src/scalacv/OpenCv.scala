@@ -30,7 +30,7 @@ object OpenCv:
           doLoad()
           loaded = true
 
-  /** True once [[load]] has completed successfully. */
+  /** True once [[OpenCv.load]] has completed successfully. */
   def isLoaded: Boolean = loaded
 
   private def doLoad(): Unit =

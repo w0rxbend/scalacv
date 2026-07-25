@@ -48,7 +48,7 @@ enum CascadeName(val fileName: String):
   *   1. **`CascadeClassifier` never reports a bad path.** `new CascadeClassifier("/nope.xml")` succeeds,
   *      prints nothing useful, and hands back an object whose `empty()` is `true`. Every subsequent
   *      `detectMultiScale` then returns zero rectangles, which is indistinguishable from "there was nothing
-  *      in the frame". [[load]] and [[loadFrom]] check `empty()` and return a `Left` instead.
+  *      in the frame". [[Cascades.load]] and [[loadFrom]] check `empty()` and return a `Left` instead.
   *   1. **The cascades are a classpath resource, not a file on disk.** They live in the per-platform
   *      classifier jar under `share/opencv4/haarcascades/`, so they have to be extracted before OpenCV — a
   *      C++ library that only knows filesystem paths — can read them. `Loader.cacheResource` does that and
@@ -180,11 +180,11 @@ extension (mat: Mat)
   */
 extension (img: Image)
 
-  /** Rectangles via a Haar [[CascadeClassifier]] you supply (see [[Cascades]]). Borrowed, not released.
+  /** Rectangles via a Haar `CascadeClassifier` you supply (see [[Cascades]]). Borrowed, not released.
     *
     * Takes the raw classifier, not the [[Managed]] [[Cascades.load]] returns — a defaulted overload for the
     * `Managed` is not expressible alongside this one — so keep the classifier inside its scope to keep the
-    * spent-handle guard: `Cascades.load(name).map(_.use(c => image.detectHaar(c)))`. (The [[FaceDetectorYN]]
+    * spent-handle guard: `Cascades.load(name).map(_.use(c => image.detectHaar(c)))`. (The `FaceDetectorYN`
     * detector, `faces`, does take a `Managed` directly, since it has no defaults to collide.)
     */
   def detectHaar(

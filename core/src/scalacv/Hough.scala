@@ -5,7 +5,7 @@ import org.opencv.imgproc.Imgproc
 
 /* Typed results for the Hough line transforms.
  *
- * OpenCV returns lines as an `Nx1` multi-channel [[org.opencv.core.Mat]] whose element type differs per
+ * OpenCV returns lines as an `Nx1` multi-channel `Mat` whose element type differs per
  * transform, and whose channels have no names. Reading one correctly means knowing three separate facts that
  * nothing in the Java signature tells you — and getting any of them wrong either throws from JNI or, worse,
  * silently reinterprets bit patterns. Verified against 4.13.0 by execution:

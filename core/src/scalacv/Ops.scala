@@ -5,7 +5,7 @@ import org.opencv.core.{Core, CvType, Mat}
 import org.opencv.imgproc.Imgproc
 import org.opencv.photo.Photo
 
-/* Imgproc and Core operations as extension methods on [[org.opencv.core.Mat]].
+/* Imgproc and Core operations as extension methods on `Mat`.
  *
  * ==The ownership contract==
  *
@@ -40,7 +40,7 @@ import org.opencv.photo.Photo
 
 /** The destination depth for the derivative operators.
   *
-  * Worth a type of its own rather than a bare `int` because [[SameAsSource]] is a trap on the commonest
+  * Worth a type of its own rather than a bare `int` because [[OutputDepth.SameAsSource]] is a trap on the commonest
   * input: `Sobel` on an 8-bit unsigned image with `ddepth = -1` clips every negative derivative to zero, so
   * half of each edge silently disappears. [[Signed16]] then [[convertScaleAbs]] is the standard fix.
   */
@@ -515,7 +515,7 @@ extension (self: Managed[Mat])
     * This is the whole reason the ownership contract above is safe to write down. Each op returns a Mat the
     * caller owns, so a chain of them produces one owned Mat per stage, and every stage but the last is
     * garbage the moment the next one returns. `pipe` makes that the default rather than something the caller
-    * has to remember: `self` is consumed, and using it afterwards throws [[IllegalStateException]] instead of
+    * has to remember: `self` is consumed, and using it afterwards throws `IllegalStateException` instead of
     * reading freed memory.
     *
     * {{{

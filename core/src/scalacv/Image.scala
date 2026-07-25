@@ -4,7 +4,7 @@ import org.opencv.core.{CvType, Mat}
 
 /** The high-level, fluent face of scalacv — an owned image you transform by chaining.
   *
-  * `Image` is the layer to reach for first. It wraps a single native [[org.opencv.core.Mat]] and lets you
+  * `Image` is the layer to reach for first. It wraps a single native `Mat` and lets you
   * express the common OpenCV shape — read, transform, detect, annotate, write — as one readable chain:
   *
   * {{{
@@ -18,7 +18,7 @@ import org.opencv.core.{CvType, Mat}
   * ==Move semantics: a transform consumes the image==
   *
   * Every **transform** (`gray`, `blur`, `canny`, `resize`, `crop`, a `draw*`) returns a *new* `Image` and
-  * **spends the one it was called on** — using the old handle afterwards throws [[IllegalStateException]]
+  * **spends the one it was called on** — using the old handle afterwards throws `IllegalStateException`
   * rather than reading freed memory. That is what makes the chain leak-free without a scope: each step frees
   * (or hands on) the previous Mat, so a long pipeline holds exactly one live Mat at a time, never a pile of
   * intermediates. It is [[Mats.chain]]'s guarantee, surfaced as a type.
@@ -49,7 +49,7 @@ import org.opencv.core.{CvType, Mat}
   * this library cannot foresee), the op throws [[CvError.NativeCall]], naming the operation — an unchecked
   * throw, so it is invisible at the call site. Argument mistakes this library *can* see are rejected up front
   * with `IllegalArgumentException`. Only the `Either`-returning boundary methods ([[Image.read]], [[write]],
-  * [[bytes]], [[decode]]) turn failure into a value. To fold a transform's throw into an `Either` too, wrap
+  * [[bytes]], [[Image.decode]]) turn failure into a value. To fold a transform's throw into an `Either` too, wrap
   * it with [[Cv.attempt]]. Reusing an already-consumed image throws `IllegalStateException`; see [[Managed]]
   * for `-Dscalacv.trackOwnership=true`, which points the error at the consuming call.
   *
@@ -119,7 +119,7 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
       val side = radius * 2 + 1
       transform(_.gaussianBlur(Size(side.toDouble, side.toDouble)))
 
-  /** Gaussian blur with an explicit kernel and sigmas — the mid-level [[Ops]] signature. */
+  /** Gaussian blur with an explicit kernel and sigmas — the mid-level `Ops` signature. */
   def gaussianBlur(kernel: Size, sigmaX: Double = 0, sigmaY: Double = 0): Image =
     transform(_.gaussianBlur(kernel, sigmaX, sigmaY))
 
@@ -315,7 +315,7 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
   /** Applies a named, composable [[Filter]] — `image.filter(Filter.vintage)`. */
   def filter(f: Filter): Image = f(this)
 
-  /** Detects the text skew and rotates the image upright — the OCR straightening step. See [[Ops.deskew]]. */
+  /** Detects the text skew and rotates the image upright — the OCR straightening step. See `Ops.deskew`. */
   def deskew(maxAngle: Double = 45.0): Image = transform(_.deskew(maxAngle))
 
   /** A binary mask of the pixels whose channels all fall within `[lo, hi]` — the core of colour segmentation.
