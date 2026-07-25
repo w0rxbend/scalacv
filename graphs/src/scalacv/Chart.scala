@@ -9,8 +9,16 @@ package scalacv
   */
 object Chart:
 
+  /** The drawing box every chart needs. A non-positive box yields degenerate `Rect`s and divide-by-span
+    * artifacts rather than a picture, so it is a precondition violation — thrown, like the other graphics
+    * value types validate their invariants — not a silently empty chart.
+    */
+  private def requireBox(width: Int, height: Int): Unit =
+    require(width > 0 && height > 0, s"a chart needs a positive box, got ${width}x$height")
+
   /** A bottom-aligned bar chart of `values` (scaled to the tallest). */
   def bars(values: Seq[Double], width: Int, height: Int, color: Color = Color.Blue, gap: Int = 4): Picture =
+    requireBox(width, height)
     if values.isEmpty then Picture.empty
     else
       val peak = values.map(math.abs).max.max(1e-9)
@@ -30,6 +38,7 @@ object Chart:
       color: Color = Color.Green,
       strokeWidth: Int = 2
   ): Picture =
+    requireBox(width, height)
     if values.sizeIs < 2 then Picture.empty
     else
       val peak = values.map(math.abs).max.max(1e-9)
@@ -46,6 +55,7 @@ object Chart:
       color: Color = Color.Red,
       radius: Double = 3
   ): Picture =
+    requireBox(width, height)
     if points.isEmpty then Picture.empty
     else
       val xs = points.map(_._1)
@@ -66,6 +76,7 @@ object Chart:
       color: Color = Color.Blue,
       strokeWidth: Int = 2
   ): Picture =
+    requireBox(width, height)
     if values.sizeIs < 2 then Picture.empty
     else
       val peak = values.map(math.abs).max.max(1e-9)
@@ -86,6 +97,7 @@ object Chart:
       height: Int,
       palette: Seq[Color] = Color.categorical
   ): Picture =
+    requireBox(width, height)
     val positive = values.map(math.abs)
     val total = positive.sum
     if total <= 0 || palette.isEmpty then Picture.empty
@@ -115,6 +127,7 @@ object Chart:
       color: Color = Color.Purple
   ): Picture =
     require(bins >= 1, s"a histogram needs at least one bin, got $bins")
+    requireBox(width, height)
     if data.isEmpty then Picture.empty
     else
       val lo = data.min

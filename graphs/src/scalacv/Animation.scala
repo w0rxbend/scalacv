@@ -20,6 +20,14 @@ object Animation:
 
   private given Releasable[CvAnimation] = Releasable.handle(_.getNativeObjAddr)
 
+  /** Removes a half-written output after a failed render or encode. A truncated video or GIF still opens in a
+    * player, so a partial file reads as success; deleting it makes a failure a failure. Best-effort — a
+    * cleanup that itself fails must not mask the original error.
+    */
+  private def deletePartial(path: String): Unit =
+    try java.nio.file.Files.deleteIfExists(java.nio.file.Path.of(path)): Unit
+    catch case _: Throwable => ()
+
   /** Renders `frames` frames — each the picture `frame(i)` drawn on a `width`×`height` `background` canvas —
     * and writes them to `path` as a video at `fps`. Returns the number of frames written, or a `Left` if the
     * recorder cannot open or a frame fails to encode.
@@ -45,9 +53,17 @@ object Animation:
             try recorder.write(canvas).fold(e => throw e, _ => written += 1)
             finally canvas.close()
             i += 1
+          recorder.close()
           Right(written)
-        catch case e: CvError => Left(e)
-        finally recorder.close()
+        catch
+          // Close before deleting: the writer holds the file, and an open file will not delete on Windows. A
+          // CvError (a failed encode) becomes a Left; a bad Picture's IllegalArgumentException stays a throw.
+          case e =>
+            recorder.close()
+            deletePartial(path)
+            e match
+              case cv: CvError => Left(cv)
+              case other => throw other
 
   /** Renders `frames` frames as owned [[Image]]s (each `frame(i)` on a fresh canvas) — for feeding elsewhere
     * than a file. **Each image is yours to close.**
@@ -78,17 +94,21 @@ object Animation:
     if frames == 0 then Right(0L)
     else
       val images = Vector.tabulate(frames)(i => frame(i).render(width, height, background))
-      try
-        Managed(CvAnimation()).use: anim =>
-          anim.set_loop_count(if loop then 0 else 1)
-          val list = java.util.ArrayList[Mat](frames)
-          images.foreach(img => list.add(img.mat))
-          anim.set_frames(list)
-          val durationMs = math.max(1, math.round(1000.0 / fps).toInt)
-          Managed.use(MatOfInt(Array.fill(frames)(durationMs)*)): durations =>
-            anim.set_durations(durations)
-            Cv.attempt(s"imwriteanimation('$path')")(Imgcodecs.imwriteanimation(path, anim)).flatMap {
-              case true => Right(frames.toLong)
-              case false => Left(CvError.EncodeFailed(path, "imwriteanimation returned false"))
-            }
-      finally images.foreach(_.close())
+      val result =
+        try
+          Managed(CvAnimation()).use: anim =>
+            anim.set_loop_count(if loop then 0 else 1)
+            val list = java.util.ArrayList[Mat](frames)
+            images.foreach(img => list.add(img.mat))
+            anim.set_frames(list)
+            val durationMs = math.max(1, math.round(1000.0 / fps).toInt)
+            Managed.use(MatOfInt(Array.fill(frames)(durationMs)*)): durations =>
+              anim.set_durations(durations)
+              Cv.attempt(s"imwriteanimation('$path')")(Imgcodecs.imwriteanimation(path, anim)).flatMap {
+                case true => Right(frames.toLong)
+                case false => Left(CvError.EncodeFailed(path, "imwriteanimation returned false"))
+              }
+        finally images.foreach(_.close())
+      // A returned-false or CvException encode can still leave a half-written GIF behind; drop it.
+      if result.isLeft then deletePartial(path)
+      result
