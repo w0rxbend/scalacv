@@ -81,6 +81,13 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Leak regression suite (RSS-gated, finding-specific paths)
+        # The leaks module runs in its own forked JVM as a single suite, so process RSS is not
+        # contaminated by concurrent suites. It gates the finding-specific paths (background-effect
+        # error path, Intrinsics-per-call) that the single-pipeline driver below does not exercise.
+        # RSS -- not Pointer.totalBytes() -- is the only signal that sees org.opencv.core.Mat buffers.
+        run: ./mill leaks.test
+
       - name: Stress native allocation and assert RSS stays bounded
         run: |
           set -euo pipefail
