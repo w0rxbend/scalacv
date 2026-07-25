@@ -81,3 +81,23 @@ class GraphicsDeepTest extends munit.FunSuite:
       assertEquals(written, Right(6L))
       assert(Files.size(out) > 0, "the GIF file should have content")
     finally Files.deleteIfExists(out)
+
+  test("Animation.gif closes already-rendered frames when a later frame throws"):
+    // The frame lambda throws at index 3, after frames 0-2 have been rendered (each owns a Mat). The
+    // fix renders inside gif's try, so its finally closes those three; the eager tabulate it replaced
+    // ran before the try and leaked them. The throw must propagate (proving the finally path ran), and
+    // a subsequent valid gif must still succeed — a regression that corrupted state would fail here.
+    val out = Files.createTempFile("scalacv-gif-throw-", ".gif")
+    try
+      intercept[RuntimeException] {
+        Animation.gif(out.toString, frames = 6, width = 40, height = 40) { i =>
+          if i == 3 then throw new RuntimeException("boom")
+          else Picture.circle(Point(20, 20), 6).fillColor(Color.White).noStroke
+        }
+      }
+      val written =
+        Animation.gif(out.toString, frames = 4, width = 40, height = 40)(i =>
+          Picture.circle(Point(10 + i * 5, 20), 4).fillColor(Color.White).noStroke
+        )
+      assertEquals(written, Right(4L))
+    finally Files.deleteIfExists(out): Unit

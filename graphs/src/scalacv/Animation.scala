@@ -93,9 +93,17 @@ object Animation:
     require(fps > 0, s"fps must be positive, got $fps")
     if frames == 0 then Right(0L)
     else
-      val images = Vector.tabulate(frames)(i => frame(i).render(width, height, background))
+      // Rendered INSIDE the try, not eagerly before it: each frame(i).render owns a Mat, and if
+      // render throws partway (a throwing frame lambda, a Picture that fails on a later frame) the
+      // frames already built must still be closed. Accumulating in the try's own buffer makes the
+      // finally cover them; the previous `Vector.tabulate` ran before the try and leaked them.
+      val images = scala.collection.mutable.ArrayBuffer.empty[Image]
       val result =
         try
+          var i = 0
+          while i < frames do
+            images += frame(i).render(width, height, background)
+            i += 1
           Managed(CvAnimation()).use: anim =>
             anim.set_loop_count(if loop then 0 else 1)
             val list = java.util.ArrayList[Mat](frames)
