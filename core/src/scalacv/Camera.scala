@@ -130,8 +130,12 @@ final class Camera private (private val handle: Managed[VideoCapture]) extends A
     * @param fps
     *   frames per second for the output; `0` derives it from the source, falling back to 30 when the source
     *   does not report one (common for a camera).
+    * @param attemptsPerFrame
+    *   how many times a frame read is retried before it counts as end-of-stream — see [[foreach]]. The
+    *   default of 3 tolerates a flaky live camera; a finite file source can set `1` to avoid the extra
+    *   blocking reads at EOF.
     */
-  def recordTo(path: String, fps: Double = 0, codec: Codec = Codec.Mp4v)(
+  def recordTo(path: String, fps: Double = 0, codec: Codec = Codec.Mp4v, attemptsPerFrame: Int = 3)(
       transform: Image => Image
   ): Either[CvError, Long] =
     val source = info
@@ -141,7 +145,7 @@ final class Camera private (private val handle: Managed[VideoCapture]) extends A
       .flatMap: recorder =>
         try
           var written = 0L
-          foreach(): frame =>
+          foreach(attemptsPerFrame): frame =>
             val processed = transform(frame)
             try recorder.write(processed).fold(e => throw e, _ => written += 1)
             finally processed.close()

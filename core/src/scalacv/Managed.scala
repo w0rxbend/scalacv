@@ -102,7 +102,10 @@ final class Managed[A] private (initial: A, releaser: Releasable[A]) extends Aut
     finally release()
 
   override def toString: String =
-    if isReleased then "Managed(<released>)" else s"Managed(${ref.get})"
+    // One snapshot: a concurrent release between an isReleased check and a second read could print
+    // Managed(null). Diagnostics only, but cheap to make consistent.
+    val snapshot = ref.get
+    if snapshot == null then "Managed(<released>)" else s"Managed($snapshot)"
 
 object Managed:
 

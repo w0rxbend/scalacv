@@ -166,7 +166,7 @@ extension (self: Mat)
   def threshold(
       value: Double,
       maxValue: Double = 255,
-      kind: Threshold = Threshold(Threshold.Mode.Binary)
+      kind: Threshold = Threshold.Binary
   ): (Managed[Mat], ThresholdResult) =
     var computed = 0.0
     val out = Mats.produce("threshold"): dst =>

@@ -166,6 +166,11 @@ object Threshold:
     case Otsu extends Auto(Imgproc.THRESH_OTSU)
     case Triangle extends Auto(Imgproc.THRESH_TRIANGLE)
 
+  /** Plain fixed binary thresholding — the common "binarise at this value" case, and the default the
+    * `threshold` methods use. The companion counterpart to [[otsu]]/[[triangle]].
+    */
+  val Binary: Threshold = Threshold(Mode.Binary)
+
   def otsu(mode: Mode = Mode.Binary): Threshold = Threshold(mode, Some(Auto.Otsu))
   def triangle(mode: Mode = Mode.Binary): Threshold = Threshold(mode, Some(Auto.Triangle))
 

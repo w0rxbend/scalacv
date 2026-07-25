@@ -144,7 +144,7 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
   def threshold(
       value: Double,
       maxValue: Double = 255,
-      kind: Threshold = Threshold(Threshold.Mode.Binary)
+      kind: Threshold = Threshold.Binary
   ): Image =
     transform(_.threshold(value, maxValue, kind)._1)
 
@@ -456,11 +456,11 @@ object Image:
   def blank(width: Int, height: Int, color: Scalar = Scalar.Black, channels: Int = 3): Image =
     require(width > 0 && height > 0, s"a blank Image needs a positive size, got ${width}x$height")
     require(channels == 1 || channels == 3 || channels == 4, s"channels must be 1, 3 or 4, got $channels")
+    // The require is the single channel check; the match is total over what it admits, so no dead fallback.
     val cvType = channels match
       case 1 => CvType.CV_8UC1
       case 3 => CvType.CV_8UC3
-      case 4 => CvType.CV_8UC4
-      case n => throw IllegalArgumentException(s"channels must be 1, 3 or 4, got $n")
+      case _ => CvType.CV_8UC4
     apply(Managed(Mat(height, width, cvType, color.toCv)))
 
   /** Reads `path` and runs `use` on the resulting `Image`, closing it afterwards — even if `use` already
