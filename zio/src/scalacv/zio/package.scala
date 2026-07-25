@@ -85,7 +85,7 @@ extension (self: Mat)
 
 /** Frames from a capture as a `ZStream`, **each frame valid only until the next pull.**
   *
-  * This inherits the borrowing contract of the synchronous [[Video.frames]] rather than ZIO's usual value
+  * This inherits the borrowing contract of the synchronous `Video.frames` rather than ZIO's usual value
   * semantics, and the difference matters: the emitted `Mat` is a single buffer decoded into in place, so
   * operations that retain elements — `runCollect`, `broadcast`, `buffer`, `zipWithNext` — see N references to
   * one Mat with the newest content, not N distinct frames. Map each frame to something owned (encode it, copy
@@ -94,7 +94,7 @@ extension (self: Mat)
   *
   * The capture itself is not closed by the stream — acquire it through [[acquireRelease]] so the scope owns
   * it. The stream stops at the first frame that fails to decode, which for a file is end-of-stream and for a
-  * camera is a dropped connection; the two are indistinguishable through OpenCV's API, as [[Video.frames]]
+  * camera is a dropped connection; the two are indistinguishable through OpenCV's API, as `Video.frames`
   * documents.
   *
   * For the duration of the stream the capture's exception mode is forced off and its previous value restored
