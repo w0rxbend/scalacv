@@ -1,6 +1,7 @@
-//| mill-version: 1.1.7
 //| mill-jvm-version: zulu:25
 //| mvnDeps: ["com.goyeau::mill-scalafix::0.6.2"]
+// The Mill version is pinned in `.mill-version` (a single source of truth: the `./mill` bootstrap and
+// Scala Steward both read that file). Keep it out of this header to avoid the two drifting apart.
 
 package build
 
