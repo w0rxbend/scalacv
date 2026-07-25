@@ -194,6 +194,12 @@ trait ScalacvPublishModule extends ScalacvModule with PublishModule {
   /* Consumers read this to know that 0.x still means breaking changes are allowed. */
   def versionScheme = Task { Some(VersionScheme.EarlySemVer) }
 
+  /* Project name/version, GitHub source-links and social-links on every *published* doc jar --
+   * core, vision, graphs and zio -- so none of them ships to Central with an unlabelled,
+   * source-link-less Scaladoc. Previously only zio and the aggregate apidocs set this. */
+  def scalaDocOptions =
+    Task { Deps.scaladocOptions(publishVersion(), mill.api.BuildCtx.workspaceRoot.toString) }
+
   // MiMa is deliberately NOT mixed in yet (D13/G7). It is armed from 0.2.0: before a prior
   // release exists, an empty mimaPreviousVersions fails, and 0.1.x under early-semver is allowed
   // to break anyway. When 0.2.0 approaches, mix in com.github.lolgab.mill.mima.Mima and set
@@ -252,7 +258,6 @@ object zio extends ScalacvPublishModule {
   def artifactName = "scalacv-zio"
   def moduleDeps   = Seq(core)
   def mvnDeps      = Seq(mvn"dev.zio::zio:2.1.26", mvn"dev.zio::zio-streams:2.1.26")
-  def scalaDocOptions = Task { Deps.scaladocOptions(publishVersion(), mill.api.BuildCtx.workspaceRoot.toString) }
 
   /* zio-test rather than munit here (D6): the module under test is ZIO, so its own effects are
    * the natural thing to write assertions in. Natives are still needed at run time. */
