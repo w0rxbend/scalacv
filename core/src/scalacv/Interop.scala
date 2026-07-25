@@ -55,7 +55,10 @@ private[scalacv] object Interop:
       val fastData = image.getType match
         case BufferedImage.TYPE_3BYTE_BGR =>
           val d = image.getRaster.getDataBuffer.asInstanceOf[DataBufferByte].getData
-          if d.length == w * h * 3 then d else null
+          // Long math: w*h*3 overflows a signed Int past a ~26k-pixel square, and a wrapped negative
+          // could spuriously equal a (never-negative) array length, taking the fast path on the wrong
+          // raster. Comparing as Long keeps the guard honest for very large images.
+          if d.length.toLong == w.toLong * h * 3 then d else null
         case _ => null
       if fastData != null then mat.put(0, 0, fastData)
       else

@@ -103,5 +103,11 @@ object OccupancyGrid:
   /** A `cols`×`rows` grid, each cell `resolution` world-units square, centred on the origin. */
   def apply(cols: Int, rows: Int, resolution: Double = 0.05): OccupancyGrid =
     require(cols > 0 && rows > 0, s"a grid needs positive dimensions, got ${cols}x$rows")
+    // cols*rows sizes the backing arrays; check it fits an Int before it silently overflows to a
+    // negative size and throws a bare NegativeArraySizeException instead of this named error.
+    require(
+      cols.toLong * rows <= Int.MaxValue,
+      s"grid ${cols}x$rows has too many cells (${cols.toLong * rows}) to address"
+    )
     require(resolution > 0, s"resolution must be positive, got $resolution")
     new OccupancyGrid(cols, rows, resolution)

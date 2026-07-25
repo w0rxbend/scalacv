@@ -12,6 +12,11 @@ class OccupancyGridTest extends munit.FunSuite:
     intercept[IllegalArgumentException](OccupancyGrid(10, -1))
     intercept[IllegalArgumentException](OccupancyGrid(10, 10, resolution = 0.0))
 
+  test("construction rejects a cell count that overflows Int, with a typed error not a raw crash"):
+    // cols*rows here is ~3.4e9, past Int.MaxValue: without the Long-checked require it would wrap
+    // negative and throw a bare NegativeArraySizeException from Array.fill.
+    intercept[IllegalArgumentException](OccupancyGrid(60000, 60000))
+
   test("the grid is centred on the origin and quantises by resolution"):
     val g = OccupancyGrid(21, 21, resolution = 1.0)
     assertEquals(g.cellOf(0.0, 0.0), (10, 10))
