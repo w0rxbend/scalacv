@@ -41,8 +41,8 @@ final class LoopDetector private (
   private val keyframes = ArrayBuffer.empty[Descriptors | Null]
   private var live = 0
 
-  /** Stores `image` as a keyframe and returns its (stable) index. Evicts the oldest keyframes if this
-    * pushes the live count past `maxKeyframes`.
+  /** Stores `image` as a keyframe and returns its (stable) index. Evicts the oldest keyframes if this pushes
+    * the live count past `maxKeyframes`.
     */
   def addKeyframe(image: Image): Int =
     keyframes += Features.detect(image, maxFeatures)
@@ -104,7 +104,7 @@ final class LoopDetector private (
   def close(): Unit =
     keyframes.foreach {
       case d: Descriptors => d.close()
-      case null           => ()
+      case null => ()
     }
     keyframes.clear()
     live = 0
@@ -118,8 +118,8 @@ object LoopDetector:
     * @param recentExclusion
     *   how many of the most recent keyframes to ignore (they are always similar to now).
     * @param maxKeyframes
-    *   the most keyframes to keep live before evicting the oldest and freeing their descriptors.
-    *   Defaults to unbounded (the original behaviour); set it to cap native memory over a long run.
+    *   the most keyframes to keep live before evicting the oldest and freeing their descriptors. Defaults to
+    *   unbounded (the original behaviour); set it to cap native memory over a long run.
     */
   def apply(
       maxFeatures: Int = 500,

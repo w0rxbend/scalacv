@@ -359,7 +359,7 @@ final class scalacv.LoopClosure
 final class scalacv.LoopDetector
   extends java.lang.Object
   implements java.lang.AutoCloseable
-  def <init>(int, int, int): void
+  def <init>(int, int, int, int): void
   def addKeyframe(scalacv.Image): int
   def close(): void
   def detect(scalacv.Image): scala.Option<scalacv.LoopClosure>
@@ -1009,7 +1009,8 @@ object scalacv.LoopDetector
   def apply$default$1(): int
   def apply$default$2(): int
   def apply$default$3(): int
-  def apply(int, int, int): scalacv.LoopDetector
+  def apply$default$4(): int
+  def apply(int, int, int, int): scalacv.LoopDetector
 object scalacv.MarkerPose
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
