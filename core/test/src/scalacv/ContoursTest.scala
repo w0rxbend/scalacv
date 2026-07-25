@@ -103,3 +103,46 @@ class ContoursTest extends munit.FunSuite:
     assertEquals(c.boundingRect, Rect(0, 0, 0, 0))
     assertEqualsDouble(c.area, 0.0, 0.0)
     assertEqualsDouble(c.perimeter, 0.0, 0.0)
+    assertEquals(c.centroid, None)
+    assert(c.convexHull.isEmpty)
+    assert(c.approx(1.0).isEmpty)
+
+  test("centroid of a rectangle is its geometric centre"):
+    Using.resource(Managed(blackCanvas())): canvas =>
+      fill(canvas.get, boxA) // corners at pixel centres (10,10)..(49,39)
+      val c = canvas.get.findContours().head
+      val Some(centre) = c.centroid: @unchecked
+      assertEqualsDouble(centre.x, (10 + 49) / 2.0, 0.5)
+      assertEqualsDouble(centre.y, (10 + 39) / 2.0, 0.5)
+
+  test("centroid is None for a degenerate (collinear) contour where m00 is zero"):
+    // Three collinear points enclose no area, so the moment m00 is 0 and the centroid is undefined.
+    val line = Contour(Seq(Point(0, 0), Point(5, 0), Point(10, 0)))
+    assertEquals(line.centroid, None)
+
+  test("convex hull of a rectangle is its four corners and encloses the original"):
+    Using.resource(Managed(blackCanvas())): canvas =>
+      fill(canvas.get, boxA)
+      val hull = canvas.get.findContours().head.convexHull
+      assertEquals(hull.points.size, 4)
+      assertEquals(hull.boundingRect, boxA)
+
+  test("convex hull of a concave (L-shaped) contour drops the reflex vertex"):
+    // An L has six corners, one of them the reflex vertex (10,10) that pokes inward. The hull drops exactly
+    // that vertex and fills the notch back in, so it has fewer points and a larger area.
+    val l = Contour(Seq(Point(0, 0), Point(40, 0), Point(40, 10), Point(10, 10), Point(10, 40), Point(0, 40)))
+    val hull = l.convexHull
+    assert(!hull.points.contains(Point(10, 10)), s"the reflex vertex should be dropped, got ${hull.points}")
+    assert(
+      hull.points.size < l.points.size,
+      s"hull ${hull.points.size} should be smaller than the L's ${l.points.size}"
+    )
+    assert(hull.area > l.area, s"hull area ${hull.area} should exceed L area ${l.area}")
+
+  test("approx simplifies a full pixel chain back to four corners"):
+    Using.resource(Managed(blackCanvas())): canvas =>
+      fill(canvas.get, boxA)
+      val full = canvas.get.findContours(approximation = ContourApproximation.None).head
+      assert(full.points.size > 4, s"expected the full chain, got ${full.points.size}")
+      assertEquals(full.approx(epsilon = 2.0).points.size, 4)
+      intercept[IllegalArgumentException](full.approx(epsilon = -1))

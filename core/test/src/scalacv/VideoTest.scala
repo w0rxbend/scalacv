@@ -218,6 +218,35 @@ class VideoTest extends munit.FunSuite:
       assertEqualsDouble(i.fps, Fps, 0.5)
       assert(i.backendName.nonEmpty, "the backend should name itself")
 
+  test("Recorder.write accepts a borrowed Mat directly, and rejects a mis-sized one"):
+    val dir = Files.createTempDirectory("scalacv-rec")
+    dir.toFile.deleteOnExit()
+    val out = dir.resolve("rec.avi")
+    val result = Recorder.using(out.toString, Size(Width.toDouble, Height.toDouble), Fps, Codec.Mjpg):
+      recorder =>
+        // The borrowing overload: a raw video frame writes with no Image wrapping and no clone.
+        Managed.use(frameFixture(0))(m =>
+          assert(recorder.write(m).isRight, "a correctly-sized Mat should write")
+        )
+        Managed.use(Mat(Height + 4, Width, CvType.CV_8UC3, CvScalar(0, 0, 0))): wrong =>
+          intercept[IllegalArgumentException](recorder.write(wrong))
+    assert(result.isRight, s"recorder should have opened: $result")
+    assert(Files.size(out) > 0, "the recording is empty")
+
+  test("Camera.taking yields a batch and closes every frame when the block returns"):
+    val file = writeFixtureVideo()
+    val taken = Camera.usingFile(file.toString): cam =>
+      cam.taking(3): imgs =>
+        assertEquals(imgs.size, 3)
+        assert(imgs.forall(img => !img.mat.empty()), "frames should be live inside the block")
+        imgs
+    taken match
+      case Left(e) => fail(s"could not open the fixture as a Camera: $e")
+      case Right(imgs) =>
+        // The block handed the images back out; taking has since closed them all, so touching one now throws
+        // the same use-after-release Managed guards against — proof the batch was released.
+        imgs.foreach(img => intercept[IllegalStateException](img.mat))
+
   test("frames refuses a capture that is not open"):
     val capture = VideoCapture()
     try intercept[IllegalArgumentException](Video.frames(capture)(_.size))

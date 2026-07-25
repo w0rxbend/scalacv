@@ -41,6 +41,14 @@ class VizTest extends munit.FunSuite:
     try assertEquals(paintedPixels(img, channel = 0, min = 100), 0)
     finally img.close()
 
+  test("a non-positive chart box is a precondition violation, not a degenerate picture"):
+    intercept[IllegalArgumentException](Chart.bars(Seq(1.0, 2.0), 0, 80))
+    intercept[IllegalArgumentException](Chart.line(Seq(1.0, 2.0), 100, -5))
+    intercept[IllegalArgumentException](Chart.scatter(Seq((1.0, 2.0)), -1, 100))
+    intercept[IllegalArgumentException](Chart.area(Seq(1.0, 2.0), 100, 0))
+    intercept[IllegalArgumentException](Chart.pie(Seq(1.0, 2.0), 100, -1))
+    intercept[IllegalArgumentException](Chart.histogram(Seq(1.0, 2.0), bins = 4, width = 0, height = 50))
+
   test("animation records a frame per step to a video"):
     val out = Files.createTempFile("scalacv-anim-", ".avi")
     try

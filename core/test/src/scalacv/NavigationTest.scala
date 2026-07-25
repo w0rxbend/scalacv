@@ -118,3 +118,22 @@ class NavigationTest extends munit.FunSuite:
           s"expected ~no rotation (identity), got $rot"
         )
         assert(motion.inliers > 0, "recoverPose should find inliers")
+
+  test("steer rejects an empty or too-narrow disparity map"):
+    val empty = Image.wrap(Managed(org.opencv.core.Mat()))
+    try intercept[IllegalArgumentException](Navigator.steer(empty))
+    finally empty.close()
+
+    val narrow = Image.blank(2, 12) // width 2 < 3 collapses the thirds into a negative-width band
+    try
+      val e = intercept[IllegalArgumentException](Navigator.steer(narrow))
+      assert(e.getMessage.contains("3 px"), e.getMessage)
+    finally narrow.close()
+
+  test("a clear (dark) disparity map suggests going straight"):
+    val clear = Image.blank(30, 12)
+    try
+      val g = Navigator.steer(clear)
+      assertEquals(g.steering, Steering.Straight)
+      assertEqualsDouble(g.centreNearness, 0.0, 0.001)
+    finally clear.close()
