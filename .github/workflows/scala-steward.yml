@@ -15,4 +15,9 @@ jobs:
       - name: Launch Scala Steward
         uses: scala-steward-org/scala-steward-action@v2
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # A PR opened with the default GITHUB_TOKEN does NOT trigger other workflows (GitHub suppresses
+          # workflow runs on token-created events), so every Steward PR would land with no CI. Set a
+          # repo/org secret SCALA_STEWARD_TOKEN to a PAT (or GitHub App token) with `repo` scope and the
+          # dependency PRs get built and tested. Until then this falls back to GITHUB_TOKEN, which still
+          # opens the PRs — they just won't run CI automatically.
+          github-token: ${{ secrets.SCALA_STEWARD_TOKEN || secrets.GITHUB_TOKEN }}
