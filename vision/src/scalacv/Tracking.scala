@@ -58,6 +58,13 @@ object Tracker:
       case TrackerKind.Csrt => org.opencv.tracking.TrackerCSRT.create()
       case TrackerKind.Kcf => org.opencv.tracking.TrackerKCF.create()
       case TrackerKind.Mil => org.opencv.video.TrackerMIL.create()
+    // A build without a given algorithm returns null here; wrapping it in Managed would surface later as an
+    // opaque "already released" at the first `init`. Name it now, as FaceDetect.create does for its null.
+    if native == null then
+      throw CvError.NativeCall(
+        s"creating a $kind tracker",
+        IllegalStateException(s"OpenCV returned no $kind tracker — this build may not include that algorithm")
+      )
     new Tracker(Managed(native))
 
 /** A constant-velocity Kalman filter over a 2D point — the smoother behind [[ObjectTracker]], useful on its
@@ -65,7 +72,8 @@ object Tracker:
   *
   * The state is position and velocity `(x, y, vx, vy)`; you [[predict]] the next position, then [[correct]]
   * it with a fresh measurement (or skip the correction if you have none this frame and trust the model). Owns
-  * a native filter — **caller-owned**, [[close]] it.
+  * a native filter — **caller-owned**, [[close]] it. Stateful and **not safe to share across threads**; give
+  * each thread its own, as with the detectors.
   */
 final class Kalman private (private val handle: Managed[KalmanFilter]) extends AutoCloseable:
 
@@ -90,17 +98,25 @@ object Kalman:
     * measurements are trusted (larger ⇒ smoother, laggier).
     */
   def point(initial: Point, processNoise: Double = 1e-2, measurementNoise: Double = 1e-1): Kalman =
-    val kf = KalmanFilter(4, 2, 0)
-    // Constant-velocity transition: x += vx, y += vy each step (dt = 1).
-    Managed.use(kf.get_transitionMatrix()): t =>
-      t.put(0, 0, 1.0, 0, 1.0, 0, 0, 1.0, 0, 1.0, 0, 0, 1.0, 0, 0, 0, 0, 1.0): Unit
-    // Measurement observes position only: the 2×4 identity picks x and y out of the state.
-    Managed.use(kf.get_measurementMatrix())(Core.setIdentity(_))
-    Managed.use(kf.get_processNoiseCov())(Core.setIdentity(_, Scalar(processNoise).toCv))
-    Managed.use(kf.get_measurementNoiseCov())(Core.setIdentity(_, Scalar(measurementNoise).toCv))
-    Managed.use(kf.get_errorCovPost())(Core.setIdentity(_, Scalar(1.0).toCv))
-    Managed.use(kf.get_statePost())(_.put(0, 0, initial.x, initial.y, 0.0, 0.0): Unit)
-    new Kalman(Managed(kf))
+    // Owned from construction: if any of the get_*/put setup below throws, the filter is freed rather than
+    // stranded (it holds no public release(), so a leak would need the delete bridge to reclaim).
+    val handle = Managed(KalmanFilter(4, 2, 0))
+    try
+      val kf = handle.get
+      // Constant-velocity transition: x += vx, y += vy each step (dt = 1).
+      Managed.use(kf.get_transitionMatrix()): t =>
+        t.put(0, 0, 1.0, 0, 1.0, 0, 0, 1.0, 0, 1.0, 0, 0, 1.0, 0, 0, 0, 0, 1.0): Unit
+      // Measurement observes position only: the 2×4 identity picks x and y out of the state.
+      Managed.use(kf.get_measurementMatrix())(Core.setIdentity(_))
+      Managed.use(kf.get_processNoiseCov())(Core.setIdentity(_, Scalar(processNoise).toCv))
+      Managed.use(kf.get_measurementNoiseCov())(Core.setIdentity(_, Scalar(measurementNoise).toCv))
+      Managed.use(kf.get_errorCovPost())(Core.setIdentity(_, Scalar(1.0).toCv))
+      Managed.use(kf.get_statePost())(_.put(0, 0, initial.x, initial.y, 0.0, 0.0): Unit)
+      new Kalman(handle)
+    catch
+      case e: Throwable =>
+        handle.release()
+        throw e
 
 /** One tracked object as reported by [[ObjectTracker.update]]: a stable [[id]] that persists across frames,
   * the current [[box]], and how long the track has lived.
@@ -120,7 +136,8 @@ final case class ObjectTrack(id: Int, box: Rect, hits: Int, age: Int)
   * whatever produced them.
   *
   * Build one with [[ObjectTracker.create]] and [[close]] it when done, the same shape as [[Tracker.create]]
-  * and [[Kalman.point]].
+  * and [[Kalman.point]]. Like those, it is **stateful and not safe to share across threads** — [[update]]
+  * mutates the live-track buffer — so keep the detect-and-track loop on one thread, or serialise access.
   */
 final class ObjectTracker private (
     iouThreshold: Double,

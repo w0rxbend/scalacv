@@ -217,11 +217,14 @@ object FaceDetect:
     )
     // Per frame, unconditionally. Skipping this when the size "looks unchanged" is how the CvException
     // gets back in: the detector's size is also changed by any other caller holding it.
-    detector.setInputSize(CvSize(image.cols.toDouble, image.rows.toDouble))
+    Cv.orThrow("FaceDetectorYN.setInputSize")(
+      detector.setInputSize(CvSize(image.cols.toDouble, image.rows.toDouble))
+    )
     Managed.use(Mat()): faces =>
       // An int, and not a count: 1 = the network ran, 0 = the input was empty (which `require` above has
-      // already excluded). The number of faces is faces.rows().
-      val status = detector.detect(image, faces)
+      // already excluded). The number of faces is faces.rows(). Wrapped so a malformed model surfaces as
+      // CvError.NativeCall, matching the column-count check below rather than escaping as a raw CvException.
+      val status = Cv.orThrow("FaceDetectorYN.detect")(detector.detect(image, faces))
       // faces stays a 0x0 Mat when nothing was found, so cols() is 0 too — the empty() check has to come
       // before the column-count check or every blank frame looks like a corrupt model.
       if status <= 0 || faces.empty() || faces.rows == 0 then Seq.empty

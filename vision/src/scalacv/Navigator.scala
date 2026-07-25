@@ -44,9 +44,13 @@ object Navigator:
       s"blockedNearness must be in [0, 1], got $blockedNearness"
     )
     val mat = disparity.mat
+    require(!mat.empty(), "steer needs a non-empty disparity map")
     val width = mat.cols
     val height = mat.rows
-    val third = math.max(1, width / 3)
+    // Below three columns the thirds collapse: width 1/2 give a right band of negative or zero width, which
+    // is a raw CvException from submat, not a steering answer. A real disparity map is hundreds of px wide.
+    require(width >= 3, s"steer needs a disparity map at least 3 px wide, got ${width}px")
+    val third = width / 3
 
     def nearness(x0: Int, x1: Int): Double =
       Managed.use(mat.submat(Rect(x0, 0, x1 - x0, height).toCv))(band => Core.mean(band).`val`(0) / 255.0)

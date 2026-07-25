@@ -154,6 +154,17 @@ object PoseEstimator:
   /** `[1, 1, K, 3]` rows of `(y, x, score)`, normalised — MoveNet. */
   private def decodeRegression(output: Mat, imageSize: Size, topology: PoseTopology): Pose =
     val k = topology.size
+    // Validate before reshape: a model whose output is not K×(y,x,score) makes `reshape` throw a raw
+    // CvException about total-size mismatch. Name it instead, the way FaceDetect names a wrong column count.
+    val expected = k * 3
+    if output.total() != expected then
+      throw CvError.NativeCall(
+        "decoding the pose regression output",
+        IllegalStateException(
+          s"expected $expected values (K=$k keypoints × (y, x, score)) but the model produced ${output.total()}. " +
+            "This is not the regression pose model this topology decodes."
+        )
+      )
     Managed.use(output.reshape(1, k)): flat => // k rows x 3 cols (y, x, score)
       val row = Array.ofDim[Float](3)
       val kps = (0 until k).map: i =>
@@ -163,6 +174,16 @@ object PoseEstimator:
 
   /** `[1, K, H, W]` — one heatmap per keypoint; each keypoint is the arg-max of its plane. OpenPose. */
   private def decodeHeatmap(output: Mat, imageSize: Size, topology: PoseTopology): Pose =
+    // `size(1..3)` reads dimensions that only exist on a 4-D [1, K, H, W] tensor; on anything else it throws a
+    // raw CvException. Name the shape mismatch up front, mirroring FaceDetect's wrong-column-count error.
+    if output.dims() != 4 then
+      throw CvError.NativeCall(
+        "decoding the pose heatmap output",
+        IllegalStateException(
+          s"expected a 4-D [1, K, H, W] heatmap tensor but the model produced a ${output.dims()}-D output. " +
+            "This is not the heatmap pose model this topology decodes."
+        )
+      )
     val k = output.size(1)
     val h = output.size(2)
     val w = output.size(3)
@@ -215,45 +236,43 @@ object HeadPose:
     * converge (degenerate landmarks).
     */
   def estimate(face: Face, imageSize: Size): Option[HeadPose] =
-    val objectPoints = MatOfPoint3f(model*)
-    val imagePoints = MatOfPoint2f(face.landmarks.map(p => CvPoint(p.x, p.y))*)
-    // A crude but standard pinhole guess: focal length ≈ image width, principal point at the centre, no
-    // lens distortion. Enough for orientation.
-    val focal = imageSize.width
-    val camera = Mat.zeros(3, 3, org.opencv.core.CvType.CV_64F)
-    camera.put(0, 0, focal); camera.put(1, 1, focal)
-    camera.put(0, 2, imageSize.width / 2); camera.put(1, 2, imageSize.height / 2)
-    camera.put(2, 2, 1.0)
-    val distortion = MatOfDouble(0.0, 0.0, 0.0, 0.0)
-    val rvec = Mat()
-    val tvec = Mat()
-    try
-      val ok = org.opencv.calib3d.Calib3d.solvePnP(
-        objectPoints,
-        imagePoints,
-        camera,
-        distortion,
-        rvec,
-        tvec,
-        false,
-        org.opencv.calib3d.Calib3d.SOLVEPNP_EPNP
-      )
-      if !ok then None
-      else
-        Managed.use(Mat()): rotation =>
-          org.opencv.calib3d.Calib3d.Rodrigues(rvec, rotation)
-          Managed.use(Mat()): mtxR =>
-            Managed.use(Mat()): mtxQ =>
-              // RQDecomp3x3 returns the Euler angles (degrees) about x, y, z.
-              val euler = org.opencv.calib3d.Calib3d.RQDecomp3x3(rotation, mtxR, mtxQ)
-              Some(HeadPose(yaw = euler(1), pitch = euler(0), roll = euler(2)))
-    finally
-      objectPoints.release()
-      imagePoints.release()
-      camera.release()
-      distortion.release()
-      rvec.release()
-      tvec.release()
+    // Every native Mat is acquired through Managed.use, so a throw from any constructor or `put` frees the
+    // ones already allocated — the plain val-before-try form leaked them. The whole solvePnP block runs in
+    // Cv.attempt: degenerate landmarks can make OpenCV *throw* rather than return `ok = false`, and the
+    // documented contract here is `None` on failure, not a raw CvException.
+    Managed.use(MatOfPoint3f(model*)): objectPoints =>
+      Managed.use(MatOfPoint2f(face.landmarks.map(p => CvPoint(p.x, p.y))*)): imagePoints =>
+        // A crude but standard pinhole guess: focal length ≈ image width, principal point at the centre, no
+        // lens distortion. Enough for orientation.
+        Managed.use(Mat.zeros(3, 3, org.opencv.core.CvType.CV_64F)): camera =>
+          Managed.use(MatOfDouble(0.0, 0.0, 0.0, 0.0)): distortion =>
+            Managed.use(Mat()): rvec =>
+              Managed.use(Mat()): tvec =>
+                val focal = imageSize.width
+                camera.put(0, 0, focal); camera.put(1, 1, focal)
+                camera.put(0, 2, imageSize.width / 2); camera.put(1, 2, imageSize.height / 2)
+                camera.put(2, 2, 1.0)
+                Cv.attempt("solvePnP") {
+                  val ok = org.opencv.calib3d.Calib3d.solvePnP(
+                    objectPoints,
+                    imagePoints,
+                    camera,
+                    distortion,
+                    rvec,
+                    tvec,
+                    false,
+                    org.opencv.calib3d.Calib3d.SOLVEPNP_EPNP
+                  )
+                  if !ok then None
+                  else
+                    Managed.use(Mat()): rotation =>
+                      org.opencv.calib3d.Calib3d.Rodrigues(rvec, rotation)
+                      Managed.use(Mat()): mtxR =>
+                        Managed.use(Mat()): mtxQ =>
+                          // RQDecomp3x3 returns the Euler angles (degrees) about x, y, z.
+                          val euler = org.opencv.calib3d.Calib3d.RQDecomp3x3(rotation, mtxR, mtxQ)
+                          Some(HeadPose(yaw = euler(1), pitch = euler(0), roll = euler(2)))
+                }.getOrElse(None)
 
 /** The high-level pose overlay on [[Image]] — an extension method so it lives beside the pose types rather
   * than in the image class. `import scalacv.*` gives `image.drawSkeleton(pose)`.

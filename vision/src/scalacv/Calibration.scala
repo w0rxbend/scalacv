@@ -193,12 +193,25 @@ object Calibration:
     */
   private def detect(gray: Mat, pattern: ChessboardPattern): Option[MatOfPoint2f] =
     val corners = MatOfPoint2f()
-    if !Calib3d.findChessboardCorners(gray, pattern.patternSize, corners, DetectFlags) then
+    // A view that makes OpenCV throw (a degenerate or oversized frame) is a view that yielded no usable
+    // corners, not a reason to abort the whole multi-view calibration — fold the throw into `None`, the same
+    // outcome as "no board found", and let `fromChessboard` decide if too few views survived.
+    val found = Cv
+      .attempt("findChessboardCorners")(
+        Calib3d.findChessboardCorners(gray, pattern.patternSize, corners, DetectFlags)
+      )
+      .getOrElse(false)
+    if !found then
       corners.release()
       None
     else
-      Imgproc.cornerSubPix(gray, corners, CvSize(11, 11), CvSize(-1, -1), RefineCriteria)
-      Some(corners)
+      Cv.attempt("cornerSubPix")(
+        Imgproc.cornerSubPix(gray, corners, CvSize(11, 11), CvSize(-1, -1), RefineCriteria)
+      ) match
+        case Right(_) => Some(corners)
+        case Left(_) =>
+          corners.release()
+          None
 
   /** A borrowed grayscale copy of `image` — corner detection wants a single 8-bit channel. */
   private def gray(image: Image): Managed[Mat] =
