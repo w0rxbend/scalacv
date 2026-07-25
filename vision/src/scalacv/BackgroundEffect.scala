@@ -109,9 +109,9 @@ object Segmenter:
   */
 extension (img: Image)
 
-  /** Runs a selfie-segmentation `Net` over this image and decodes the person mask — the one-call form of
-    * blob → forward → [[Segmenter.decodeMask]], ready to hand to [[blurBackground]] or [[replaceBackground]].
-    * The image is only read from (it stays alive, so you can segment then composite in two lines), and the
+  /** Runs a selfie-segmentation `Net` over this image and decodes the person mask — the one-call form of blob
+    * → forward → [[Segmenter.decodeMask]], ready to hand to [[blurBackground]] or [[replaceBackground]]. The
+    * image is only read from (it stays alive, so you can segment then composite in two lines), and the
     * network is borrowed, not released. The returned mask is a new owned `CV_8UC1` [[Image]].
     *
     * The blob knobs mirror [[Dnn.blobFromImage]] and are model-specific; the defaults suit a MediaPipe-selfie

@@ -40,9 +40,9 @@ import org.opencv.photo.Photo
 
 /** The destination depth for the derivative operators.
   *
-  * Worth a type of its own rather than a bare `int` because [[OutputDepth.SameAsSource]] is a trap on the commonest
-  * input: `Sobel` on an 8-bit unsigned image with `ddepth = -1` clips every negative derivative to zero, so
-  * half of each edge silently disappears. [[Signed16]] then [[convertScaleAbs]] is the standard fix.
+  * Worth a type of its own rather than a bare `int` because [[OutputDepth.SameAsSource]] is a trap on the
+  * commonest input: `Sobel` on an 8-bit unsigned image with `ddepth = -1` clips every negative derivative to
+  * zero, so half of each edge silently disappears. [[Signed16]] then [[convertScaleAbs]] is the standard fix.
   */
 enum OutputDepth(val cvValue: Int):
 

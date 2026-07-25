@@ -63,9 +63,9 @@ def fromCv[A](result: => Either[CvError, A]): IO[CvError, A] = ZIO.fromEither(re
 def readImage(path: String, flags: ImreadFlags = ImreadFlags.Color): IO[CvError, Image] =
   ZIO.blocking(fromCv(Image.read(path, flags)))
 
-/** Acquires an [[Image]] into the current `Scope`: read on acquire, closed when the scope ends — on
-  * success, failure, and interruption, which the synchronous `Image.reading` cannot promise once an interrupt
-  * is in play. Its failure is the typed [[CvError]] from the read.
+/** Acquires an [[Image]] into the current `Scope`: read on acquire, closed when the scope ends — on success,
+  * failure, and interruption, which the synchronous `Image.reading` cannot promise once an interrupt is in
+  * play. Its failure is the typed [[CvError]] from the read.
   *
   * {{{
   * ZIO.scoped {

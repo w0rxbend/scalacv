@@ -4,8 +4,8 @@ import org.opencv.core.{CvType, Mat}
 
 /** The high-level, fluent face of scalacv — an owned image you transform by chaining.
   *
-  * `Image` is the layer to reach for first. It wraps a single native `Mat` and lets you
-  * express the common OpenCV shape — read, transform, detect, annotate, write — as one readable chain:
+  * `Image` is the layer to reach for first. It wraps a single native `Mat` and lets you express the common
+  * OpenCV shape — read, transform, detect, annotate, write — as one readable chain:
   *
   * {{{
   * import scalacv.*
@@ -49,9 +49,9 @@ import org.opencv.core.{CvType, Mat}
   * this library cannot foresee), the op throws [[CvError.NativeCall]], naming the operation — an unchecked
   * throw, so it is invisible at the call site. Argument mistakes this library *can* see are rejected up front
   * with `IllegalArgumentException`. Only the `Either`-returning boundary methods ([[Image.read]], [[write]],
-  * [[bytes]], [[Image.decode]]) turn failure into a value. To fold a transform's throw into an `Either` too, wrap
-  * it with [[Cv.attempt]]. Reusing an already-consumed image throws `IllegalStateException`; see [[Managed]]
-  * for `-Dscalacv.trackOwnership=true`, which points the error at the consuming call.
+  * [[bytes]], [[Image.decode]]) turn failure into a value. To fold a transform's throw into an `Either` too,
+  * wrap it with [[Cv.attempt]]. Reusing an already-consumed image throws `IllegalStateException`; see
+  * [[Managed]] for `-Dscalacv.trackOwnership=true`, which points the error at the consuming call.
   *
   * `Image` is `AutoCloseable`, so `scala.util.Using` manages it too.
   */

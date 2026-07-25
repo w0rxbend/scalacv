@@ -8,9 +8,9 @@ import org.opencv.videoio.{VideoCapture, Videoio}
 /** Which videoio backend to ask for.
   *
   * [[Any]] is the right answer almost always: OpenCV tries its registered backends in priority order and uses
-  * the first that can read the source. Naming one is for when that choice is wrong — forcing [[CaptureBackend.FFmpeg]] on a
-  * file that the image-sequence reader would otherwise claim, or forcing [[CaptureBackend.V4L2]] on Linux so that a camera's
-  * native pixel format is honoured.
+  * the first that can read the source. Naming one is for when that choice is wrong — forcing
+  * [[CaptureBackend.FFmpeg]] on a file that the image-sequence reader would otherwise claim, or forcing
+  * [[CaptureBackend.V4L2]] on Linux so that a camera's native pixel format is honoured.
   *
   * A backend that is not compiled into the OpenCV build on the classpath simply cannot open anything, so
   * naming one turns a working `open` into a failing one. The bytedeco 4.13.0 builds do not all carry the same
@@ -133,9 +133,9 @@ final case class CaptureInfo(
   * This is the one place in scalacv where a `Mat` you are handed is **not** yours, and it is the exact
   * opposite of the contract in `Ops.scala`:
   *
-  *   - The `Mat` from `frames` is **borrowed**. It is valid from the `next()` that returned it until you
-  *     next ask the iterator for anything, and it is released when the `frames` block returns. The iterator
-  *     is retired at that point, so keeping one is inert rather than dangerous.
+  *   - The `Mat` from `frames` is **borrowed**. It is valid from the `next()` that returned it until you next
+  *     ask the iterator for anything, and it is released when the `frames` block returns. The iterator is
+  *     retired at that point, so keeping one is inert rather than dangerous.
   *   - Do not retain it. Do not put it in a collection. `it.toList` compiles and gives you N references to
   *     one Mat holding the last frame — not N frames.
   *   - Do read it, and do run the `Ops` extensions over it: those allocate their own destination and never
@@ -369,8 +369,8 @@ object Video:
       pending = false
       frame
 
-    /** Ends the traversal for good. Called when the owning `frames` scope exits, so that an iterator
-      * someone kept hold of reports "no more frames" instead of decoding into a released Mat.
+    /** Ends the traversal for good. Called when the owning `frames` scope exits, so that an iterator someone
+      * kept hold of reports "no more frames" instead of decoding into a released Mat.
       */
     def retire(): Unit =
       retired = true
