@@ -1,11 +1,11 @@
 package scalacv
 
-/** Native-leak regression gate. Each test drives a workload a few hundred times and asserts process RSS
-  * stays bounded — the signal that sees `org.opencv.core.Mat` buffers (see [[LeakAssertions]]). This suite
-  * owns its JVM (the `leaks` module), so RSS is not contaminated by other suites.
+/** Native-leak regression gate. Each test drives a workload a few hundred times and asserts process RSS stays
+  * bounded — the signal that sees `org.opencv.core.Mat` buffers (see [[LeakAssertions]]). This suite owns its
+  * JVM (the `leaks` module), so RSS is not contaminated by other suites.
   *
-  * These complement the deterministic contract tests in `core.test` (which assert a consumed handle throws
-  * on reuse): those prove *a* handle was released; these prove memory does not accumulate at scale.
+  * These complement the deterministic contract tests in `core.test` (which assert a consumed handle throws on
+  * reuse): those prove *a* handle was released; these prove memory does not accumulate at scale.
   */
 class LeakTest extends munit.FunSuite:
 

@@ -4,16 +4,15 @@ import org.bytedeco.javacpp.Pointer
 
 /** RSS-based leak assertions.
   *
-  * Phase 6 of the memory audit proved that JavaCPP's `Pointer.totalBytes()` is **blind** to scalacv's
-  * memory: a deliberate ~1.4 GB `org.opencv.core.Mat` leak moved it by 0 bytes, because those buffers are
-  * allocated by OpenCV's own JNI (`cv::fastMalloc`) rather than through JavaCPP's tracked `Pointer`
-  * allocators. So `totalBytes()` — and the `-Dorg.bytedeco.javacpp.maxBytes` budget derived from it —
-  * cannot gate a scalacv leak. The only signal that sees these buffers is **process RSS**, read from
-  * `/proc/self/statm` on Linux and falling back to `Pointer.physicalBytes()` (itself RSS-based) elsewhere.
+  * Phase 6 of the memory audit proved that JavaCPP's `Pointer.totalBytes()` is **blind** to scalacv's memory:
+  * a deliberate ~1.4 GB `org.opencv.core.Mat` leak moved it by 0 bytes, because those buffers are allocated
+  * by OpenCV's own JNI (`cv::fastMalloc`) rather than through JavaCPP's tracked `Pointer` allocators. So
+  * `totalBytes()` — and the `-Dorg.bytedeco.javacpp.maxBytes` budget derived from it — cannot gate a scalacv
+  * leak. The only signal that sees these buffers is **process RSS**, read from `/proc/self/statm` on Linux
+  * and falling back to `Pointer.physicalBytes()` (itself RSS-based) elsewhere.
   *
-  * These assertions must run where their suite is the **only** one in the JVM (the dedicated `leaks`
-  * module), because RSS is process-global and would otherwise be contaminated by concurrently-running
-  * suites.
+  * These assertions must run where their suite is the **only** one in the JVM (the dedicated `leaks` module),
+  * because RSS is process-global and would otherwise be contaminated by concurrently-running suites.
   */
 object LeakAssertions:
 
@@ -37,10 +36,10 @@ object LeakAssertions:
     Pointer.deallocateReferences()
     System.gc(); Thread.sleep(150)
 
-  /** Runs `workload` `warmup` times (amortising one-time init/JIT/arena warmup), then `n` measured times,
-    * and asserts RSS grew by less than `toleranceMB`. The tolerance is bounded-not-zero on purpose: RSS
-    * never returns exactly to baseline (allocator arenas, code cache). A per-iteration native leak of even
-    * a modest Mat clears this bound over a few hundred iterations, while a leak-free workload stays flat.
+  /** Runs `workload` `warmup` times (amortising one-time init/JIT/arena warmup), then `n` measured times, and
+    * asserts RSS grew by less than `toleranceMB`. The tolerance is bounded-not-zero on purpose: RSS never
+    * returns exactly to baseline (allocator arenas, code cache). A per-iteration native leak of even a modest
+    * Mat clears this bound over a few hundred iterations, while a leak-free workload stays flat.
     */
   def assertBounded(name: String, n: Int = 300, warmup: Int = 40, toleranceMB: Long = 48)(
       workload: () => Unit

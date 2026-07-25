@@ -25,7 +25,8 @@ class ToleranceMetricTest extends munit.FunSuite:
     val rnd = new scala.util.Random(11)
     for _ <- 0 until 12 do
       val c = Scalar(rnd.nextInt(256).toDouble, rnd.nextInt(256).toDouble, rnd.nextInt(256).toDouble)
-      img = img.drawCircle(Point(rnd.nextInt(160), rnd.nextInt(120)), 4 + rnd.nextInt(20), c, Thickness.Filled)
+      img =
+        img.drawCircle(Point(rnd.nextInt(160), rnd.nextInt(120)), 4 + rnd.nextInt(20), c, Thickness.Filled)
     img
 
   test("identical images: PSNR is very high and max-abs-diff is zero"):
@@ -58,7 +59,11 @@ class ToleranceMetricTest extends munit.FunSuite:
     // pixel by 1 — exactly the sub-threshold difference a tolerance metric is meant to absorb.
     val src = scene()
     val nudged = src.copy.gamma(1.0)
-    try assert(maxAbsDiff(src, nudged) <= 1.0, s"a LUT identity should differ by ≤1, got ${maxAbsDiff(src, nudged)}")
+    try
+      assert(
+        maxAbsDiff(src, nudged) <= 1.0,
+        s"a LUT identity should differ by ≤1, got ${maxAbsDiff(src, nudged)}"
+      )
     finally
       src.close()
       nudged.close()
