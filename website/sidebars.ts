@@ -31,7 +31,7 @@ const sidebars: SidebarsConfig = {
       // Advanced operational topics — how to go fast, parallelise safely, and diagnose.
       type: 'category',
       label: 'Performance & scaling',
-      items: ['performance', 'concurrency', 'troubleshooting'],
+      items: ['performance', 'concurrency', 'testing', 'troubleshooting'],
     },
     {
       type: 'category',

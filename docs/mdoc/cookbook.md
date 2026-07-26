@@ -41,6 +41,109 @@ val annotated: Either[CvError, Array[Byte]] =
 Image.reading("photo.jpg")(_.gray.equalizeHist.threshold(128).write("mask.png"))
 ```
 
+## Segment by colour (HSV keying)
+
+Threshold in HSV — where "greenish" is a hue range, not a fragile RGB box — then keep only those pixels:
+
+```scala mdoc:silent
+val photo =
+  Image.blank(120, 90, Scalar(0, 0, 255)).drawCircle(Point(60, 45), 22, Scalar.Green, Thickness.Filled)
+val hueMask = photo.copy.toHsv.inRange(Scalar(35, 80, 80), Scalar(85, 255, 255)) // green hues
+val greenOnly: Either[CvError, Array[Byte]] = photo.applyMask(hueMask).bytes(".png")
+hueMask.close()
+```
+
+## Count the shapes in a frame
+
+Binarise, then count contours — the outermost outline of each blob:
+
+```scala mdoc:silent
+val shapes = Image
+  .blank(200, 120, Scalar.Black)
+  .drawCircle(Point(40, 60), 18, Scalar.White, Thickness.Filled)
+  .drawCircle(Point(100, 60), 18, Scalar.White, Thickness.Filled)
+  .drawRect(Rect(150, 40, 40, 40), Scalar.White, Thickness.Filled)
+val binary = shapes.gray.threshold(128)
+val shapeCount = binary.contours().size
+binary.close()
+```
+
+```scala mdoc
+shapeCount
+```
+
+## Apply a named filter
+
+The built-in [filters](/filters) are composable `Image => Image` looks:
+
+```scala mdoc:compile-only
+Image.read("photo.jpg").flatMap(_.filter(Filter.vintage).write("vintage.jpg"))
+```
+
+## Blend two images
+
+`blend` is an alpha composite — `weight` is how much of the receiver survives:
+
+```scala mdoc:silent
+val base = Image.blank(100, 100, Scalar(255, 0, 0)) // blue
+val over = Image.blank(100, 100, Scalar(0, 0, 255)) // red
+val blended: Either[CvError, Array[Byte]] = base.blend(over, weight = 0.5).bytes(".png")
+over.close() // `over` is borrowed by blend; `base` was consumed by it
+```
+
+## Erase an object (inpaint)
+
+Mark the region to remove with a non-zero mask; inpaint fills it from its surroundings:
+
+```scala mdoc:silent
+val scratched =
+  Image.blank(100, 100, Scalar(80, 120, 160)).drawRect(Rect(46, 10, 6, 80), Scalar.White, Thickness.Filled)
+val repairMask =
+  Image.blank(100, 100, Scalar.Black, channels = 1).drawRect(Rect(46, 10, 6, 80), Scalar.White, Thickness.Filled)
+val repaired: Either[CvError, Array[Byte]] = scratched.inpaint(repairMask).bytes(".png")
+repairMask.close()
+```
+
+## Blur the background behind a person
+
+Given a foreground mask (from a segmentation model, or any keying), keep the person sharp and blur the rest — the compositing behind a virtual background:
+
+```scala mdoc:silent
+val frame =
+  Image.blank(160, 120, Scalar(60, 60, 60)).drawCircle(Point(80, 60), 30, Scalar(200, 180, 160), Thickness.Filled)
+val personMask =
+  Image.blank(160, 120, Scalar.Black, channels = 1).drawCircle(Point(80, 60), 30, Scalar.White, Thickness.Filled)
+val composited: Either[CvError, Array[Byte]] = frame.blurBackground(personMask, strength = 15).bytes(".png")
+personMask.close()
+```
+
+See [Video conferencing](/conferencing) for producing the mask with a segmentation network.
+
+## Raise a motion alarm on a video
+
+Feed frames in order to a stateful detector; it reports whether — and where — something moved:
+
+```scala mdoc:compile-only
+val detector = MotionDetector.frameDifference()
+Camera.usingFile("clip.mp4") { cam =>
+  cam.foreach() { frame =>
+    val motion = detector.detect(frame)
+    if motion.moving then println(s"motion in ${motion.regionCount} region(s)")
+  }
+}
+detector.close()
+```
+
+## Straighten and clean a scanned page (OCR prep)
+
+Deskew the text, then adaptive-threshold so uneven lighting doesn't swallow the letters:
+
+```scala mdoc:compile-only
+Image.reading("scan.jpg")(_.gray.deskew().adaptiveThreshold(blockSize = 25, c = 10).write("clean.png"))
+```
+
+See [OCR](/ocr) to hand the cleaned page to Tesseract.
+
 ## Lower-level recipes
 
 The same tasks on a raw `Mat`, for when you want the mid-level [ownership contract](/image-processing)
