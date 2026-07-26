@@ -13,6 +13,7 @@ const sidebars: SidebarsConfig = {
       items: [
         {type: 'doc', id: 'index', label: 'What is scalacv'},
         'getting-started',
+        'architecture',
       ],
     },
     {
@@ -25,6 +26,12 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Memory & resources',
       items: ['mat-lifecycle', 'native-cache'],
+    },
+    {
+      // Advanced operational topics — how to go fast, parallelise safely, and diagnose.
+      type: 'category',
+      label: 'Performance & scaling',
+      items: ['performance', 'concurrency', 'troubleshooting'],
     },
     {
       type: 'category',
