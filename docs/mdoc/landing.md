@@ -50,5 +50,29 @@ def mvnDeps = Seq(
 )
 ```
 
-**Start here:** [Getting Started](/getting-started) · [The Image API](/image-api) ·
-[Mat lifecycle & resource safety](/mat-lifecycle) · [API reference](/api/core/index.html)
+## Find your path
+
+**New to computer vision?** Start with the gentle on-ramp — no prior CV knowledge needed:
+
+- [Image basics](/basics) — what a pixel, channel, and colour space actually are (5 minutes).
+- [Tutorial: count objects](/tutorial) — build a real thing step by step.
+- [Glossary](/glossary) — every term in plain language.
+
+**Know OpenCV already?** Map what you know onto scalacv:
+
+- [Coming from OpenCV (Java/Python)](/opencv-java) — the idiom map and the three deliberate differences.
+- [Getting Started](/getting-started) — add the dependency and run your first pipeline.
+- [Architecture](/architecture) — the two-tier design and how the modules split.
+
+**Building something?**
+
+- [Choosing the right approach](/choosing) — which detector, which API tier, which module.
+- [Cookbook](/cookbook) — ready-to-adapt recipes · [Tutorials](/tutorial-video) for video and [faces](/tutorial-faces).
+- The [Image API](/image-api) · [Object detection](/object-detection) · [Video](/video) surfaces.
+
+**Shipping to production?**
+
+- [Mat lifecycle](/mat-lifecycle) — the memory model that makes this trustworthy.
+- [Performance](/performance) · [Concurrency](/concurrency) · [Deploying to production](/deploying-to-production).
+
+**Reference:** [FAQ](/faq) · [Troubleshooting](/troubleshooting) · [API docs](/api/core/index.html)
