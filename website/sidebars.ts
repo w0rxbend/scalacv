@@ -14,9 +14,13 @@ const sidebars: SidebarsConfig = {
         {type: 'doc', id: 'index', label: 'What is scalacv'},
         'getting-started',
         'basics',
-        'tutorial',
         'architecture',
       ],
+    },
+    {
+      type: 'category',
+      label: 'Tutorials',
+      items: ['tutorial', 'tutorial-video'],
     },
     {
       type: 'category',
@@ -81,7 +85,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Concepts',
-      items: ['glossary', 'opencv-java', 'error-model', 'low-level'],
+      items: ['glossary', 'opencv-java', 'faq', 'error-model', 'low-level'],
     },
     {
       type: 'category',
