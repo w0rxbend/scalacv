@@ -1,15 +1,21 @@
 # Gesture & sign recognition
 
 Gesture recognition is two jobs wearing one name, and the split is the whole story: first you have to know
-where the hand's landmarks are, then you have to decide what shape they make. scalacv owns the **second**
-job. `GestureRecognizer` is a deterministic, model-free decision layer — pure geometry over a 21-landmark
-hand pose — and it names a handful of static gestures without any weights of its own. The first job, turning
-pixels into those 21 landmarks, is a hand-landmark network you bring and run through [DNN](/dnn), exactly the
-["rich API, you supply the weights"](/pose-estimation) pattern the rest of the site follows.
+*where the hand's landmarks are*, then you have to decide *what shape they make*. scalacv owns the
+**second** job. `GestureRecognizer` is a deterministic, model-free decision layer — pure geometry over a
+21-landmark hand pose — and it names a handful of static gestures without any weights of its own. The first
+job, turning pixels into those 21 landmarks, is a hand-landmark network you bring and run through
+[DNN](/dnn), exactly the ["rich API, you supply the weights"](/pose-estimation) pattern the rest of the
+site follows.
 
-> scalacv ships **no** hand model and **no** sign-language model. It ships the decision layer and the
-> per-frame landmark plumbing. Where a snippet needs weights it is marked compile-only and assumes a `Net`
-> you loaded yourself with [`Dnn.fromOnnx`](/dnn).
+Because the decision layer needs no model, **everything on this page except the model-driven pipelines runs
+for real** — you can read the exact answer each snippet produces.
+
+:::note bring your own weights
+scalacv ships **no** hand model and **no** sign-language model. It ships the decision layer and the
+per-frame landmark plumbing. Where a snippet needs weights it is marked `compile-only` and assumes a `Net`
+you loaded yourself with [`Dnn.fromOnnx`](/dnn).
+:::
 
 ```scala mdoc:invisible
 import scalacv.*
@@ -30,31 +36,43 @@ The `hand(...)` helper above is a **synthetic** [`Hand21`](/pose-estimation) pos
 "is this finger extended?" flags so every example on this page runs against a real `Pose` without needing a
 model or a camera. Each flag places that finger's tip either far from the wrist (extended) or curled back
 toward it (not), which is exactly the signal the recogniser reads — so it is a faithful stand-in for a hand
-the network actually decoded. We reuse it throughout.
+the network actually decoded. Its keypoints all carry a confidence of `0.9`, which matters when we look at
+`minScore` gating below. We reuse it throughout.
 
 ## The rule: a finger is extended when its tip is farther from the wrist than its middle joint
 
-`GestureRecognizer.recognize(pose, minScore)` takes a `Hand21` pose and returns a `HandGesture`. It does one
-thing per finger: compare the distance from the **wrist** to the finger **tip** against the distance from
-the wrist to that finger's **middle joint**. Tip farther than the joint means the finger is extended; tip
-nearer means it is curled. That comparison is orientation-independent — it holds whichever way the hand is
-turned in the frame — and it is all the geometry there is. `minScore` gates it: a tip the model reported
-below that confidence counts as not extended, so a landmark the network was unsure about never invents a
-gesture.
+`GestureRecognizer.recognize(pose, minScore)` takes a `Hand21` pose and returns a `HandGesture`. It does
+one thing per finger: compare the distance from the **wrist** to the finger **tip** against the distance
+from the wrist to that finger's **middle joint**. Tip farther than the joint means the finger is extended;
+tip nearer means it is curled. That comparison is orientation-independent — it holds whichever way the hand
+is turned in the frame — and it is all the geometry there is.
+
+The five fingers map to these `Hand21` landmark indices (see the [topology](/pose-estimation)):
+
+| Finger | Tip index | Middle-joint index | Flag in `hand(...)` |
+|---|---|---|---|
+| Thumb | 4 | 2 | `t` |
+| Index | 8 | 6 | `i` |
+| Middle | 12 | 10 | `m` |
+| Ring | 16 | 14 | `r` |
+| Pinky | 20 | 18 | `p` |
+
+`minScore` gates it: a tip the model reported below that confidence counts as **not** extended, so a
+landmark the network was unsure about never invents a gesture.
 
 From the five per-finger booleans it names six gestures:
 
-| `HandGesture` | Fingers extended (thumb, index, middle, ring, pinky) |
-|---|---|
-| `Fist` | none |
-| `ThumbsUp` | thumb only |
-| `Pointing` | index only |
-| `Victory` | index + middle |
-| `OpenPalm` | four or more |
-| `Unknown` | any combination the table above does not name |
+| `HandGesture` | Fingers extended (thumb, index, middle, ring, pinky) | Reads as |
+|---|---|---|
+| `Fist` | none | closed hand |
+| `ThumbsUp` | thumb only | 👍 |
+| `Pointing` | index only | index finger out |
+| `Victory` | index + middle | ✌️ / peace |
+| `OpenPalm` | four or more | flat hand |
+| `Unknown` | any combination the table above does not name | out of vocabulary |
 
-`Unknown` is not a failure — it is the honest answer for a shape outside this small vocabulary, and the seam
-where you extend the ruleset (see [sign language](#sign-language-the-honest-framing) below).
+`Unknown` is not a failure — it is the honest answer for a shape outside this small vocabulary, and the
+seam where you extend the ruleset (see [sign language](#sign-language-the-honest-framing) below).
 
 ## Recognising a gesture
 
@@ -93,8 +111,28 @@ A shape the vocabulary does not cover — here the thumb and pinky only, a "call
 GestureRecognizer.recognize(hand(true, false, false, false, true))
 ```
 
-`recognize` `require`s a 21-landmark pose: hand it a body pose or anything whose topology `size` is not 21
-and it fails loudly at the call, not with a wrong answer three layers later.
+### `minScore` in action
+
+`minScore` (default `0.3`) is a confidence floor: any tip below it is treated as not extended, no matter
+where it sits. Our `hand(...)` helper stamps every keypoint with a confidence of `0.9`, so raising
+`minScore` above that makes *every* finger read as curled — and even a flat, fully-extended hand collapses
+to a `Fist`:
+
+```scala mdoc
+GestureRecognizer.recognize(hand(true, true, true, true, true), minScore = 0.95f)
+```
+
+That is the whole point of the gate: on a real hand where the network is unsure about, say, a partially
+occluded pinky, that low-confidence tip drops out of the decision instead of flipping the answer.
+
+:::danger a 21-landmark pose is required
+`recognize` `require`s a `Hand21` pose. Hand it a body pose — or anything whose topology `size` is not 21 —
+and it fails loudly at the call, not with a wrong answer three layers later:
+:::
+
+```scala mdoc:crash
+GestureRecognizer.recognize(Pose(Nil, PoseTopology.CocoBody17))
+```
 
 ## Getting the Hand21 pose from a model
 
@@ -125,28 +163,82 @@ Dnn.fromOnnx("models/hand_landmark.onnx").flatMap { managedNet =>
 }
 ```
 
-> MediaPipe Hands — the obvious hand-landmark model — ships as **TFLite**, which OpenCV's DNN module does not
-> read. Convert it to ONNX first (for example via `tf2onnx`), or use any hand-landmark network already
-> exported to ONNX. The format is the bring-your-own part, not the API — the same constraint every skeleton
-> on the [pose-estimation](/pose-estimation) page lives with.
+The [`Image.estimatePose`](/pose-estimation) one-call helper shortens the middle three lines when you do
+not need the intermediate blob:
+
+```scala mdoc:compile-only
+Dnn.fromOnnx("models/hand_landmark.onnx").flatMap { managedNet =>
+  managedNet.use { net =>
+    Image.reading("hand.jpg") { img =>
+      val handPose = img.estimatePose(
+        net,
+        inputSize = Size(224, 224),
+        layout = KeypointLayout.Regression,
+        topology = PoseTopology.Hand21
+      )
+      GestureRecognizer.recognize(handPose)
+    }
+  }
+}
+```
+
+:::note the format is the bring-your-own part
+MediaPipe Hands — the obvious hand-landmark model — ships as **TFLite**, which OpenCV's DNN module does not
+read. Convert it to ONNX first (for example via `tf2onnx`), or use any hand-landmark network already
+exported to ONNX. The format is what you supply, not the API — the same constraint every skeleton on the
+[pose-estimation](/pose-estimation) page lives with.
+:::
+
+## Live from a camera
+
+The recogniser is cheap and stateless, so a webcam loop is just decode-then-recognise per frame.
+`Camera.foreach` hands you an owned [`Image`](/image-api) it closes for you (compile-only — it needs a
+camera and a model):
+
+```scala mdoc:compile-only
+Dnn.fromOnnx("models/hand_landmark.onnx").flatMap { managedNet =>
+  managedNet.use { net =>
+    Camera.using(0) { cam =>
+      cam.foreach() { frame =>
+        val pose = frame.estimatePose(net, Size(224, 224), KeypointLayout.Regression, PoseTopology.Hand21)
+        val gesture = GestureRecognizer.recognize(pose)
+        println(gesture) // drive your UI, debounce, map to a command, ...
+      }
+    }
+  }
+}
+```
+
+:::tip debounce, do not trust a single frame
+A landmark network jitters frame-to-frame, so a raw per-frame reading flickers. In practice you hold a
+gesture only when it repeats across a short window (say 3–5 frames), which also rejects the momentary
+`Unknown` you get mid-transition between two shapes. That windowing is the same shape as the dynamic-sign
+pipeline below.
+:::
 
 ## Sign language — the honest framing {#sign-language-the-honest-framing}
 
-"Sign recognition" spans two genuinely different problems, and scalacv sits at a different distance from each.
-Being clear about which is which is the point of this section.
+"Sign recognition" spans two genuinely different problems, and scalacv sits at a different distance from
+each. Being clear about which is which is the point of this section.
+
+| Kind | What it is | scalacv's role | You bring |
+|---|---|---|---|
+| Static sign / fingerspelling | one held handshape | the whole decision (extend the ruleset) **or** landmark extraction | nothing, or a small classifier |
+| Dynamic sign | meaning in *movement* over time | per-frame landmark extraction only | a temporal (sequence) classifier |
 
 ### Static signs and fingerspelling are hand shapes — i.e. exactly this layer
 
-A held handshape — a fingerspelled letter, a static sign — is a single hand configuration, which is precisely
-what `GestureRecognizer` reads. There are two honest ways to extend it past the six built-in gestures:
+A held handshape — a fingerspelled letter, a static sign — is a single hand configuration, which is
+precisely what `GestureRecognizer` reads. There are two honest ways to extend it past the six built-in
+gestures:
 
-- **Grow the ruleset.** The finger-extension booleans are a discrete signature; add cases for the shapes you
-  need. This stays deterministic and testable, and it is the right tool when the alphabet is small and the
-  shapes are geometrically distinct.
+- **Grow the ruleset.** The finger-extension booleans are a discrete signature; add cases for the shapes
+  you need. This stays deterministic and testable, and it is the right tool when the alphabet is small and
+  the shapes are geometrically distinct.
 - **Classify the landmark vector.** For shapes the extension rule cannot separate (thumb position, finger
   curl degree, cross-overs), feed the 21 landmarks as a feature vector to your own small classifier. You
-  extract the landmarks with scalacv and decide with your model — a tiny MLP exported to ONNX and run through
-  [DNN](/dnn), or any classifier over the flattened `(x, y)` pairs:
+  extract the landmarks with scalacv and decide with your model — a tiny MLP exported to ONNX and run
+  through [DNN](/dnn), or any classifier over the flattened `(x, y)` pairs:
 
 ```scala mdoc:compile-only
 // A static-fingerspelling classifier: decode the hand, flatten its 21 (x, y) landmarks into
@@ -175,14 +267,21 @@ Dnn.fromOnnx("models/asl_fingerspelling.onnx").flatMap { managedSignNet =>
 }
 ```
 
+:::tip normalise before you classify
+Raw pixel `(x, y)` pairs drift with hand position and camera distance. Before feeding them to a classifier,
+translate them relative to the wrist and scale by the hand's span (e.g. wrist-to-middle-MCP distance). Then
+the same handshape looks the same wherever it is in the frame — the classifier learns *shape*, not
+*location*. scalacv gives you the raw landmarks; the normalisation is a few lines over `pose.keypoints`.
+:::
+
 ### Dynamic signing is temporal — a sequence of poses fed to a sequence classifier you train
 
 Most signing is movement: the meaning lives in how the hands (and often the body) travel over time, not in
-any one frame. That is a **sequence** problem, and no per-frame rule can answer it. The shape of a solution is
-a temporal classifier — an LSTM or a Transformer, exported to ONNX and run through [DNN](/dnn) — that you
-train yourself on windows of pose data. scalacv's role is upstream and unglamorous but essential: it supplies
-the **per-frame landmark extraction** that is that classifier's input. You accumulate poses from a camera and
-hand the window over:
+any one frame. That is a **sequence** problem, and no per-frame rule can answer it. The shape of a solution
+is a temporal classifier — an LSTM or a Transformer, exported to ONNX and run through [DNN](/dnn) — that you
+train yourself on windows of pose data. scalacv's role is upstream and unglamorous but essential: it
+supplies the **per-frame landmark extraction** that is that classifier's input. You accumulate poses from a
+camera and hand the window over:
 
 ```scala mdoc:compile-only
 import scala.collection.mutable
@@ -217,16 +316,15 @@ def runSignStream(handModel: org.opencv.dnn.Net, signModel: org.opencv.dnn.Net) 
   }
 ```
 
-The division of labour is the honest boundary: scalacv gives you deterministic per-frame landmark extraction
-and a small static-gesture vocabulary; the temporal model that turns a sequence of those frames into a sign
-is yours to train and run. scalacv does not ship one.
+The division of labour is the honest boundary: scalacv gives you deterministic per-frame landmark
+extraction and a small static-gesture vocabulary; the temporal model that turns a sequence of those frames
+into a sign is yours to train and run. scalacv does not ship one.
 
-## See also
+## Next
 
-- [Pose estimation](/pose-estimation) — `PoseTopology.Hand21`, `PoseEstimator.decode`, and the hand-skeleton
-  pipeline that produces the pose `GestureRecognizer` reads.
+- [Pose estimation](/pose-estimation) — `PoseTopology.Hand21`, `PoseEstimator.decode`, and the
+  hand-skeleton pipeline that produces the pose `GestureRecognizer` reads.
 - [DNN](/dnn) — `fromOnnx` / `blobFromImage` / `forward`, the model plumbing behind every hand and
   sequence network here.
 - [Object detection](/object-detection) — the same "typed result, you bring the ONNX" contract for faces,
   QR codes and markers.
-- [The Image API](/image-api) — the read → transform → annotate chain the pipelines above plug into.

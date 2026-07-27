@@ -1,11 +1,23 @@
 # Geometric transforms & morphology
 
-Reshaping pixels rather than recolouring them: mirroring, rotating, padding, and the morphology
-operators that grow, shrink and clean up binary masks. Like the rest of the library each comes at
-**two levels** — reach for the high-level [`Image`](/image-api) verbs first (they free every
-intermediate for you), and drop to the mid-level `Mat` extension ops from
-[Image processing](/image-processing) when you want a knob `Image` does not surface (an
-`iterations`, a border colour on a rotation) or are already holding a raw `Mat`.
+Some operations change *what colour a pixel is*; the ones on this page change *where the pixels go* —
+resizing, cropping, mirroring, rotating, padding — plus the morphology operators that grow, shrink
+and clean up binary masks. If you have ever made a thumbnail, straightened a photo, or tidied the
+speckled output of a colour mask, this is the toolbox.
+
+Like the rest of the library each op comes at **two levels**. Reach for the high-level
+[`Image`](/image-api) verbs first — they free every intermediate for you and read as a fluent chain.
+Drop to the mid-level `Mat` extension ops from [Image processing](/image-processing) only when you
+want a knob `Image` does not surface (an `iterations`, a border colour on a rotation) or you are
+already holding a raw `Mat` handed to you by a detector or a video frame.
+
+:::note Transforms consume the image
+Every verb here is a **transform**: it spends the `Image` it is called on and returns a fresh one.
+Reusing the old handle throws `IllegalStateException`. To branch — build a mask from one copy and
+keep the pixels from another — take [`.copy`](/image-api) first. Queries like `width`/`height` only
+*borrow*, so they leave the image alive. See [Mat lifecycle](/mat-lifecycle) for the full ownership
+story.
+:::
 
 ```scala mdoc:invisible
 import scalacv.*
@@ -24,6 +36,81 @@ def mask(): Mat =
   m
 ```
 
+## The transforms at a glance
+
+| High-level `Image` verb | What it does | Mid-level `Mat` op |
+| --- | --- | --- |
+| `resize(w, h)` / `resizeTo(size)` / `scale(f)` | Change pixel dimensions | `resize`, `scaled` |
+| `crop(rect)` | Cut out a rectangular region (an independent copy) | `submat` + clone |
+| `flip(how)` | Mirror left↔right, top↔bottom, or both | `flip` |
+| `rotate(Rotation.…)` | Lossless 90°/180° turn | `rotate` |
+| `rotate(degrees, scale)` | Turn by any angle, growing the canvas | `rotated` |
+| `pad(size)` / `border(t, b, l, r)` | Add a margin on some or all sides | `border` |
+| `erode` / `dilate` | Shrink / grow bright regions | `erode`, `dilate` |
+| `morphology(op)` | Open, close, gradient, top-hat, black-hat | `morphology` |
+
+The rest of the page walks these in the order you usually meet them.
+
+## Resize & scale
+
+The most common geometric op. `resize(width, height)` sets an absolute pixel size; `scale(factor)`
+multiplies both sides by one number (`0.5` halves, `2.0` doubles); `resizeTo(size, interpolation)`
+takes a [`Size`](/geometry) and lets you pick the resampling filter:
+
+```scala mdoc
+val thumb = Image.blank(160, 120).resize(80, 60)
+thumb.width // 80
+```
+
+```scala mdoc:invisible
+thumb.close()
+```
+
+```scala mdoc:silent
+Image.blank(160, 120).scale(0.5).close()                              // 80×60
+Image.blank(160, 120).resizeTo(Size(320, 240), Interpolation.Cubic).close()
+```
+
+### Choosing an interpolation
+
+Every resize resamples: it invents pixel values that were not there before. [`Interpolation`](/geometry)
+picks how, and the right choice depends on whether you are growing or shrinking the image.
+
+| `Interpolation` | Best for | Notes |
+| --- | --- | --- |
+| `Nearest` | Label maps, masks | Blocky; copies the closest pixel, so exact values (0/255) survive |
+| `Linear` | General up/downscale | The default — a good, fast all-rounder |
+| `Cubic` | Upscaling | Smoother than `Linear`, slower |
+| `Area` | Downscaling | Averages the shrunk-away pixels; avoids moiré and aliasing |
+| `Lanczos4` | Highest-quality upscale | Sharpest, slowest |
+
+:::tip Downscale with `Area`, upscale with `Cubic`
+The default `Linear` is fine most of the time, but the two ends of the range have better tools. When
+you make an image smaller, `Area` avoids the shimmer a linear downscale leaves in fine textures; when
+you make it larger, `Cubic` (or `Lanczos4`) keeps edges crisp.
+:::
+
+```scala mdoc:silent
+Image.blank(320, 240).resizeTo(Size(80, 60), Interpolation.Area).close()   // shrink
+Image.blank(80, 60).resizeTo(Size(320, 240), Interpolation.Lanczos4).close() // enlarge
+```
+
+## Crop
+
+`crop(rect)` cuts out an axis-aligned region as an **independent copy** — not an aliasing view onto
+the parent — so the crop outlives the image it came from. The [`Rect`](/geometry) is
+`Rect(x, y, width, height)` and must lie fully inside the image, or the call throws
+`IllegalArgumentException` before touching native memory:
+
+```scala mdoc
+val region = Image.blank(160, 120).crop(Rect(20, 15, 60, 40))
+region.width // 60
+```
+
+```scala mdoc:invisible
+region.close()
+```
+
 ## Flip
 
 [`Flip`](/geometry) is named by the visible effect, not OpenCV's axis-centric flip code:
@@ -34,6 +121,11 @@ back a fresh one:
 ```scala mdoc:silent
 Image.blank(160, 120).flip(Flip.Horizontal).close()
 ```
+
+:::tip Mirroring a webcam preview
+A front-facing camera feels natural only when the preview is mirrored, so `frame.flip(Flip.Horizontal)`
+is the standard first step in a selfie or [conferencing](/conferencing) pipeline.
+:::
 
 Mid-level, the same op on a borrowed `Mat` returns an owned `Managed[Mat]`:
 
@@ -60,6 +152,12 @@ val turned = Image.blank(160, 120).rotate(Rotation.Clockwise)
 ```scala mdoc:invisible
 turned.close()
 ```
+
+| `Rotation` | Angle | Size change |
+| --- | --- | --- |
+| `Clockwise` | 90° CW | w↔h swap |
+| `CounterClockwise` | 90° CCW | w↔h swap |
+| `Half` | 180° | unchanged |
 
 ### Arbitrary angle — the canvas expands
 
@@ -88,6 +186,12 @@ val spun: Either[CvError, Array[Byte]] =
 toTurn.release()
 ```
 
+:::note Straightening scanned text
+When the tilt you want to remove is *text* skew rather than a known angle, reach for
+[`deskew`](/ocr) instead — it finds the dominant text angle itself and rotates upright. `rotate` is
+for when you already know the angle.
+:::
+
 ## Padding & borders
 
 `pad(size)` adds a uniform margin of `size` pixels on all four sides; `border(top, bottom, left,
@@ -113,19 +217,42 @@ val framed = Image.blank(160, 120).border(top = 4, bottom = 4, left = 20, right 
 framed.close()
 ```
 
-The mid-level `border` has the identical signature and returns an owned `Managed[Mat]`.
+The `borderType` decides what fills the new margin — a fixed colour or an extension of the existing
+edge:
+
+| `BorderType` | Fills the margin with | Typical use |
+| --- | --- | --- |
+| `Constant` | The given `color` (default black) | A visible frame or letterbox |
+| `Replicate` | The nearest edge pixel, repeated | Padding before a filter, no fake edge |
+| `Reflect` | A mirror of the edge, **including** the edge pixel | Seamless tiling |
+| `Reflect101` | A mirror **excluding** the edge pixel | OpenCV's own default for filter borders |
+| `Wrap` | Pixels from the opposite side | Periodic / tiling images |
+
+```scala mdoc:silent
+Image.blank(160, 120).pad(8, borderType = BorderType.Replicate).close()
+```
+
+The mid-level `border` has the identical `(top, bottom, left, right, borderType, color)` signature and
+returns an owned `Managed[Mat]`.
 
 ## Morphology
 
 Morphology reshapes the *bright* regions of an image (conventionally a `CV_8UC1` mask where the
-foreground is 255) by probing it with a small **structuring element**.
+foreground is 255) by probing it with a small **structuring element**. It is the standard clean-up
+crew after any segmentation — thresholding, colour masking, motion differencing — where the raw mask
+is right in outline but grainy at the pixel level.
 
 ### The structuring element
 
-[`MorphShape`](/geometry) picks the probe's shape — `Rect`, `Ellipse` or `Cross` — and `radius` sizes
-it: the kernel is `radius * 2 + 1` pixels on a side, so `radius` 1 is a 3×3, `radius` 2 a 5×5. A
-larger radius reaches further, and so removes or fills larger features. `Ellipse` is the usual choice
-for round blobs; the wrapper builds and frees the kernel for you.
+[`MorphShape`](/geometry) picks the probe's shape and `radius` sizes it: the kernel is
+`radius * 2 + 1` pixels on a side, so `radius` 1 is a 3×3, `radius` 2 a 5×5. A larger radius reaches
+further, and so removes or fills larger features. The wrapper builds and frees the kernel for you.
+
+| `MorphShape` | Shape | When |
+| --- | --- | --- |
+| `Rect` | Filled square | The fast default; fine for most masks |
+| `Ellipse` | Filled disc | Round blobs — avoids the corner artefacts a square leaves |
+| `Cross` | Plus sign | Thin structures; touches fewer diagonal neighbours |
 
 ### Erode & dilate
 
@@ -162,15 +289,19 @@ Image.blank(160, 120, Scalar.White).gray.threshold(127).erode(radius = 2).close(
 The compound operators from [`MorphOp`](/geometry) pair an erode and a dilate, and the pairing is the
 whole point:
 
-- **`Open`** = erode *then* dilate. The erode kills anything smaller than the kernel; the dilate
-  restores what survived to its original size. Net effect: **specks vanish, real shapes stay put.**
-  This is the de-speckle.
-- **`Close`** = dilate *then* erode — the mirror image. The dilate bridges small gaps and fills
-  pinholes; the erode shrinks the shapes back. Net effect: **holes fill, shapes keep their size.**
-- **`Gradient`** = dilation minus erosion — a one-pixel outline of the shapes.
-- **`TopHat`** = source minus its opening — the bright detail smaller than the kernel (what `Open`
-  threw away). **`BlackHat`** = closing minus source — the dark detail. Both are useful for pulling
-  fine features off an uneven background.
+| `MorphOp` | Definition | Net effect |
+| --- | --- | --- |
+| `Open` | erode → dilate | **Specks vanish, real shapes stay put** — the de-speckle |
+| `Close` | dilate → erode | **Holes fill, shapes keep their size** |
+| `Gradient` | dilation − erosion | A one-pixel outline of the shapes |
+| `TopHat` | source − opening | The bright detail smaller than the kernel |
+| `BlackHat` | closing − source | The dark detail smaller than the kernel |
+
+`Open` erodes first, so anything smaller than the kernel disappears; the following dilate restores
+what survived to its original size. `Close` is the mirror image — the dilate bridges gaps and fills
+pinholes, and the erode shrinks the shapes back. `TopHat` and `BlackHat` isolate the fine detail an
+`Open`/`Close` throws away, which makes them handy for pulling text or specks off an uneven
+background.
 
 ```scala mdoc:silent
 val m = mask()
@@ -180,6 +311,8 @@ val holesFilled: Either[CvError, Array[Byte]] =
   m.morphology(MorphOp.Close, radius = 3).use(Images.encode(_, ".png")) // fill the pinhole
 val outline: Either[CvError, Array[Byte]] =
   m.morphology(MorphOp.Gradient).use(Images.encode(_, ".png"))
+val brightDetail: Either[CvError, Array[Byte]] =
+  m.morphology(MorphOp.TopHat, radius = 3).use(Images.encode(_, ".png"))
 m.release()
 ```
 
@@ -215,6 +348,10 @@ Image.blank(160, 120, Scalar.White)
   .close()
 ```
 
-A mask cleaned this way is exactly what [`contours`](/contours) wants next. See the
-[Image API](/image-api) for the full high-level surface, [Image processing](/image-processing) for the
-mid-level ownership contract, and the [Cookbook](/cookbook) for end-to-end recipes.
+A mask cleaned this way is exactly what [`contours`](/contours) wants next.
+
+## Next
+
+- [Contours](/contours) — turn a cleaned mask into shapes you can measure and label.
+- [Colour, masking & compositing](/color-masking) — where most masks come from before this clean-up.
+- [Image processing](/image-processing) — the full mid-level op catalogue and the ownership contract.

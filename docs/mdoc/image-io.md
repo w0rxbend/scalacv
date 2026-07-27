@@ -5,16 +5,45 @@ import scalacv.*
 OpenCv.load()
 ```
 
-Reading and writing pixels is the one edge of the library that touches the outside world — the
-filesystem, an HTTP body, a database BLOB — and it is also the one place where OpenCV's own error
-reporting is genuinely inconsistent. `Images` is the thin object that flattens that inconsistency into a
-single `Either[CvError, ?]`, so a missing file or a corrupt JPEG is a value you handle, never a surprise
-several call frames away.
+Every image pipeline starts by getting pixels *in* and ends by getting them *out* — from a file, an HTTP
+body, a database BLOB, a byte array in a test. This page is about that boundary: the small set of
+functions that turn the outside world into a `Mat` you can work with, and a processed image back into
+bytes on disk or in memory.
 
-Everything here comes in two flavours: the mid-level [`Images`](#the-images-object) functions that hand
-back an owned [`Managed[Mat]`](/mat-lifecycle), and the high-level [`Image`](/image-api) entry points that
-give you the fluent, self-freeing wrapper instead. Reach for `Image` first for read → process → write;
-drop to `Images` when you already hold a raw `Mat`.
+It is also the one edge of the library where OpenCV's own error reporting is genuinely inconsistent — a
+missing file, a corrupt JPEG, and an unknown format each fail in a *different* way, and two of them fail
+silently. scalacv flattens all of that into a single `Either[CvError, ?]`, so a bad path is a value you
+handle right there, never a `CvException` that surfaces three call frames later.
+
+## The two layers, and which to pick
+
+Everything here comes in two flavours:
+
+| You have / want | Reach for | Returns |
+|---|---|---|
+| A path or bytes, and a full read → process → write pipeline | [`Image`](/image-api) | `Either[CvError, Image]` |
+| A raw `org.opencv.*` `Mat` already in hand | [`Images`](#the-images-object) | `Either[CvError, Managed[Mat]]` |
+
+Reach for **`Image`** first — it is the fluent, self-freeing wrapper, and `write`/`bytes` encode *and*
+release in one step. Drop to **`Images`** when you already hold a `Mat` (a detector's output, a video
+frame you copied) and just need to encode or persist it. The two share the same error model; `Image.read`
+is literally `Images.read` with an `Image` wrapped around the result.
+
+:::tip
+If you are new here, start with [`Image.reading`](#prefer-image-for-read--process--write) — it opens a
+file, runs your pipeline, and closes the image for you even on failure. You cannot leak with it.
+:::
+
+## Quick start
+
+The whole shape of an I/O pipeline, top to bottom — read a file, transform it, write it back:
+
+```scala mdoc:compile-only
+Image.read("photo.jpg").flatMap(_.gray.blur(2).canny(80, 160).write("edges.png"))
+```
+
+That touches a real file, so it is shown here as a non-running snippet. The rest of this page builds a
+*synthetic* image in memory, so every remaining example actually runs during the docs build.
 
 ## Why reading returns an `Either`
 
@@ -38,7 +67,22 @@ directory, undecodable — report identically, because that is all the informati
 Images.read("/does/not/exist.png").left.map(_.getMessage)
 ```
 
+:::note
+There are exactly three failure shapes coming out of OpenCV's codecs, and every function here folds them
+into `CvError`: a decode returns an empty Mat (→ [`DecodeFailed`](/error-model)); a write returns `false`
+(→ [`EncodeFailed`](/error-model)); an unknown extension *throws* — which scalacv heads off with a
+`haveImageWriter` check so it too becomes an `EncodeFailed`, never an escaped exception. See the
+[error model](/error-model) for the full ADT.
+:::
+
 ## The `Images` object
+
+Four functions, symmetric in pairs — file vs memory, in vs out:
+
+| | Read (in) | Write (out) |
+|---|---|---|
+| **File** | `read(path, flags)` | `write(path, mat)` |
+| **Memory** | `decode(bytes, flags)` | `encode(mat, ext)` |
 
 ### Reading from a file
 
@@ -50,7 +94,8 @@ Images.read("photo.jpg")                             // Either[CvError, Managed[
 Images.read("scan.png", ImreadFlags.Grayscale)       // decode straight to one channel
 ```
 
-Because the result is owned, prefer consuming it in place over holding it:
+Because the result is owned, prefer consuming it in place over holding it. `Managed.use` runs your
+function and releases the Mat when it returns, so nothing leaks:
 
 ```scala mdoc:compile-only
 Images.read("photo.jpg").map(_.use { mat =>
@@ -75,6 +120,13 @@ Images.decode(httpBody, ImreadFlags.Unchanged)       // keep any alpha channel
 val httpBody: Array[Byte] = Array.emptyByteArray
 ```
 
+An empty array short-circuits to a `Left` with its own message, so you never confuse "no bytes arrived"
+with "the bytes were not an image":
+
+```scala mdoc
+Images.decode(Array.emptyByteArray).left.map(_.getMessage)
+```
+
 ### Writing to a file
 
 `Images.write` picks the encoder from the path's extension. It does **not** modify or release the Mat you
@@ -83,7 +135,7 @@ pass. `imwrite` has two failure modes and `write` covers both:
 - an unwritable destination — a missing parent directory, no permission — which `imwrite` reports by
   returning `false`, surfaced as [`CvError.EncodeFailed`](/error-model);
 - an extension with no registered encoder, which `imwrite` reports by **throwing** `CvException`,
-  surfaced as `CvError.NativeCall`.
+  surfaced as `CvError.EncodeFailed` too (a `haveImageWriter` check catches it before the throw).
 
 Both are `Left`s, so a single check catches either:
 
@@ -97,6 +149,12 @@ val source = Mat(64, 64, CvType.CV_8UC3)
 ```scala mdoc
 Images.write("/no/such/directory/out.png", source).isLeft   // returns false -> EncodeFailed
 ```
+
+:::warning
+`write` does **not** create parent directories. A path into a folder that does not exist is a `Left`, not
+a thrown exception — but it is still a failure, so pattern-match or `flatMap` the result rather than
+assuming success.
+:::
 
 ### Encoding to memory
 
@@ -118,19 +176,38 @@ An extension with no encoder yields a `Left` rather than the `CvException` OpenC
 Images.encode(source, ".not-a-format").isLeft
 ```
 
+Format choice is a trade of size against fidelity — the codec is picked purely from the extension:
+
+| `ext` | Lossy? | Alpha | Use it for |
+|---|---|---|---|
+| `".png"` | no | yes | screenshots, masks, anything you re-process |
+| `".jpg"` / `".jpeg"` | yes | no | photos where a smaller file wins |
+| `".webp"` | either | yes | modern web delivery |
+| `".bmp"` | no | no | a raw, decoder-free dump |
+
 ## `ImreadFlags`
 
 Both `read` and `decode` take an `ImreadFlags`, defaulting to `ImreadFlags.Color`. It is a typed value,
-not a bare `int` — a decode `color`, an optional `scale`, and an `ignoreOrientation` flag:
+not a bare `int` — a decode `color`, an optional `scale`, and an `ignoreOrientation` flag. The three
+named constants cover the common cases:
 
 | Value | Meaning |
 |---|---|
 | `ImreadFlags.Color` | force 3-channel BGR (the default) |
 | `ImreadFlags.Grayscale` | force single-channel greyscale |
 | `ImreadFlags.Unchanged` | as stored, alpha channel and all |
-| `ImreadColor.AnyDepth` | keep 16-bit / 32-bit depth instead of downcasting to 8-bit |
 
-Unlike a raw bitmask, the `color` and `scale` are *not* independent bits you OR together — OpenCV's
+The full `ImreadColor` enum has two more cases you build with the `ImreadFlags(color, …)` constructor:
+
+| `ImreadColor` | Effect |
+|---|---|
+| `Grayscale` | single channel |
+| `Color` | 3-channel BGR |
+| `ColorRgb` | 3-channel RGB (no `BgrToRgb` step needed) |
+| `Unchanged` | exactly as stored, alpha and all |
+| `AnyDepth` | keep 16-/32-bit depth instead of downcasting to 8-bit |
+
+Unlike a raw bitmask, `color` and `scale` are *not* independent bits you OR together — OpenCV's
 `IMREAD_*` constants are not orthogonal, so the `(color, scale)` pair maps totally onto exactly one named
 constant. Pass `ignoreOrientation = true` to skip the EXIF rotation (the one genuinely independent flag),
 and an `ImreadScale` other than `Full` to decode a downscaled image cheaply. The resolved OpenCV int is
@@ -140,10 +217,28 @@ and an `ImreadScale` other than `Full` to decode a downscaled image cheaply. The
 ImreadFlags.Grayscale.cvValue
 ```
 
+### Reduced-size decode
+
+`ImreadScale` decodes a *downscaled* image directly, without ever materialising the full-resolution one.
+That is strictly cheaper than reading full then resizing, because the codec skips the discarded detail
+rather than producing it and throwing it away:
+
+| `ImreadScale` | Fraction | A 4000×3000 source decodes to |
+|---|---|---|
+| `Full` | 1/1 | 4000×3000 |
+| `Half` | 1/2 | 2000×1500 |
+| `Quarter` | 1/4 | 1000×750 |
+| `Eighth` | 1/8 | 500×375 |
+
 ```scala mdoc:silent
 // greyscale, decoded at half resolution
 val thumbnail = ImreadFlags(ImreadColor.Grayscale, ImreadScale.Half)
 ```
+
+:::tip
+Building a thumbnail grid or a gallery preview? Decode at `Quarter` or `Eighth` up front. On a folder of
+large photos it is the single biggest I/O win available — see [Performance](/performance).
+:::
 
 Reduced-size decode exists only for `Grayscale` and `Color`, and `Unchanged` can carry no extra bit;
 combinations OpenCV has no constant for are rejected at construction, not silently decoded as something
@@ -151,6 +246,13 @@ else:
 
 ```scala mdoc:crash
 ImreadFlags(ImreadColor.AnyDepth, ImreadScale.Half) // require fails: no reduced-size AnyDepth decode
+```
+
+`Unchanged` likewise refuses a scale or an orientation flag, because `IMREAD_UNCHANGED` is `-1` and its
+bits swamp everything else:
+
+```scala mdoc:crash
+ImreadFlags(ImreadColor.Unchanged, ImreadScale.Half) // require fails
 ```
 
 ## Round-tripping through memory
@@ -165,6 +267,16 @@ val roundTrip: Either[CvError, (Int, Int)] =
     .flatMap(png => Images.decode(png))                      // bytes -> owned Mat
     .map(_.use(mat => (mat.rows, mat.cols)))                 // read it, then release
 roundTrip
+```
+
+The same round trip in the high-level API never names a `Mat`: `Image.bytes(".png")` encodes and
+releases, `Image.decode(bytes)` reads back:
+
+```scala mdoc:compile-only
+for
+  png  <- Image.read("photo.jpg").flatMap(_.gray.bytes(".png"))
+  back <- Image.decode(png)
+yield back.width
 ```
 
 ```scala mdoc:invisible
@@ -182,7 +294,19 @@ step, so a whole pipeline never names a `Mat` or a `release`:
 Image.read("photo.jpg").flatMap(_.gray.blur(2).canny(80, 160).write("edges.png"))
 ```
 
-`Image.decode(bytes)` mirrors it for in-memory input, and `Image.bytes(".png")` mirrors `encode` on the
-way out. See the [Image API](/image-api) for the full story, [Image processing](/image-processing) for
-the operation catalogue, and the [Cookbook](/cookbook) for worked recipes.
+Best of all is `Image.reading`, which opens the file, runs your body, and closes the image afterwards —
+even if the body already consumed it, and even on an exception. Failure inside the body comes back as a
+`Left` rather than escaping the `Either`:
+
+```scala mdoc:compile-only
+Image.reading("photo.jpg")(_.gray.canny(80, 160).write("edges.png"))
 ```
+
+`Image.decode(bytes)` mirrors it for in-memory input, and `Image.bytes(".png")` mirrors `encode` on the
+way out. See the [Image API](/image-api) for the full story.
+
+## Next
+
+- [Image API](/image-api) — the fluent `Image` wrapper this page keeps pointing at, with move semantics explained.
+- [Image processing](/image-processing) — the operation catalogue: what to do with the pixels once they are in.
+- [Mat lifecycle](/mat-lifecycle) — how `Managed[Mat]` guarantees release-exactly-once under both layers.

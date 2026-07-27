@@ -1,10 +1,25 @@
 # Colour, masking & compositing
 
 This page is about turning colour into something you can *act on*: brightening and stretching
-contrast, moving into a colour space you can reason about, carving a region out by its colour, and
-compositing images together. It leads with the high-level [`Image`](/image-api) verbs — each consumes
-the image it is called on and frees every intermediate — and shows the mid-level `Mat` op underneath
-each one for when you need a knob `Image` does not surface.
+contrast, restyling a photo, moving into a colour space you can reason about, carving a region out by
+its colour, and compositing images together. Three ideas run through all of it:
+
+1. **Tone** — nudging brightness, contrast, saturation and hue (`adjust`, `sepia`, `saturate`, …).
+2. **Segmentation** — deciding which pixels you care about and building a binary *mask* (`toHsv` →
+   `inRange`).
+3. **Compositing** — combining images, either blended together (`blend`) or one seen *through* a mask
+   (`applyMask`).
+
+It leads with the high-level [`Image`](/image-api) verbs — each consumes the image it is called on
+and frees every intermediate — and shows the mid-level `Mat` op underneath each one for when you need
+a knob `Image` does not surface.
+
+:::note Transforms consume, masks are borrowed
+A colour verb spends the `Image` it is called on and returns a new one. But `applyMask`, `blend` and
+friends take a second image (the mask, or the other layer) that is **borrowed** — it stays alive, so
+you close it yourself. Getting this right is the whole subject of [Mat lifecycle](/mat-lifecycle);
+each snippet below is careful about it.
+:::
 
 ```scala mdoc:invisible
 import scalacv.*
@@ -30,13 +45,33 @@ def colourMat(): Mat =
 def colourScene(): Image = Image.wrap(Managed(colourMat()))
 ```
 
+## First taste
+
+The everyday tone verbs read exactly the way you would say them. Each consumes the scene and returns
+a new image; `.close()` releases it because these snippets actually run:
+
+```scala mdoc:silent
+colourScene().adjust(brightness = 30).close() // lighter
+colourScene().invert.close()                  // photographic negative
+colourScene().gray.close()                    // drop to greyscale
+```
+
+Everything else on the page is a richer version of one of those three moves.
+
 ## Intensity & contrast
 
-Four transforms cover the everyday tone work. `adjust` is brightness and contrast in one step —
-`contrast` scales each pixel (1.0 leaves it), `brightness` shifts it — saturating to 8-bit. `invert`
-is the photographic negative (`255 - v`). `normalize` is a min-max contrast stretch: it rescales the
-darkest pixel to `min` and the brightest to `max`, filling the range. `sharpen` is an unsharp mask —
-firm at `amount` ~1, and a source of ugly haloes at the edges if you push it far past that.
+Four transforms cover the everyday tone work.
+
+| Verb | What it does |
+| --- | --- |
+| `adjust(brightness, contrast)` | Shift *and* scale each pixel in one step (saturating to 8-bit) |
+| `invert` | Photographic negative, `255 - v` |
+| `normalize(min, max)` | Min-max contrast stretch — rescale so the darkest pixel is `min`, brightest `max` |
+| `sharpen(amount)` | Unsharp mask; ~1 is firm, higher haloes the edges |
+
+`contrast` scales each pixel (1.0 leaves it), `brightness` shifts it — both saturate to 8-bit.
+`normalize` fills the range so a flat, low-contrast image gains punch. `sharpen` is firm at
+`amount` ~1 and a source of ugly haloes at the edges if you push it far past that.
 
 ```scala mdoc:silent
 colourScene().adjust(brightness = 30, contrast = 1.2).close() // brighter, punchier
@@ -58,6 +93,49 @@ val stretched: Either[CvError, Array[Byte]] =
 src.release()
 ```
 
+## Stylistic colour
+
+Beyond plain tone there is a family of look-and-feel transforms — the ones that make a photo warm,
+vintage, or posterised. They are all transforms, so each consumes the scene:
+
+| Verb | Effect | Range guide |
+| --- | --- | --- |
+| `sepia` | Warm brown monochrome | — |
+| `saturate(factor)` | Vividness; `0` is grey (still 3-channel) | `≥ 0`, `>1` vivid, `<1` muted |
+| `gamma(g)` | Mid-tone brightness | `>0`, `<1` darkens, `>1` lifts |
+| `temperature(shift)` | Warm/cool white balance | `[-1, 1]`, `>0` warm, `<0` cool |
+| `posterize(levels)` | Flatten to `levels` tones per channel | `[2, 256]` |
+| `emboss` | Directional relief | — |
+| `colorMap(map)` | False-colour a single channel into a heatmap | see [`Colormap`](/geometry) |
+
+```scala mdoc:silent
+colourScene().sepia.close()
+colourScene().saturate(1.4).close()      // more vivid
+colourScene().gamma(0.8).close()         // darken mid-tones
+colourScene().temperature(0.4).close()   // warmer
+colourScene().posterize(6).close()       // 6 tones per channel
+colourScene().emboss.close()
+```
+
+`colorMap` expects a single channel, so it usually follows `gray` — it turns a scalar field (grey
+intensity, a depth map, a [motion](/motion-detection) field) into a colour heatmap:
+
+```scala mdoc:silent
+colourScene().gray.colorMap(Colormap.Turbo).close()
+```
+
+:::tip Reach for a named filter first
+Most of these looks are already bundled as composable [`Filter`](/filters) values — `Filter.vintage`,
+`Filter.noir`, `Filter.warm`, `Filter.dramatic` — applied with `image.filter(...)`. Build your own
+only when none fits.
+:::
+
+```scala mdoc:silent
+colourScene().filter(Filter.vintage).close()
+```
+
+See [Filters](/filters) for the full catalogue and how to chain them.
+
 ## Colour spaces
 
 OpenCV Mats are **BGR** by default, not RGB — which is why [`Scalar`](/geometry) is ordered
@@ -74,10 +152,20 @@ colourScene().toHsv.close()
 colourScene().convert(ColorConversion.BgrToHsv).close()
 ```
 
-The conversion changes what each channel *means*, not how many there are — a 3-channel BGR image
-becomes a 3-channel HSV one. In OpenCV's 8-bit HSV, **hue runs 0–179** (degrees halved to fit a
-byte), while saturation and value run the full 0–255. A `Scalar` you pass to `inRange` below is
-therefore `Scalar(hue, sat, val)` in exactly that scale.
+[`ColorConversion`](/geometry) covers the spaces you actually reach for:
+
+| Conversion | From → to | Why |
+| --- | --- | --- |
+| `BgrToGray` / `GrayToBgr` | colour ↔ 1-channel grey | Feed grey into edges, thresholds, `colorMap` |
+| `BgrToHsv` / `HsvToBgr` | BGR ↔ hue/sat/value | Segment by colour (below) |
+| `BgrToLab` / `LabToBgr` | BGR ↔ CIELAB | Perceptual colour distance, white balance |
+| `BgrToRgb` / `RgbToBgr` | swap channel order | Hand pixels to a library that expects RGB |
+| `BgrToBgra` / `BgraToBgr` | add / drop alpha | Move between opaque and 4-channel images |
+
+The conversion changes what each channel *means*, not how many there are (except when it adds or
+drops the alpha channel) — a 3-channel BGR image becomes a 3-channel HSV one. In OpenCV's 8-bit HSV,
+**hue runs 0–179** (degrees halved to fit a byte), while saturation and value run the full 0–255. A
+`Scalar` you pass to `inRange` below is therefore `Scalar(hue, sat, val)` in exactly that scale.
 
 ## Colour segmentation
 
@@ -95,6 +183,19 @@ greenMask.channels // 1 — a binary mask, whatever the source had
 ```scala mdoc:invisible
 greenMask.close()
 ```
+
+Picking the hue bounds is the hard part. These centres (on OpenCV's 0–179 scale) are a starting
+point; widen the `sat`/`val` floor to admit more washed-out or shadowed pixels:
+
+| Colour | Hue (0–179) | Note |
+| --- | --- | --- |
+| Red | 0–10 **and** 170–179 | Wraps the seam — needs two ranges (see below) |
+| Orange | ~10–20 | — |
+| Yellow | ~25–35 | — |
+| Green | ~35–85 | The disc in our scene |
+| Cyan | ~85–95 | — |
+| Blue | ~100–130 | — |
+| Magenta | ~140–160 | — |
 
 Now the whole pipeline. `inRange` and `applyMask` are high-level transforms, so each chain must end
 in a terminal or a `close`; and `applyMask` **borrows** its `mask` argument — that `Image` stays
@@ -120,6 +221,30 @@ val segmented: Either[CvError, Array[Byte]] =
     .use(m => bgr.masked(m).use(Images.encode(_, ".png")))
 bgr.release()
 ```
+
+:::warning Red wraps around the hue wheel
+Because hue is circular and red sits at the 0/179 seam, no single `inRange` captures it — you build
+*two* masks (one at each end) and OR them together. `inRange` and `applyMask` are wrapped, but a raw
+bitwise OR is not, so you drop to `org.opencv.core.Core` for that one step:
+
+```scala
+import org.opencv.core.{Core, Mat}
+
+val hsv  = scene.toHsv                                   // scene held elsewhere
+val low  = hsv.copy.inRange(Scalar(0, 80, 80), Scalar(10, 255, 255))
+val high = hsv.copy.inRange(Scalar(170, 80, 80), Scalar(179, 255, 255))
+val redMask = Mat()
+Core.bitwise_or(low.mat, high.mat, redMask)              // both ends of the wheel
+low.close(); high.close(); hsv.close()
+// redMask is now an unmanaged Mat — wrap it (Image.wrap(Managed(redMask))) or release it yourself.
+```
+
+This block is illustrative (not type-checked), because it reaches past the wrapped API into raw
+OpenCV; treat `redMask` as an unmanaged Mat you must release.
+:::
+
+A freshly-cut mask is usually grainy at the edges — the [Transforms](/transforms) page's
+threshold → open → close clean-up is the natural next step before you [find its contours](/contours).
 
 ## Compositing
 
@@ -153,6 +278,12 @@ Underneath, `blend` is `addWeighted` and `applyMask` is `masked`, both on a `Mat
 `mask` borrowed exactly like the receiver — see [Image processing](/image-processing) for the
 `addWeighted` signature in full.
 
+:::note Invisible pastes want `seamlessCloneInto`
+`applyMask` composites with a hard edge. To paste an object into another image so the join is
+*invisible* — Poisson blending that matches gradients across the seam — reach for
+`seamlessCloneInto`, the compositing behind a good virtual background. See [Conferencing](/conferencing).
+:::
+
 ## Channels
 
 `channel(index)` pulls one plane out as its own single-channel image — the hue plane of an HSV image,
@@ -167,7 +298,9 @@ hue.channels // 1 — one plane on its own
 hue.close()
 ```
 
-The mid-level op is `extractChannel(index)` on a `Mat`, returning an owned `Managed[Mat]`:
+The channel index follows the Mat's storage order — for a BGR image that is blue = 0, green = 1,
+red = 2; for HSV it is hue = 0, saturation = 1, value = 2. The mid-level op is `extractChannel(index)`
+on a `Mat`, returning an owned `Managed[Mat]`:
 
 ```scala mdoc:silent
 val planeSrc = colourMat()
@@ -219,10 +352,8 @@ val document: Either[CvError, Array[Byte]] =
 docSrc.release()
 ```
 
-## See also
+## Next
 
-- [The Image API](/image-api) — the transform / query / terminal model these verbs follow.
-- [Image processing](/image-processing) — the full mid-level op catalogue and the ownership contract.
-- [Drawing](/drawing) — building masks and annotations by hand.
-- [Geometry](/geometry) — `Scalar` and its BGR ordering, `AdaptiveMethod`, and the other typed enums.
-- [Cookbook](/cookbook) — end-to-end recipes.
+- [Transforms & morphology](/transforms) — clean up the masks you build here before measuring them.
+- [Contours](/contours) — turn a colour mask into shapes you can count and outline.
+- [Filters](/filters) — the named, composable looks built from the stylistic verbs above.

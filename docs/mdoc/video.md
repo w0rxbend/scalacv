@@ -1,10 +1,5 @@
 # Video & the camera
 
-```scala mdoc:invisible
-import scalacv.*
-OpenCv.load()
-```
-
 A video — a file, a webcam, an RTSP stream — is a source you open, walk frame by frame, and reduce
 to something as you go: edges, a face count, a re-encoded clip. scalacv gives you two levels for
 that, and this page leads with the one to reach for first.
@@ -20,15 +15,50 @@ that, and this page leads with the one to reach for first.
 The whole surface is headless: it decodes and computes, and never draws to a window (see
 [displaying frames](#displaying-frames)).
 
-Nothing on this page runs under mdoc, because a real capture needs a camera, a file, or a codec that
-CI does not have. **Every snippet is `compile-only`** — it type-checks against the real library but
-is not executed. The paths (`"clip.mp4"`), indices (`0`) and sizes are realistic stand-ins.
+:::note Nothing on this page runs under mdoc
+A real capture needs a camera, a file, or a codec that CI does not have, so **every runnable snippet
+is `compile-only`** — it type-checks against the real library but is not executed. The paths
+(`"clip.mp4"`), indices (`0`) and sizes are realistic stand-ins; swap in your own. If you are new
+here, read [Getting started](/getting-started) first — it covers `OpenCv.load()` and the `Image`
+basics this page assumes.
+:::
+
+## Which level, at a glance
+
+Reach for `Camera` unless a profiler says otherwise. This table is the decision:
+
+| You want to… | Use | Frame you get | Lifetime |
+|---|---|---|---|
+| Grab one frame | [`Camera.snapshot`](#snapshot--one-frame) | owned `Image` | yours (or scoped by `using`) |
+| Process every frame | [`Camera.foreach`](#foreach--the-processing-loop) | owned `Image` | **closed for you** per frame |
+| Collect a handful | [`Camera.taking`](#take--taking--collect-a-batch-of-frames) | owned `Image`s | closed for you at block end |
+| Transform a whole file to a new video | [`Camera.recordTo`](#recordto--read-transform-write-in-one-line) | — | handled |
+| Build frames and write them | [`Recorder`](#recorder) | you supply them | you own the recorder |
+| Squeeze out the per-frame copy | [`Video.frames`](#the-low-level-videoframes) | **borrowed** `Mat` | one reused buffer |
+| Keep frames past the loop, low-level | [`Video.framesCopied`](#keeping-a-frame) | owned `Managed[Mat]` | yours to release |
+
+The split in one sentence: **`Camera` copies every frame so you can keep it; `Video.frames` never
+copies, so you must reduce each frame before the next one overwrites it.** See
+[the ownership split](#the-ownership-split) for when the copy is worth avoiding.
 
 ## Camera — frames as owned Images
 
 `Camera` is the high-level counterpart to `Video`. Where `Video.frames` hands you one reused `Mat`,
 `Camera` hands you a fresh **owned** `Image` per frame. The price is one frame copy per iteration;
 when that price is the bottleneck, [drop to the low level](#the-ownership-split).
+
+The methods, all on an open `Camera`:
+
+| Method | Returns | Notes |
+|---|---|---|
+| `snapshot(attemptsPerFrame = 3)` | `Either[CvError, Image]` | one frame; `Left` at end-of-stream |
+| `foreach(attemptsPerFrame = 3)(f)` | `Unit` | every frame; each `Image` closed for you |
+| `take(count, attemptsPerFrame = 3)` | `Seq[Image]` | a batch — **you close them** |
+| `taking(count, …)(use)` | `A` | scoped batch — closed for you |
+| `recordTo(path, …)(transform)` | `Either[CvError, Long]` | read → transform → write, frames written |
+| `info` / `size` / `fps` | `CaptureInfo` / `Size` / `Double` | advisory metadata |
+| `capture` | `VideoCapture` | borrowed escape hatch |
+| `close()` | `Unit` | idempotent; `using` calls it for you |
 
 ### Opening a camera
 
@@ -40,6 +70,8 @@ protocol. None of that is a programming error, so it is a `Left` carrying a
 [`CvError`](/error-model), never a throw.
 
 ```scala mdoc:compile-only
+import scalacv.*
+
 val fromCamera: Either[CvError, Camera] = Camera.open(0)          // device index
 val fromFile: Either[CvError, Camera]   = Camera.openFile("clip.mp4")
 ```
@@ -49,6 +81,8 @@ your block, and **close for you** on every exit path — even on an exception �
 default:
 
 ```scala mdoc:compile-only
+import scalacv.*
+
 Camera.using(0) { cam =>
   cam.snapshot().flatMap(_.write("shot.png"))
 }
@@ -57,8 +91,15 @@ Camera.using(0) { cam =>
 `open` / `openFile` are there for when the camera has to outlive a single block; then you
 [`close()`](#the-ownership-split) it yourself.
 
-Both forms accept [`CaptureOptions`](#opening-a-source) — the same options `Video.open` takes, for
-picking a backend or setting network timeouts.
+Both forms accept [`CaptureOptions`](#backends-and-options) — the same options `Video.open` takes,
+for picking a backend or setting network timeouts.
+
+:::tip Every `using` returns `Either[CvError, A]`
+`Camera.using` and `usingFile` wrap your block's result in the `Right`, and surface a failed open as
+the `Left` — so the whole capture-and-process is one value you can `.map` / `.flatMap`. The inner
+`snapshot()` is itself an `Either`, which is why the example above uses `flatMap` (the outer `map`
+would leave you an `Either[CvError, Either[CvError, Unit]]`; `flatten` it if you `.map`).
+:::
 
 ### snapshot — one frame
 
@@ -67,9 +108,24 @@ the device delivered nothing within `attemptsPerFrame` reads (a camera can drop 
 being dead, so it retries a few times by default):
 
 ```scala mdoc:compile-only
+import scalacv.*
+
 Camera.using(0) { cam =>
   cam.snapshot().flatMap(_.gray.write("frame.png"))
 }
+```
+
+A snapshot is a first-class [`Image`](/image-api), so the whole surface applies before you write it —
+crop a region of interest, resize, run a detector. Here it is resized to a thumbnail and encoded to
+bytes instead of a file:
+
+```scala mdoc:compile-only
+import scalacv.*
+
+val thumbBytes: Either[CvError, Array[Byte]] =
+  Camera.using(0) { cam =>
+    cam.snapshot().flatMap(_.resize(160, 120).bytes(".jpg"))
+  }.flatten
 ```
 
 ### foreach — the processing loop
@@ -84,6 +140,7 @@ annotate it, write it out. Here is the detect → annotate → record shape, eac
 [`Recorder`](#recording):
 
 ```scala mdoc:compile-only
+import scalacv.*
 import org.opencv.objdetect.FaceDetectorYN
 
 val detector: FaceDetectorYN = ??? // from FaceDetect.create(model, size); see /object-detection
@@ -100,8 +157,29 @@ Camera.usingFile("clip.mp4") { cam =>
 }
 ```
 
+:::warning Ownership inside the loop
+The `Image` `foreach` hands you is closed **when your function returns** — do not stash it in a
+field or a collection to use later (that is a use-after-free; see [Mat lifecycle](/mat-lifecycle)).
+And remember [`Image`](/image-api)'s move semantics: `frame.markFaces(...)` *consumes* `frame` and
+returns a **new** `Image`. That new image is yours — `write` only borrows it, so you `.close()` it
+yourself. If you need to keep frames beyond the loop, use [`take`](#take--taking--collect-a-batch-of-frames).
+:::
+
 `foreach` takes `attemptsPerFrame` as a leading parameter list; the default of `3` suits a camera.
 For a file, where the first failed read is genuinely end-of-file, `cam.foreach(1)(...)` is exact.
+
+A pure side-effect pass — counting frames, or gathering a statistic — needs no writer at all:
+
+```scala mdoc:compile-only
+import scalacv.*
+import java.util.concurrent.atomic.AtomicLong
+
+Camera.usingFile("clip.mp4") { cam =>
+  val frames = AtomicLong(0)
+  cam.foreach(1) { _ => frames.incrementAndGet() }
+  frames.get
+}
+```
 
 ### take / taking — collect a batch of frames
 
@@ -111,6 +189,8 @@ you that the elements are live resources, so prefer `taking(n) { … }`, which h
 closes every frame when the block returns — on success, failure, and exception:
 
 ```scala mdoc:compile-only
+import scalacv.*
+
 Camera.usingFile("clip.mp4") { cam =>
   // Scoped: the frames are released for you when the block ends.
   cam.taking(5) { frames =>
@@ -124,6 +204,21 @@ Camera.usingFile("clip.mp4") { cam =>
 }
 ```
 
+`taking` is the natural fit when you need several frames *at once* — to compare them, composite them,
+or pick the sharpest. Because the frames are owned copies, holding all five in memory is fine (unlike
+[`Video.frames`](#the-borrowing-contract), where retaining is the cardinal sin):
+
+```scala mdoc:compile-only
+import scalacv.*
+
+val sizes: Either[CvError, Seq[(Int, Int)]] =
+  Camera.usingFile("clip.mp4") { cam =>
+    cam.taking(3) { frames =>
+      frames.map(img => (img.width, img.height))
+    }
+  }
+```
+
 ### info, size, fps
 
 `info` reports what the backend *claims* about the source — width, height, fps, frame count,
@@ -132,11 +227,29 @@ an `fps` of `0` until it warms up. `size` and `fps` are shortcuts onto it. Use t
 recorder or show progress, never as a loop bound:
 
 ```scala mdoc:compile-only
+import scalacv.*
+
 Camera.usingFile("clip.mp4") { cam =>
   val meta: CaptureInfo = cam.info
   (meta.size, cam.fps, meta.backendName)
 }
 ```
+
+`CaptureInfo` carries exactly these fields, and none of them is a promise:
+
+| Field | Type | What it means | When it lies |
+|---|---|---|---|
+| `width` / `height` | `Int` | reported frame size (`size` bundles them) | a camera may report 0 before warm-up |
+| `fps` | `Double` | reported frame rate | `0` for a camera that has not delivered a frame |
+| `frameCount` | `Long` | reported total frames | `0`/`-1` for a live source; off by a frame or two for some containers |
+| `backendName` | `String` | which videoio backend opened it | — |
+
+:::danger Never loop on `frameCount`
+`for (i <- 0 until cam.info.frameCount.toInt)` is a bug: a live camera reports `0` (you process
+nothing) and some containers over- or under-report by a frame (you read past the end, or stop
+short). **The only frame count that is true is the one the frame loop actually delivers.** Let
+`foreach` / `frames` stop at end-of-stream for you.
+:::
 
 ### capture — the escape hatch
 
@@ -145,10 +258,26 @@ Camera.usingFile("clip.mp4") { cam =>
 owned by the `Camera`; do not release it yourself.
 
 ```scala mdoc:compile-only
+import scalacv.*
+
 Camera.usingFile("clip.mp4") { cam =>
   Video.frames(cam.capture) { frames => // zero-copy loop over the same capture
     frames.map(_.cvtColor(ColorConversion.BgrToGray).use(_.findContours().size)).sum
   }
+}
+```
+
+This is the bridge between the two levels: hold the `Camera` for its owned-`Image` convenience, then
+step down to `Video.frames` on its `capture` for a hot inner loop that must not copy. Seeking works
+the same way — set `CAP_PROP_POS_FRAMES` on the borrowed capture before you read:
+
+```scala mdoc:compile-only
+import scalacv.*
+import org.opencv.videoio.Videoio
+
+Camera.usingFile("clip.mp4") { cam =>
+  cam.capture.set(Videoio.CAP_PROP_POS_FRAMES, 100.0)  // jump to frame 100 (file sources only)
+  cam.snapshot()
 }
 ```
 
@@ -162,14 +291,38 @@ video, returning the number of frames written. The recorder is **sized from the 
 [`Recorder`](#recorder) yourself instead.
 
 ```scala mdoc:compile-only
+import scalacv.*
+
 val written: Either[CvError, Long] =
   Camera.usingFile("clip.mp4") { cam =>
     cam.recordTo("edges.mp4")(_.gray.canny(80, 160).convert(ColorConversion.GrayToBgr))
   }.flatten
 ```
 
+The `transform` is any `Image => Image`. It must return a **3-channel** frame the size of the input,
+because the recorder was opened `color = true` at the source size — that is why the Canny example
+ends `.convert(ColorConversion.GrayToBgr)`: `canny` produces a single-channel edge map, and it has
+to become BGR again before it can be written.
+
+```scala mdoc:compile-only
+import scalacv.*
+
+// Blur every frame, keeping it BGR throughout — no channel round-trip needed.
+Camera.usingFile("clip.mp4") { cam =>
+  cam.recordTo("blurred.avi", codec = Codec.Mjpg)(_.blur(4))
+}
+```
+
 `fps` defaults to the source's rate (falling back to 30 for a camera that reports none); `codec`
 defaults to `Codec.Mp4v`. A frame that fails to encode, or a recorder that cannot open, is a `Left`.
+The parameters:
+
+| Parameter | Default | Notes |
+|---|---|---|
+| `path` | — | output file; extension should match the codec's container |
+| `fps` | `0` | `0` derives from the source, falling back to `30` |
+| `codec` | `Codec.Mp4v` | see [Codecs and portability](#codecs-and-portability) |
+| `attemptsPerFrame` | `3` | end-of-stream tolerance; `1` for a finite file |
 
 ### Recorder
 
@@ -180,6 +333,8 @@ throws `IllegalArgumentException`. Like `Camera`, it is caller-owned and `AutoCl
 scoped `using` form:
 
 ```scala mdoc:compile-only
+import scalacv.*
+
 Recorder.using("out.avi", Size(640, 480), fps = 30, codec = Codec.Mjpg) { rec =>
   (0 until 90).foreach { i =>
     val frame = Image.blank(640, 480, if i % 2 == 0 then Scalar.Black else Scalar.White)
@@ -189,27 +344,120 @@ Recorder.using("out.avi", Size(640, 480), fps = 30, codec = Codec.Mjpg) { rec =>
 }
 ```
 
-`write(image)` **borrows** the image (it is not consumed, so close it yourself). `writer` borrows
-the raw `VideoWriter` as the escape hatch, and `size` is the fixed frame size.
+`write(image)` **borrows** the image (it is not consumed, so close it yourself). There is also a
+`write(mat)` overload that borrows a raw `org.opencv.core.Mat` directly — that is what lets the
+zero-copy frames from [`Video.frames`](#the-low-level-videoframes) be recorded without the per-frame
+clone an `Image` would force:
+
+```scala mdoc:compile-only
+import scalacv.*
+import org.opencv.videoio.VideoCapture
+
+// Re-encode a source frame-for-frame at the lowest level: borrowed Mat straight into the recorder.
+Video.open("clip.mp4").flatMap { capture =>
+  capture.use { c =>
+    val meta = Video.info(c)
+    Recorder.using("copy.avi", meta.size, meta.fps, Codec.Mjpg) { rec =>
+      Video.frames(c) { frames =>
+        frames.foreach(mat => rec.write(mat))
+      }
+    }
+  }
+}
+```
+
+`writer` borrows the raw `VideoWriter` as the escape hatch, and `size` is the fixed frame size.
+`Recorder.open` also takes `color = false` for a single-channel (greyscale) output stream.
+
+:::warning Frame size is fixed, and enforced
+A `Recorder` is opened at one size and never changes it. Writing a frame of any other dimensions
+throws `IllegalArgumentException` immediately — this is a programming error (a mismatched pipeline),
+not a data-dependent failure, so it throws rather than returning a `Left`. If your transform changes
+size, size the recorder to the *output* and resize each frame to match before writing.
+:::
 
 ### Codecs and portability
 
-`Codec` names a container/codec as a FOURCC — packed in pure Scala, so it needs no native call.
-Whether a codec actually *works* depends on what the platform's videoio build links (FFmpeg, the OS
-frameworks):
+`Codec` names a container/codec as a FOURCC — packed in pure Scala, so it needs no native call and
+can be referenced before `OpenCv.load()`. Whether a codec actually *works* depends on what the
+platform's videoio build links (FFmpeg, the OS frameworks):
 
-| Codec | Container | Notes |
-|---|---|---|
-| `Mp4v` | `.mp4` | MPEG-4 Part 2 — the widely-available default |
-| `Avc1` | `.mp4` | H.264, best compression, only if the build ships an H.264 encoder |
-| `Mjpg` | `.avi` | Motion-JPEG — large files, but encodes with the **built-in** codecs |
-| `Xvid` | `.avi` | Xvid MPEG-4 |
+| Codec | `fourcc` | Container | Notes |
+|---|---|---|---|
+| `Mp4v` | `mp4v` | `.mp4` | MPEG-4 Part 2 — the widely-available default |
+| `Avc1` | `avc1` | `.mp4` | H.264, best compression, only if the build ships an H.264 encoder |
+| `Mjpg` | `MJPG` | `.avi` | Motion-JPEG — large files, but encodes with the **built-in** codecs |
+| `Xvid` | `XVID` | `.avi` | Xvid MPEG-4 |
 
 The portability point: an unavailable codec is a **`Left`**, not a silent black file. OpenCV reports
 it by leaving `isOpened` false, and `Recorder.open` turns that into a
 [`CvError`](/error-model) whose message points you at the fallback. **`Codec.Mjpg` with an `.avi`
 extension encodes with only the built-in codecs**, so it is the portable choice when `Mp4v` is
 unavailable.
+
+```scala mdoc:compile-only
+import scalacv.*
+
+// A portable fallback pattern: try the compact codec, fall back to the always-available one.
+def openRecorder(base: String, size: Size, fps: Double): Either[CvError, Recorder] =
+  Recorder.open(s"$base.mp4", size, fps, Codec.Mp4v)
+    .orElse(Recorder.open(s"$base.avi", size, fps, Codec.Mjpg))
+```
+
+## Backends and options
+
+Both `Camera.open`/`openFile` and `Video.open` accept a [`CaptureOptions`](#backends-and-options),
+which chooses a backend and sets network timeouts. The default — `CaptureOptions.Default`, i.e.
+`CAP_ANY` with no timeouts — is right almost always: OpenCV tries its registered backends in
+priority order and uses the first that can read the source.
+
+`CaptureBackend` is for the rare case where that choice is wrong:
+
+| Backend | Purpose |
+|---|---|
+| `Any` | Let OpenCV choose (`CAP_ANY`). The default, and usually correct. |
+| `FFmpeg` | Force FFmpeg — files and network streams. |
+| `GStreamer` | GStreamer pipelines. |
+| `V4L2` | Linux cameras (force a native pixel format). |
+| `AVFoundation` | macOS cameras and files. |
+| `MediaFoundation` | Windows Media Foundation. |
+| `DirectShow` | Windows DirectShow — the older camera stack. |
+| `ImageSequence` | Read a numbered image sequence (`frame_%04d.png`) as a video. |
+| `BuiltinMjpeg` | OpenCV's own MJPEG reader — always built in, depends on nothing external. |
+
+:::warning Naming a backend can turn a working open into a failing one
+A backend that is not compiled into the OpenCV build on your classpath cannot open anything, so
+forcing it makes `open` fail. The bytedeco 4.13.0 builds do not all carry the same set. This is a
+portability lever, not a tuning knob — leave it `Any` unless you have a concrete reason.
+:::
+
+```scala mdoc:compile-only
+import scalacv.*
+import scala.concurrent.duration.*
+
+// Force FFmpeg for a network stream, with a 5-second best-effort timeout.
+val opts = CaptureOptions.withTimeout(5.seconds, CaptureBackend.FFmpeg)
+val stream: Either[CvError, Camera] = Camera.openFile("rtsp://camera.local/stream", opts)
+```
+
+### Timeouts are best-effort
+
+`CaptureOptions.withTimeout` sets OpenCV's `CAP_PROP_OPEN_TIMEOUT_MSEC` /
+`CAP_PROP_READ_TIMEOUT_MSEC`. They matter only for network sources, where a hang is the real failure
+mode, and they are **advisory**: FFmpeg and GStreamer honour them, while V4L2, AVFoundation and the
+built-in MJPEG reader ignore them outright, and the API does not report which you got. They are off
+by default because they can only be set at open time and some backends reject them (a local `.avi`
+opened with the parameters attached reports `isOpened == false`), so `Video` retries without them
+rather than turning a supported source into a failure. Set them for RTSP/HTTP; leave them alone for
+local files.
+
+The full `CaptureOptions` shape:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `backend` | `CaptureBackend.Any` | which videoio backend to ask for |
+| `openTimeout` | `None` | best-effort cap on how long opening may block |
+| `readTimeout` | `None` | best-effort cap on how long one frame read may block |
 
 ## The ownership split
 
@@ -219,11 +467,13 @@ first, at the cost of a [borrowing contract](#the-borrowing-contract) you must r
 thumb: **stay on `Camera` until a profiler shows the per-frame copy is your bottleneck**, then drop
 to `Video.frames` on the borrowed [`capture`](#capture--the-escape-hatch). A 1080p BGR frame is
 ~6 MB; whether copying it per frame matters depends entirely on your frame rate and what else the
-loop does.
+loop does. See [Performance](/performance) for how to measure it before you decide.
 
 Holding a `Camera` open across calls, released by hand rather than through `using`:
 
 ```scala mdoc:compile-only
+import scalacv.*
+
 Camera.openFile("clip.mp4").foreach { cam =>
   try cam.snapshot().flatMap(_.write("shot.png"))
   finally cam.close() // idempotent
@@ -244,6 +494,7 @@ the capture back, so a `Right` can actually deliver frames; you never get a sile
 that looks like a zero-frame video.
 
 ```scala mdoc:compile-only
+import scalacv.*
 import scala.concurrent.duration.*
 import org.opencv.videoio.VideoCapture
 
@@ -253,21 +504,11 @@ val fromNetwork: Either[CvError, Managed[VideoCapture]] =
   Video.open("rtsp://camera.local/stream", CaptureOptions.withTimeout(5.seconds))
 ```
 
-#### Timeouts are best-effort
-
-`CaptureOptions.withTimeout` sets OpenCV's `CAP_PROP_OPEN_TIMEOUT_MSEC` /
-`CAP_PROP_READ_TIMEOUT_MSEC`. They matter only for network sources, where a hang is the real failure
-mode, and they are **advisory**: FFmpeg and GStreamer honour them, while V4L2, AVFoundation and the
-built-in MJPEG reader ignore them outright, and the API does not report which you got. They are off
-by default because they can only be set at open time and some backends reject them (a local `.avi`
-opened with the parameters attached reports `isOpened == false`), so `Video` retries without them
-rather than turning a supported source into a failure. Set them for RTSP/HTTP; leave them alone for
-local files.
-
 `Video.info(capture)` reports what the backend *claims* — every field advisory, exactly as
 [`Camera.info`](#info-size-fps) above:
 
 ```scala mdoc:compile-only
+import scalacv.*
 import org.opencv.videoio.VideoCapture
 
 Video.open("clip.mp4").map { capture =>
@@ -285,6 +526,7 @@ created when the block begins and retired when it returns, and it owns **exactly
 every frame decodes into, in place.
 
 ```scala mdoc:compile-only
+import scalacv.*
 import org.opencv.videoio.VideoCapture
 
 val totalContours: Either[CvError, Int] =
@@ -314,6 +556,7 @@ bytes, an owned `Managed[Mat]` from an `Ops` op. Writing each frame out as you g
 the work happens before the next pull:
 
 ```scala mdoc:compile-only
+import scalacv.*
 import java.nio.file.{Files, Path}
 import org.opencv.videoio.VideoCapture
 
@@ -335,6 +578,7 @@ combinator that buffers. `toList`, `toVector`, `sliding` and `buffered` all comp
 they hand you N references to the one buffer, every one showing the last frame decoded.
 
 ```scala mdoc:compile-only
+import scalacv.*
 import org.opencv.videoio.VideoCapture
 
 // WRONG: this is N aliases of a single Mat holding the final frame — not N frames.
@@ -344,6 +588,17 @@ Video.open("clip.mp4").map { capture =>
   }
 }
 ```
+
+Here is the borrowing contract as a table — what the one `Mat` supports, and what silently breaks:
+
+| Operation | Safe? | Why |
+|---|---|---|
+| Read pixels, query (`empty`, `size`, `findContours`) | ✅ | consumed before the next pull |
+| `frame.cvtColor(...)` / `canny` / `resize` (any `Ops` op) | ✅ | allocates its own owned output |
+| Write the frame out (`rec.write`, encode to bytes) | ✅ | work happens before the next pull |
+| `it.toList` / `toVector` / `sliding` / `buffered` | ❌ | N references to one reused buffer |
+| Stash the `Mat` in a `var` / field / collection | ❌ | dangling after the next pull / block exit |
+| `frame.clone()` and keep the clone | ✅ | but that is exactly what [`framesCopied`](#keeping-a-frame) does for you |
 
 **Why not just make it a `LazyList`?** Because memoisation and per-frame release cannot both be
 correct at once. A `LazyList` (or `Stream`, or any retaining combinator) keeps every cell it has
@@ -357,6 +612,20 @@ ownership model this is the exception to.
 
 `capture` itself is only borrowed by `frames` — not released, not rewound — so calling `frames`
 again resumes where the last traversal stopped, which is what makes `_.take(10)` behave as it reads.
+That resume behaviour composes: two `frames` calls read consecutive spans of the same stream.
+
+```scala mdoc:compile-only
+import scalacv.*
+import org.opencv.videoio.VideoCapture
+
+Video.open("clip.mp4").map { capture =>
+  capture.use { c =>
+    val firstTen  = Video.frames(c)(_.take(10).size)   // frames 0..9
+    val nextTen   = Video.frames(c)(_.take(10).size)   // frames 10..19 — resumes, does not rewind
+    (firstTen, nextTen)
+  }
+}
+```
 
 ### Keeping a frame
 
@@ -366,6 +635,7 @@ every frame. The clone happens as you pull, so frames you never reach are never 
 everything you *do* pull is yours to release:
 
 ```scala mdoc:compile-only
+import scalacv.*
 import org.opencv.core.Mat
 import org.opencv.videoio.VideoCapture
 
@@ -381,7 +651,10 @@ def process(frame: Mat): Unit = ()
 ```
 
 The cost is one allocation and one full-frame copy per frame, which is why it is not the default —
-and why `Camera`, which always makes it, is a copy dearer than `Video.frames`.
+and why `Camera`, which always makes it, is a copy dearer than `Video.frames`. In fact
+[`Camera`](#camera--frames-as-owned-images) is `framesCopied` with the copy wrapped as an owned
+`Image` and the lifetime handled — so if you find yourself reaching for `framesCopied`, ask whether
+`Camera` already does what you want.
 
 ### End of stream, or a broken one
 
@@ -399,6 +672,7 @@ connection reads exactly the same way, and the two are indistinguishable from th
 camera into a spinning, hung thread:
 
 ```scala mdoc:compile-only
+import scalacv.*
 import org.opencv.videoio.VideoCapture
 
 Video.open(0).map { capture =>
@@ -416,6 +690,12 @@ It is a bound, not retry-forever: because `read` blocks with no timeout of its o
 loop against a dead source would hang. The `CAP_PROP_*_TIMEOUT_MSEC` options above are the only lever
 on that blocking, and only for the backends that honour them.
 
+| Source | Recommended `attemptsPerFrame` | Reasoning |
+|---|---|---|
+| File | `1` | the first failed read *is* end-of-file |
+| Local camera | `3` (default) | rides out an occasional dropped frame |
+| Flaky network stream | `2`–`5` | tolerates jitter without spinning forever on a dead link |
+
 ### Releasing the capture
 
 `VideoCapture` is one of exactly **three** `org.opencv.*` types with a real public `release()` — the
@@ -428,6 +708,7 @@ crashing from native code.
 Prefer `.use`, which releases on every exit path:
 
 ```scala mdoc:compile-only
+import scalacv.*
 import org.opencv.videoio.VideoCapture
 
 Video.open("clip.mp4").map(_.use(c => Video.frames(c)(_.size)))
@@ -436,6 +717,7 @@ Video.open("clip.mp4").map(_.use(c => Video.frames(c)(_.size)))
 If you must hold the capture open across calls, release it yourself in a `finally`:
 
 ```scala mdoc:compile-only
+import scalacv.*
 import org.opencv.videoio.VideoCapture
 
 Video.open("clip.mp4").foreach { capture =>
@@ -452,6 +734,10 @@ one buffer, so reduce it inside the stream — and its `framesCopied` counterpar
 ordinary stream combinators can safely retain. Reach for it when frames are one stage of a larger
 effectful pipeline, with acquisition and interruption handled by `Scope`.
 
+If you are consuming frames from several threads, or want to see how the borrowing contract interacts
+with parallelism, [Concurrency](/concurrency) covers the rules — the short version is that one
+capture is single-threaded, so parallelise the *work* on owned copies, not the read.
+
 ## Displaying frames
 
 Displaying frames on screen (OpenCV's `imshow`) is out of scope for the headless core — it needs a
@@ -459,4 +745,14 @@ GUI toolkit that resolves per host, which core deliberately does not depend on. 
 module carries a JavaFX webcam demo (`scalacv.CamFaceDetect`) that pulls frames, draws detections,
 and paints them into a window; it is never built in CI and never published. Run it with
 `./mill examples-gui.runMain scalacv.CamFaceDetect`.
-```
+
+For a headless equivalent — turning a frame into something you can look at without a window — encode
+it to bytes and hand those to a notebook or a web response; [Notebooks](/notebooks) shows the
+almond/Jupyter path.
+
+## Next
+
+- [Image API](/image-api) — the owned `Image` every `Camera` frame is, and its move semantics.
+- [Mat lifecycle](/mat-lifecycle) — the ownership model that `Video.frames` is the one exception to.
+- [Performance](/performance) — how to measure whether the per-frame copy is really your bottleneck
+  before dropping from `Camera` to `Video.frames`.

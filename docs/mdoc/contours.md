@@ -1,8 +1,11 @@
 # Contours & shape analysis
 
-A *contour* is the outline of a connected region in a binary image. `findContours` traces those outlines;
-scalacv hands them back as plain, immutable Scala data you can measure and draw. Every snippet here is
-compiled by mdoc against the real library, so it cannot drift out of date.
+A *contour* is the outline of a connected region in a binary image — the boundary curve that traces around
+one solid blob of foreground. Once you have that outline as data you can ask the questions that matter for
+most vision work: how big is this shape, where is its centre, how many corners does it have, does it enclose
+a hole? `findContours` traces those outlines; scalacv hands them back as plain, immutable Scala data you can
+measure, filter, and draw. Every snippet here is compiled by mdoc against the real library, so it cannot
+drift out of date.
 
 ```scala mdoc:invisible
 import scalacv.*
@@ -10,6 +13,14 @@ import org.opencv.core.{CvType, Mat}
 import org.opencv.imgproc.Imgproc
 OpenCv.load()
 ```
+
+:::tip When you reach for contours
+Contours are the workhorse of classical (non-neural) shape analysis: counting objects on a conveyor,
+measuring blobs under a microscope, finding the paper in a document scan, isolating a coloured region after
+[colour masking](/color-masking), turning a segmentation mask back into per-object boxes. If you can get your
+subject to stand out as bright-on-dark (or dark-on-bright), contours turn that mask into countable,
+measurable objects.
+:::
 
 ## You need a binary image first
 
@@ -29,6 +40,13 @@ Image.reading("coins.jpg")(_.gray.threshold(127).contours())
 // Or trace Canny edges directly.
 Image.reading("coins.jpg")(_.gray.canny(80, 160).contours())
 ```
+
+:::note Threshold vs. Canny
+Threshold gives you the outline of a **filled region** — one contour per blob, ready to measure area and
+centroid. Canny gives you the outline of **edges** — you may get the outer boundary *and* an inner one for a
+thick stroke, because both sides of the stroke are edges. For counting and measuring solid objects, threshold
+first; for tracing thin structure, Canny. See [image processing](/image-processing) for both.
+:::
 
 The examples below skip the file and **draw their own binary images**, so they run against real pixels with
 nothing to download. This helper paints two solid white shapes on black — a 100×50 rectangle and a circle:
@@ -71,12 +89,13 @@ hands contours back as a `java.util.List[MatOfPoint]` — a list of **live nativ
 expected to free individually**. Nothing in that signature says the list owns anything, and the handles
 survive every reasonable-looking use of the result, so leaking them is the single most reliable leak in the
 Java API. `findContours` releases every `MatOfPoint` (and the hierarchy `Mat`) in a `finally` block and gives
-you copied-out data instead. There are no handles in a `Contour` to forget.
+you copied-out data instead. There are no handles in a `Contour` to forget. (The same design runs through the
+whole library — see [Mat lifecycle](/mat-lifecycle) for why.)
 
 ## Measuring a contour
 
-Each `Contour` carries its `points: Seq[Point]` and computes three metrics lazily, delegating to OpenCV so
-the numbers match what the rest of the ecosystem reports:
+Each `Contour` carries its `points: Seq[Point]` and computes its metrics lazily, delegating to OpenCV so the
+numbers match what the rest of the ecosystem reports:
 
 ```scala mdoc
 val rect: Contour =
@@ -84,17 +103,82 @@ val rect: Contour =
 (rect.boundingRect, rect.area, rect.perimeter)
 ```
 
-- **`boundingRect: Rect`** — the upright bounding box, from `Imgproc.boundingRect`. OpenCV's box is
-  *inclusive* of the extreme pixels, so a shape spanning x = 20..119 reports `width == 100`, not 99. (`Rect`
-  itself is covered in [Geometry](/geometry).)
-- **`area: Double`** — the enclosed area by the shoelace formula (`Imgproc.contourArea`), **not** the filled
-  pixel count. Area is measured between the *centres* of the boundary pixels, so our 100×50 filled rectangle
-  reports 99 × 49 = 4851, and never `boundingRect.area`. It is always non-negative.
-- **`perimeter: Double`** — the closed arc length (`Imgproc.arcLength` with `closed = true`); contours from
-  `findContours` are always closed curves.
+Here is the full surface of a `Contour`. Everything but `points` is lazy, so a contour you never measure never
+pays for the native call:
+
+| Member | Type | What it gives you |
+|---|---|---|
+| `points` | `Seq[Point]` | the outline vertices, sub-pixel `Double` (widened int32s from `findContours`) |
+| `isEmpty` | `Boolean` | `true` only for a hand-built empty contour — `findContours` never emits one |
+| `boundingRect` | `Rect` | the upright bounding box (`Imgproc.boundingRect`) |
+| `area` | `Double` | enclosed area by the shoelace formula (`Imgproc.contourArea`), always ≥ 0 |
+| `perimeter` | `Double` | closed arc length (`Imgproc.arcLength`, `closed = true`) |
+| `centroid` | `Option[Point]` | centre of mass from image moments; `None` when it is undefined |
+| `convexHull` | `Contour` | the tightest convex outline enclosing the points |
+| `approx(epsilon, closed)` | `Contour` | Ramer–Douglas–Peucker simplification |
+
+- **`boundingRect: Rect`** — the upright bounding box. OpenCV's box is *inclusive* of the extreme pixels, so a
+  shape spanning x = 20..119 reports `width == 100`, not 99. (`Rect` itself is covered in
+  [Geometry](/geometry).)
+- **`area: Double`** — the enclosed area by the shoelace formula, **not** the filled pixel count. Area is
+  measured between the *centres* of the boundary pixels, so our 100×50 filled rectangle reports 99 × 49 =
+  4851, and never `boundingRect.area`. It is always non-negative.
+- **`perimeter: Double`** — the closed arc length; contours from `findContours` are always closed curves.
 
 `isEmpty` is `true` only for a `Contour` built by hand — `findContours` never emits one — and the metrics
 short-circuit to zero rather than reaching native code in that case.
+
+## More shape metrics: centroid, hull, simplification
+
+Three further members answer the questions shape work most often asks after size.
+
+### Centroid — where the shape *is*
+
+`centroid` is the centre of mass, computed from image moments. It is an `Option` because it is undefined for
+an empty contour or a zero-area one (a single point or a collinear run), where the division `m10/m00` would be
+by zero:
+
+```scala mdoc
+Managed.use(shapes())(_.findContours().head.centroid).map(p => (p.x.round, p.y.round))
+```
+
+The rectangle spans x = 20..119 and y = 20..69, so its centre lands near `(70, 44)`. Centroids are how you
+track an object frame to frame, sort blobs left-to-right, or place a label in the middle of a shape.
+
+### Convex hull — the shape with its dents filled
+
+`convexHull` returns a new `Contour`: the tightest convex outline enclosing the points. The vertices it
+returns are *exactly* points of the original contour (OpenCV computes indices, which scalacv maps back), not
+re-derived coordinates. A filled rectangle read with `None` approximation is a long chain of boundary pixels;
+its hull is just the four corners:
+
+```scala mdoc
+Managed.use(shapes())(_.findContours(approximation = ContourApproximation.None).head.convexHull.points.size)
+```
+
+The hull is the standard way to measure *convexity* — compare `contour.area` to `contour.convexHull.area` and
+a low ratio tells you the shape has deep concavities (fingers of a hand, teeth of a gear).
+
+### `approx` — fewer vertices, same shape
+
+`approx(epsilon)` runs Ramer–Douglas–Peucker simplification: it drops vertices, keeping none more than
+`epsilon` pixels off the original outline. `epsilon` is usually a small fraction of the `perimeter`. This is
+the classic "how many sides does this polygon have?" tool — a noisy quadrilateral collapses back to four
+corners:
+
+```scala mdoc:silent
+val quad = Managed.use(shapes())(_.findContours(approximation = ContourApproximation.None).head)
+```
+
+```scala mdoc
+quad.approx(0.02 * quad.perimeter).points.size
+```
+
+:::tip Counting sides
+`approx(0.02 * perimeter).points.size` is the idiom behind shape classifiers: 3 → triangle, 4 → quad, and a
+count that stays high as you shrink `epsilon` → a circle. Tune the `0.02` up to tolerate more noise, down to
+keep more detail.
+:::
 
 ## Retrieval: which contours you get
 
@@ -120,9 +204,19 @@ Managed.use(ring())(_.findContours(retrieval = ContourRetrieval.External).size) 
 Managed.use(ring())(_.findContours(retrieval = ContourRetrieval.List).size) // outer + hole
 ```
 
-The four modes are `External`, `List` (every contour, flat), `CComp` and `Tree` (both nesting-aware). scalacv
-does not currently expose the parent/child hierarchy the last two compute — a typed nesting API can be added
-later — so choose between `External` and `List` unless you only need the count.
+| Mode | Returns | Nesting |
+|---|---|---|
+| `External` | the outermost outline of each region only (**default**) | ignored |
+| `List` | every contour, including holes, as a flat list | flattened |
+| `CComp` | every contour, organised two-level (outer boundaries + their holes) | two-level |
+| `Tree` | every contour, in a full parent/child nesting tree | full tree |
+
+:::note Hierarchy is not exposed (yet)
+`CComp` and `Tree` compute a parent/child hierarchy, but scalacv does not currently surface it — handing back
+OpenCV's raw `Nx1 CV_32SC4` index Mat would be exactly the untyped, unmanaged shape this library exists to
+remove. A typed nesting API can be added later. Until then, choose between `External` and `List` unless you
+only need the count.
+:::
 
 ## Approximation: how the outline is compressed
 
@@ -138,8 +232,31 @@ Managed.use(shapes())(_.findContours(approximation = ContourApproximation.Simple
 Managed.use(shapes())(_.findContours(approximation = ContourApproximation.None).head.points.size)
 ```
 
+| Mode | Effect | Reach for it when |
+|---|---|---|
+| `Simple` | collapses straight runs to their endpoints (**default**) | corner-counting, polygon work, drawing |
+| `None` | keeps every pixel on the boundary | you need the full pixel chain (arc-length precision, curvature) |
+| `Tc89L1` | Teh–Chin chain approximation (L1) | you want a smoother poly than `Simple` gives |
+| `Tc89Kcos` | Teh–Chin chain approximation (k-cosine) | as above, different corner metric |
+
 `Simple` is what you want for corner-counting and polygon work; `None` when you need the full pixel chain.
-(`Tc89L1` and `Tc89Kcos` apply the Teh–Chin approximation.)
+
+## Filtering: keeping the shapes you want
+
+Because the result is plain `Seq[Contour]`, the whole Scala collections API is available. The near-universal
+first move is to throw away noise by area — tiny contours are almost always specks:
+
+```scala mdoc
+Managed.use(shapes())(_.findContours().map(_.area.round).sorted)
+```
+
+```scala mdoc
+Managed.use(shapes())(_.findContours().count(_.area > 1000))
+```
+
+From there it composes like any other data: `filter` by `area` or `perimeter`, `sortBy(_.boundingRect.x)` to
+order left-to-right, `maxBy(_.area)` to grab the largest object, `map(_.centroid)` to collect centres. None of
+it touches native memory.
 
 ## Drawing contours back
 
@@ -189,7 +306,14 @@ Image.reading("parts.png") { img =>
 }
 ```
 
-## See also
+:::warning `contours` borrows, transforms consume
+`img.contours(...)` is a **query**: it leaves `img` alive, so you can keep chaining or must `close()` it
+yourself. `img.gray`, `img.threshold(...)` and every `draw*` on an `Image` are **transforms**: they consume
+the receiver and hand back a new image. Reusing a consumed `Image` throws — take a `.copy` first if you need
+to branch. This distinction is the whole of [the Image API](/image-api).
+:::
+
+## Next
 
 - [The Image API](/image-api) — queries, transforms, and lifetimes
 - [Image processing](/image-processing) — threshold, Canny, and the mid-level ops that produce a binary image

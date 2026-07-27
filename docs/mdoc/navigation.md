@@ -16,6 +16,27 @@ scope. Knowing where that line falls is half the battle:
 | **Mapping** | [`LoopDetector`](#mapping-loop-closure--occupancy) — revisit detection; [`OccupancyGrid`](#mapping-loop-closure--occupancy) | — |
 | **Full SLAM** | all of the above as the front end | pose-graph optimisation, bundle adjustment |
 
+:::tip New to visual navigation? Start here.
+Everything on this page turns *pixels* into *geometry*. The chain, roughly: find distinctive points
+([`OpticalFlow`](#optical-flow) / [`Features`](#features--matching)) → work out how the camera moved
+([`VisualOdometry`](#visual-odometry)) or where it is ([`Localizer`](#absolute-localization)) → avoid
+what is close ([`StereoDepth`](#stereo-depth-obstacles), [`Navigator`](#reactive-navigation)) → build a
+map ([`OccupancyGrid`](#mapping-loop-closure--occupancy)) and know when you have been somewhere before
+([`LoopDetector`](#mapping-loop-closure--occupancy)). Each is one call; you can use any piece on its own.
+:::
+
+The typed result each primitive returns, in one place:
+
+| Type | Returned by | Carries |
+|---|---|---|
+| `Track` | `OpticalFlow.track` | `from`, `to`, `found`, `displacement`, `distance` |
+| `FeatureMatch` | `Features.matches` | `queryIndex`, `trainIndex`, `distance` (Hamming) |
+| `CameraMotion` | `VisualOdometry.estimate` | `rotation` (3×3), `translation` (unit dir), `inliers` |
+| `CameraPose` | `Localizer.locate` | `rotation`, `translation`, `position` (world coords) |
+| `Obstacle` | `Obstacles.fromDisparity` | `region` (`Rect`), `nearness` (0…1) |
+| `Guidance` | `Navigator.steer` | `steering`, `clearanceAhead`, per-third nearness |
+| `LoopClosure` | `LoopDetector.detect` | `keyframe`, `matches`, `score` |
+
 ```scala mdoc:invisible
 import scalacv.*
 OpenCv.load()
@@ -42,6 +63,34 @@ moving, and which way":
 }
 ```
 
+`track(a, b)` is the one-call form: it seeds Shi–Tomasi corners on `a` for you. When you want to control
+the seeds — reuse last frame's points, mask a region, cap the count — call
+[`goodFeatures`](/api/core/scalacv/OpticalFlow$.html) yourself and pass them to the three-argument
+`track`:
+
+```scala mdoc:silent
+val seedFrame = scene(0, 0)
+val corners = OpticalFlow.goodFeatures(seedFrame, maxPoints = 100, quality = 0.01, minDistance = 7.0)
+val nextFrame = scene(6, 4)
+val tracked = OpticalFlow.track(seedFrame, nextFrame, corners)
+seedFrame.close(); nextFrame.close()
+```
+
+```scala mdoc
+s"seeded ${corners.size} corners, tracked ${tracked.count(_.found)} into the next frame"
+```
+
+| `goodFeatures` knob | Meaning | Default |
+|---|---|---|
+| `maxPoints` | most corners to return | `200` |
+| `quality` | keep corners at least this fraction as strong as the best | `0.01` |
+| `minDistance` | minimum pixel spacing between kept corners | `7.0` |
+
+:::note The returned tracks line up with the seeds
+`track(prev, cur, points)` returns one `Track` per input point, **in order**. A point the tracker lost
+has `found == false` — filter on it before you trust its `to`.
+:::
+
 ## Features & matching
 
 ORB finds repeatable keypoints and binary descriptors; a cross-checked Hamming matcher pairs them across
@@ -60,6 +109,28 @@ detection:
 
 `Descriptors` owns native memory — close it (or take it into a `Using` block).
 
+Two knobs shape the recognition:
+
+| Call | Knob | Effect |
+|---|---|---|
+| `Features.detect(image, maxFeatures = 500)` | `maxFeatures` | ceiling on keypoints per image |
+| `Features.matches(a, b, maxDistance = 64f)` | `maxDistance` | reject pairs whose Hamming distance exceeds this |
+
+Matching is **cross-checked** — every returned pair is each other's mutual best — and sorted best
+(smallest distance) first, so `matches.take(n)` gives the `n` most confident correspondences.
+
+## Optical flow vs. features — which one?
+
+Both give you point correspondences to feed [`VisualOdometry`](#visual-odometry) or
+[`Localizer`](#absolute-localization); they differ in what they assume:
+
+| | `OpticalFlow` | `Features` (ORB) |
+|---|---|---|
+| Assumes | small motion between consecutive frames | nothing — matches across any two views |
+| Speed | very fast (sparse LK) | slower (detect + describe + match) |
+| Use for | frame-to-frame **tracking**, odometry | **recognition** — relocalization, loop closure |
+| Fails when | large jumps, occlusion | textureless scenes |
+
 ## Visual odometry
 
 Feed matched correspondences to the essential-matrix estimator and `recoverPose` to get the camera's motion
@@ -77,8 +148,15 @@ scale). Here the correspondences come from projecting known 3D points before and
 }
 ```
 
-Chaining these per-frame motions is dead-reckoning odometry; it **drifts**, and correcting that drift is the
-back end's job.
+:::warning Monocular odometry is up-to-scale, and it drifts
+A single camera cannot tell a small nearby motion from a large distant one, so `translation` is a unit
+*direction*, not metres. Recover scale by fusing wheel odometry, an IMU, or a known stereo baseline.
+And chaining the per-frame motions is dead-reckoning — error accumulates. Cancelling that drift is the
+back end's job (loop closure + global optimisation).
+:::
+
+`estimate` needs at least **5** correspondences and returns `None` on too few, or on degenerate geometry
+(all points coplanar and the motion pure rotation, say).
 
 ## Stereo depth & obstacles {#stereo-depth-obstacles}
 
@@ -95,8 +173,22 @@ From a rectified stereo pair, `StereoDepth.disparity` produces a map where **bri
 }
 ```
 
-Rectifying the pair first (`stereoRectify`, from a one-time stereo calibration) is assumed — it is off the hot
-path and not wrapped here.
+Each [`Obstacle`](/api/core/scalacv/Obstacle.html) is a bounding `region` plus a mean `nearness` in
+`0…1`; the list comes back **largest first**. The two knobs:
+
+| `fromDisparity` knob | Meaning | Default |
+|---|---|---|
+| `minNearness` | how near (0…1) a region must be to count | `0.5` |
+| `minArea` | ignore blobs smaller than this many pixels | `200` |
+
+The disparity search itself is tunable too — `StereoDepth.disparity(left, right, numDisparities = 64,
+blockSize = 9)`, where `numDisparities` (the depth range searched) must be a positive multiple of 16 and
+`blockSize` an odd matching window.
+
+:::note Rectification is assumed
+The pair must already be **rectified** (row-aligned). That is a one-time stereo-calibration step
+(`stereoRectify`) done off the hot path, so it is not wrapped here — see [calibration](/calibration).
+:::
 
 ## Localization against a map {#absolute-localization}
 
@@ -117,8 +209,17 @@ camera two units to the side of the world origin:
 }
 ```
 
-In practice the 3D↔2D pairs come from matching this frame's [`Features`](#features--matching) to the map; the
+`locate` needs at least **4** 3D↔2D pairs and returns a [`CameraPose`](/api/core/scalacv/CameraPose.html),
+whose `position` gives the camera's location in *world* coordinates (`-Rᵀ·t`, computed for you). In
+practice the pairs come from matching this frame's [`Features`](#features--matching) to the map; the
 recovered pose then anchors the drifting odometry.
+
+| | `VisualOdometry` | `Localizer` |
+|---|---|---|
+| Answers | how did I *move* between two frames? | where am I, absolutely? |
+| Relative to | the previous frame | the map's origin |
+| Scale | up-to-scale (unit direction) | metric (at map scale) |
+| Drifts? | yes, accumulates | no |
 
 ## Reactive navigation
 
@@ -135,6 +236,15 @@ the view into thirds, and pick a `Steering` toward the clearest — obstacle avo
 }
 ```
 
+The returned [`Guidance`](/api/core/scalacv/Guidance.html) has a `steering` and the per-third nearness it
+decided from. `steer` reads the disparity centre and picks one of four moves:
+
+| `Steering` | When | 
+|---|---|
+| `Straight` | the centre third is clearer than `dangerNearness` (default `0.55`) |
+| `Left` / `Right` | the centre is blocked — turn toward the clearer side |
+| `Stop` | both sides are past `blockedNearness` (default `0.8`) — boxed in |
+
 A planner — a map, a goal, a path — layers on top; the reflex keeps you off the walls while it thinks.
 
 ## The odometry pipeline
@@ -148,6 +258,12 @@ val odometry = Odometry.monocular(Intrinsics(fx = 500, fy = 500, cx = 320, cy = 
 try Camera.usingFile("drive.mp4")(_.foreach()(frame => odometry.update(frame).foreach(step => println(step.inliers))))
 finally odometry.close()
 ```
+
+`update` returns `None` on the very first frame (it becomes the reference) and whenever too few points
+survive to estimate a motion; otherwise a [`CameraMotion`](/api/core/scalacv/CameraMotion.html) for that
+step. `framesProcessed` tells you how many frames it has consumed. The pipeline retains a frame's worth
+of native memory between calls — that is why it is `AutoCloseable`, and why it is **not** thread-safe:
+feed one frame at a time.
 
 ## Mapping: loop closure & occupancy
 
@@ -173,6 +289,20 @@ frame revisits an old place — the cue that lets a back end cancel accumulated 
 }
 ```
 
+`LoopDetector` is stateful and caller-owned — it holds a descriptor set per keyframe, so close it. Its
+construction knobs:
+
+| Knob | Meaning | Default |
+|---|---|---|
+| `maxFeatures` | ORB features stored per keyframe | `500` |
+| `minMatches` | matches that count as "the same place" | `20` |
+| `recentExclusion` | recent keyframes to skip (always look similar to *now*) | `5` |
+| `maxKeyframes` | live keyframes before the oldest are evicted and freed | unbounded |
+
+`process` is the usual per-step call — `detect` then `addKeyframe` in one. Over a long run, set
+`maxKeyframes` to bound native memory: evicted keyframes leave a tombstone so an index handed out earlier
+stays valid, it is simply skipped when matching.
+
 **Occupancy grid.** `OccupancyGrid` accumulates free/occupied evidence into a top-down log-odds map. A range
 reading marks the ray to an obstacle as free and its endpoint as occupied; `toImage` renders the map:
 
@@ -184,6 +314,21 @@ reading marks the ray to an obstacle as free and its endpoint as occupied; `toIm
 }
 ```
 
+Under the hood each cell holds a **log-odds** estimate that it is occupied; repeated evidence accumulates
+and clamps, so a single stray reading cannot flip a well-observed cell. `probability(x, y)` reads the
+soft belief (0.5 = unknown or out of bounds):
+
+```scala mdoc
+{
+  val grid = OccupancyGrid(cols = 40, rows = 40, resolution = 0.1)
+  (1 to 5).foreach(_ => grid.observe(0.0, 0.0, 1.5, 0.0)) // five confirming hits
+  f"P(occupied at 1.5m ahead) = ${grid.probability(1.5, 0.0)}%.2f, P(0.7m) = ${grid.probability(0.7, 0.0)}%.2f"
+}
+```
+
+The grid is pure in-memory data (no native memory); `toImage` renders it as grayscale — occupied white,
+free black, unknown mid-grey — for viewing or saving.
+
 ## Where OpenCV ends
 
 The front end now reaches quite far: it tracks, estimates motion, localizes against a map, detects revisited
@@ -192,3 +337,9 @@ loop closures, and the odometry constraints and solving for the trajectory and m
 (pose-graph optimisation, bundle adjustment). That is a nonlinear-least-squares back end (g2o, GTSAM,
 Ceres), not computer vision, and belongs to those libraries. scalacv gives you every per-frame piece that
 feeds them — clean, typed, and resource-safe.
+
+## Next
+
+- [Camera calibration](/calibration) — the intrinsics that make odometry, localization and depth metric.
+- [Tracking](/tracking) — object trackers, the higher-level cousin of optical flow.
+- [Motion detection](/motion-detection) — background subtraction, when you only need "did something move".
