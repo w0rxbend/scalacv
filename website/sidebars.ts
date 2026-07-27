@@ -21,7 +21,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Tutorials',
-      items: ['tutorial', 'tutorial-video', 'tutorial-faces'],
+      items: ['tutorial', 'tutorial-video', 'tutorial-faces', 'tutorial-color-tracking'],
     },
     {
       type: 'category',
