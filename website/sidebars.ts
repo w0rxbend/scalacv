@@ -26,7 +26,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'The high-level API',
-      items: ['image-api', 'graphics', 'cookbook'],
+      items: ['image-api', 'operations-reference', 'graphics', 'cookbook'],
     },
     {
       // Hoisted near the top: this is the page that makes a native-memory library trustworthy.
