@@ -15,12 +15,13 @@ const sidebars: SidebarsConfig = {
         'getting-started',
         'basics',
         'architecture',
+        'choosing',
       ],
     },
     {
       type: 'category',
       label: 'Tutorials',
-      items: ['tutorial', 'tutorial-video'],
+      items: ['tutorial', 'tutorial-video', 'tutorial-faces'],
     },
     {
       type: 'category',
