@@ -75,6 +75,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         # Independent of the Central publish above: even before Central is wired up, a pushed tag cuts a
         # GitHub Release with auto-generated notes, so the tag is not a silent event.
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
