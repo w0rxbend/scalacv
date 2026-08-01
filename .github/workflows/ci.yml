@@ -224,7 +224,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: coursier/cache-action@v8
-      - uses: coursier/setup-action@v1
+      - uses: coursier/setup-action@v3
         with:
           jvm: zulu:17
 
