@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Launch Scala Steward
-        uses: scala-steward-org/scala-steward-action@v2
+        uses: scala-steward-org/scala-steward-action@v2.92.0
         with:
           # A PR opened with the default GITHUB_TOKEN does NOT trigger other workflows (GitHub suppresses
           # workflow runs on token-created events), so every Steward PR would land with no CI. Set a
