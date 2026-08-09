@@ -50,12 +50,17 @@ rewrite_api() { sed 's#](/api/#](pathname:///api/#g' "$1"; }
 echo "==> copy generated guide pages into $DOCS"
 mkdir -p "$DOCS"
 # Wipe previously generated pages (but keep nothing hand-written here — the dir is fully generated).
-find "$DOCS" -maxdepth 1 -name '*.md' -delete
+# Both extensions: guides are .md, the landing page is .mdx (see below).
+find "$DOCS" -maxdepth 1 \( -name '*.md' -o -name '*.mdx' \) -delete
 for f in "$MDOC_OUT"/*.md; do
   base="$(basename "$f")"
   case "$base" in
     index.md)   continue ;;                 # VitePress hero — not used by Docusaurus
-    landing.md) rewrite_api "$f" > "$DOCS/index.md" ;; # Docusaurus landing (slug: /)
+    # The landing page lands as .mdx, not .md. docusaurus.config.ts sets `markdown.format: 'detect'`,
+    # which parses .md as CommonMark (no JSX) and .mdx as MDX — and the landing page imports React
+    # components from src/components/, so it needs the MDX parser. The guides stay .md deliberately:
+    # CommonMark renders `<:`, `=>` and `?=>` literally, so Scala 3 prose cannot trip the JSX lexer.
+    landing.md) rewrite_api "$f" > "$DOCS/index.mdx" ;; # Docusaurus landing (slug: /)
     *)          rewrite_api "$f" > "$DOCS/$base" ;;
   esac
 done

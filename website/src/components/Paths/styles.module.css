@@ -1,0 +1,123 @@
+/* Two fixed columns rather than `auto-fit`. There are exactly four routes, and `auto-fit` resolves
+   to three at a desktop width — which strands the fourth alone on its own row and makes the set look
+   like a mistake. A 2×2 block reads as a deliberate set of four. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 860px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.path {
+  padding: 1.4rem 1.35rem;
+  border: 1px solid var(--scv-line);
+  border-radius: var(--scv-radius);
+  background: var(--scv-surface);
+  transition: border-color var(--scv-med) var(--scv-ease);
+}
+
+.path:hover {
+  border-color: var(--scv-line-strong);
+}
+
+.head {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  padding-bottom: 1rem;
+  margin-bottom: 0.9rem;
+  border-bottom: 1px dashed var(--scv-line-strong);
+}
+
+.index {
+  flex: 0 0 auto;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1;
+  color: transparent;
+  /* An outlined numeral: present enough to anchor the row, quiet enough not to compete with the
+     heading beside it. `text-stroke` is unprefixed-unsupported in Firefox, hence the fallback
+     colour set on the element for browsers that ignore the stroke properties. */
+  -webkit-text-stroke: 1px var(--scv-accent);
+  paint-order: stroke fill;
+}
+
+@supports not ((-webkit-text-stroke: 1px red)) {
+  .index {
+    color: var(--scv-accent);
+  }
+}
+
+.audience {
+  margin: 0 0 0.3rem;
+  font-size: 1.02rem;
+  font-weight: 660;
+  letter-spacing: -0.01em;
+  color: var(--scv-text);
+}
+
+.question {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--scv-dim);
+}
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  counter-reset: step;
+}
+
+.step {
+  position: relative;
+  padding-left: 1.15rem;
+}
+
+/* A small square bullet that fills in on hover — a checklist you are working through. */
+.step::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.42em;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--scv-accent);
+  border-radius: 1px;
+  transition: background-color var(--scv-fast) var(--scv-ease);
+}
+
+.step:hover::before {
+  background: var(--scv-accent);
+}
+
+.stepLink {
+  display: block;
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: var(--scv-text);
+  text-decoration: none;
+}
+
+.stepLink:hover {
+  color: var(--scv-accent);
+  text-decoration: none;
+}
+
+.note {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.83rem;
+  line-height: 1.5;
+  color: var(--scv-dim);
+}

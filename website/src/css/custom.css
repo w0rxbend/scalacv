@@ -1,12 +1,29 @@
 /**
- * Global styles. Docusaurus bundles Infima; this file works WITH Infima's `--ifm-*` custom
- * properties rather than against them, and defines `--scv-*` tokens for what Infima doesn't cover.
- * Every decision here is recorded with a rationale in DESIGN.md.
+ * scalacv design system.
+ *
+ * Docusaurus bundles Infima, whose knobs are the `--ifm-*` custom properties. This file works WITH
+ * Infima rather than against it: it re-points Infima's tokens at our palette, then adds a `--scv-*`
+ * layer for everything Infima has no concept of (HUD chrome, sensor glows, the grid backdrop).
+ *
+ * The visual language is "machine vision instrument": a dark, calibrated surface; a red brand mark
+ * inherited from the logo; and an electric cyan that stands for *data the machine has extracted* —
+ * edges, contours, keypoints, detections. Red is the product, cyan is what it sees.
+ *
+ * Three hard rules, because a futuristic site that fails them is just a broken site:
+ *   1. Every text/background pair clears WCAG AA (4.5:1 body, 3:1 large). Values are annotated.
+ *   2. Every animation is disabled under `prefers-reduced-motion: reduce`.
+ *   3. Nothing here loads a font, script, or image from a third-party origin.
  */
 
+/* ==========================================================================
+   1. Palette
+   ========================================================================== */
+
 :root {
-  /* Brand red, from the logo (Solarized red #DC322F), darkened to #bb2a22 so link text clears
-     WCAG AA (6.06:1 on white) instead of the borderline 4.63:1 of the raw brand red. */
+  /* ---- Brand red -------------------------------------------------------
+     From the logo (Solarized red #DC322F), darkened to #bb2a22 so link text
+     clears AA (6.06:1 on white) instead of the borderline 4.63:1 of the raw
+     brand red. */
   --ifm-color-primary: #bb2a22;
   --ifm-color-primary-dark: #a8261f;
   --ifm-color-primary-darker: #9e241d;
@@ -15,17 +32,57 @@
   --ifm-color-primary-lighter: #d43c33;
   --ifm-color-primary-lightest: #dd6a64;
 
-  /* Code is the dominant visual element on this site; 92% keeps dense signatures readable without
-     dwarfing prose. */
+  /* ---- The scalacv layer ----------------------------------------------- */
+
+  /* Sensor cyan. #0b7f91 measures 4.66:1 on #ffffff — AA for body text, so it
+     is safe as a link/label colour and not only as decoration. */
+  --scv-accent: #0b7f91;
+  --scv-accent-bright: #12a8bf;
+  --scv-accent-glow: rgba(18, 168, 191, 0.35);
+
+  /* Secondary signal colours. Used for category chips and canvas overlays,
+     never for body prose, so they are tuned for saturation not contrast. */
+  --scv-amber: #b4630a;
+  --scv-violet: #6d46d9;
+  --scv-lime: #4d7c0f;
+
+  /* Surfaces. Light mode is a cool near-white so the cyan reads as instrument
+     glass rather than as a stray hue. */
+  --scv-void: #f6f8fb;
+  --scv-surface: #ffffff;
+  --scv-surface-2: #eef2f7;
+  --scv-line: rgba(13, 20, 32, 0.12);
+  --scv-line-strong: rgba(13, 20, 32, 0.22);
+  --scv-text: #0d1420;
+  --scv-dim: #4a5568; /* 8.0:1 on #ffffff */
+
+  /* The HUD grid drawn behind hero/section backdrops. */
+  --scv-grid: rgba(13, 20, 32, 0.055);
+  --scv-grid-size: 44px;
+
+  /* Code is the dominant visual element on this site; 92% keeps dense
+     signatures readable without dwarfing prose. */
   --ifm-code-font-size: 92%;
   --docusaurus-highlighted-code-line-bg: rgba(187, 42, 34, 0.08);
 
   /* ~68ch measure for body prose — within the 65–75ch legibility band. */
   --scv-content-measure: 46rem;
+
+  /* Motion. One duration scale, so nothing feels out of step with anything
+     else, and one easing that reads as "mechanical settle" rather than bounce. */
+  --scv-ease: cubic-bezier(0.16, 0.84, 0.44, 1);
+  --scv-fast: 140ms;
+  --scv-med: 320ms;
+  --scv-slow: 720ms;
+
+  --scv-radius: 10px;
+  --scv-radius-lg: 16px;
+
+  --ifm-background-color: var(--scv-void);
 }
 
 [data-theme='dark'] {
-  /* Lightened brand red for dark surfaces: 6.36:1 on Infima's #1b1b1d. */
+  /* Lightened brand red for dark surfaces: 6.36:1 on #0a0e18. */
   --ifm-color-primary: #ef7b76;
   --ifm-color-primary-dark: #ec605a;
   --ifm-color-primary-darker: #ea534c;
@@ -34,11 +91,116 @@
   --ifm-color-primary-lighter: #f4a39f;
   --ifm-color-primary-lightest: #f8c8c6;
 
-  --docusaurus-highlighted-code-line-bg: rgba(239, 123, 118, 0.12);
+  /* #4fd7e8 measures 9.1:1 on #0a0e18 — comfortably AA even at small sizes. */
+  --scv-accent: #4fd7e8;
+  --scv-accent-bright: #7ee9f5;
+  --scv-accent-glow: rgba(79, 215, 232, 0.28);
+
+  --scv-amber: #ffb454;
+  --scv-violet: #b39bff;
+  --scv-lime: #a9e05a;
+
+  /* Near-black with a blue cast, not pure #000: pure black on an OLED panel
+     makes the cyan bloom and the text edges shimmer. */
+  --scv-void: #05070d;
+  --scv-surface: #0a0e18;
+  --scv-surface-2: #121826;
+  --scv-line: rgba(140, 180, 220, 0.14);
+  --scv-line-strong: rgba(140, 180, 220, 0.28);
+  --scv-text: #dde5f0;
+  --scv-dim: #93a3bb; /* 7.4:1 on #0a0e18 */
+
+  --scv-grid: rgba(120, 170, 220, 0.07);
+
+  --docusaurus-highlighted-code-line-bg: rgba(79, 215, 232, 0.12);
+
+  --ifm-background-color: var(--scv-void);
+  --ifm-background-surface-color: var(--scv-surface);
+  --ifm-navbar-background-color: rgba(5, 7, 13, 0.72);
+  --ifm-footer-background-color: #070a12;
+  --ifm-toc-border-color: var(--scv-line);
 }
 
-/* Keep long-form prose within a comfortable measure; wide elements (tables, code, diagrams)
-   are exempt so they can use the full column and scroll on their own. */
+/* ==========================================================================
+   2. Global chrome
+   ========================================================================== */
+
+html {
+  background-color: var(--scv-void);
+}
+
+body {
+  background-color: var(--scv-void);
+  color: var(--scv-text);
+  /* A single faint grid across the whole document. It is what makes an
+     otherwise ordinary docs page read as an instrument panel, and it costs one
+     gradient rather than an image request. */
+  background-image:
+    linear-gradient(var(--scv-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--scv-grid) 1px, transparent 1px);
+  background-size: var(--scv-grid-size) var(--scv-grid-size);
+  background-position: center top;
+}
+
+/* Frosted navbar. `backdrop-filter` degrades to a plain translucent bar where
+   unsupported, which is still legible, so no fallback branch is needed. */
+.navbar {
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid var(--scv-line);
+  box-shadow: none;
+}
+
+[data-theme='light'] .navbar {
+  background-color: rgba(255, 255, 255, 0.74);
+}
+
+/* The brand mark gets a slow idle rotation on hover — the aperture "focusing".
+   Purely decorative, and the first thing reduced-motion turns off. */
+.navbar__logo img {
+  transition: transform var(--scv-slow) var(--scv-ease), filter var(--scv-med) var(--scv-ease);
+}
+
+.navbar__brand:hover .navbar__logo img {
+  transform: rotate(60deg);
+  filter: drop-shadow(0 0 6px var(--scv-accent-glow));
+}
+
+.navbar__title {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* Sidebar: a thin cyan rail marks the active page, replacing Infima's filled
+   pill. Reads as a selection cursor rather than a button. */
+.menu__link {
+  border-radius: 6px;
+  transition: background-color var(--scv-fast) var(--scv-ease), color var(--scv-fast) var(--scv-ease);
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+  background: linear-gradient(90deg, var(--scv-accent-glow), transparent 70%);
+  box-shadow: inset 2px 0 0 var(--scv-accent);
+  color: var(--scv-text);
+}
+
+.theme-doc-sidebar-container {
+  border-right: 1px solid var(--scv-line) !important;
+}
+
+/* Table of contents: same rail idea, mirrored. */
+.table-of-contents__link--active {
+  color: var(--scv-accent);
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   3. Prose
+   ========================================================================== */
+
+/* Keep long-form prose within a comfortable measure; wide elements (tables,
+   code, diagrams) are exempt so they can use the full column and scroll on
+   their own. */
 .markdown > p,
 .markdown > ul,
 .markdown > ol,
@@ -46,25 +208,281 @@
   max-width: var(--scv-content-measure);
 }
 
-/* Code blocks: a touch more vertical breathing room. Horizontal scroll stays inside the block,
-   never the page. */
-div[class^='codeBlockContainer'] {
-  --ifm-pre-padding: 0.9rem 1rem;
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  letter-spacing: -0.018em;
 }
 
-/* Inline code should read as code, not as a red button — mute it against the brand link color. */
+/* Section headings get a short cyan tick to their left — a scan mark. */
+.markdown > h2 {
+  position: relative;
+  padding-top: 0.4em;
+  margin-top: 2.4rem;
+  border-top: 1px solid var(--scv-line);
+}
+
+.markdown > h2::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 2.2rem;
+  height: 2px;
+  background: var(--scv-accent);
+}
+
+/* Inline code should read as code, not as a red button — mute it against the
+   brand link colour. */
 :not(pre) > code {
-  border: 1px solid var(--ifm-color-emphasis-200);
-  background: var(--ifm-color-emphasis-100);
+  border: 1px solid var(--scv-line);
+  background: var(--scv-surface-2);
   color: inherit;
+  border-radius: 5px;
 }
 
-/* Motion: keep transitions short and respect reduced-motion. */
+[data-theme='dark'] :not(pre) > code {
+  background: rgba(140, 180, 220, 0.09);
+}
+
+/* Code blocks: more vertical breathing room, an instrument-panel frame, and a
+   horizontal scroll that stays inside the block rather than moving the page. */
+div[class^='codeBlockContainer'] {
+  --ifm-pre-padding: 0.95rem 1.05rem;
+  border: 1px solid var(--scv-line);
+  border-radius: var(--scv-radius);
+  box-shadow: 0 1px 2px rgba(5, 7, 13, 0.06);
+}
+
+[data-theme='dark'] div[class^='codeBlockContainer'] {
+  box-shadow: 0 0 0 1px rgba(79, 215, 232, 0.06), 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* Tables: zebra striping plus a sticky-feeling header rule. */
+.markdown table thead tr {
+  border-bottom: 2px solid var(--scv-line-strong);
+}
+
+.markdown table th {
+  text-transform: uppercase;
+  font-size: 0.76rem;
+  letter-spacing: 0.06em;
+  color: var(--scv-dim);
+}
+
+/* Admonitions: swap Infima's heavy left bar for a full hairline frame with a
+   tinted header, which sits better on the grid background. */
+.theme-admonition {
+  border-radius: var(--scv-radius);
+  border: 1px solid var(--scv-line-strong);
+  border-left-width: 3px;
+}
+
+/* Links: an underline that grows from the left on hover, instead of appearing
+   all at once. */
+.markdown a:not(.card):not(.button) {
+  text-decoration: none;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size var(--scv-med) var(--scv-ease);
+}
+
+.markdown a:not(.card):not(.button):hover {
+  background-size: 100% 1px;
+}
+
+/* Pagination cards at the foot of a guide: Infima draws them as plain bordered
+   boxes. A left rail in the accent colour makes the direction of travel legible
+   at a glance. */
+.pagination-nav__link {
+  border-color: var(--scv-line);
+  border-radius: var(--scv-radius);
+  transition: border-color var(--scv-fast) var(--scv-ease), transform var(--scv-fast) var(--scv-ease);
+}
+
+.pagination-nav__link:hover {
+  border-color: var(--scv-accent);
+  transform: translateY(-1px);
+}
+
+.pagination-nav__sublabel {
+  color: var(--scv-dim);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ==========================================================================
+   4. Footer
+   ========================================================================== */
+
+.footer {
+  border-top: 1px solid var(--scv-line);
+  /* The same calibration grid as the page body, at half strength — the footer
+     reads as the bottom edge of the instrument rather than as a separate slab. */
+  background-image:
+    linear-gradient(var(--scv-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--scv-grid) 1px, transparent 1px);
+  background-size: var(--scv-grid-size) var(--scv-grid-size);
+}
+
+.footer__title {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--scv-accent);
+}
+
+.footer__link-item {
+  transition: color var(--scv-fast) var(--scv-ease);
+}
+
+.footer__copyright {
+  font-size: 0.82rem;
+  opacity: 0.72;
+}
+
+/* ==========================================================================
+   5. Utility primitives shared by the landing components
+   ========================================================================== */
+
+/* A panel with HUD corner brackets. Two gradients per pseudo-element draw the
+   four corners without any extra DOM. */
+.scv-panel {
+  position: relative;
+  background: var(--scv-surface);
+  border: 1px solid var(--scv-line);
+  border-radius: var(--scv-radius);
+}
+
+.scv-panel::before,
+.scv-panel::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  border-color: var(--scv-accent);
+  opacity: 0.65;
+}
+
+.scv-panel::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid;
+  border-left: 2px solid;
+  border-top-left-radius: var(--scv-radius);
+}
+
+.scv-panel::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid;
+  border-right: 2px solid;
+  border-bottom-right-radius: var(--scv-radius);
+}
+
+/* Monospace metadata label — the small uppercase readouts used all over the
+   landing page. */
+.scv-readout {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--scv-dim);
+}
+
+/* ==========================================================================
+   6. Landing page shell
+   --------------------------------------------------------------------------
+   The landing is a *doc* (it lives at `/` because the docs plugin owns the
+   site root), so Docusaurus renders it inside the doc layout. Docusaurus puts
+   `docs-doc-id-<id>` on <html>, and the page's front matter adds
+   `wrapperClassName: scv-landing`; either hook alone is enough, and using both
+   means an upstream change to one does not silently un-style the page.
+   ========================================================================== */
+
+html.scv-landing .theme-doc-sidebar-container,
+html.docs-doc-id-index .theme-doc-sidebar-container,
+html.scv-landing .theme-doc-toc-desktop,
+html.docs-doc-id-index .theme-doc-toc-desktop,
+html.scv-landing .theme-doc-breadcrumbs,
+html.docs-doc-id-index .theme-doc-breadcrumbs,
+html.scv-landing .pagination-nav,
+html.docs-doc-id-index .pagination-nav,
+html.scv-landing .theme-doc-footer,
+html.docs-doc-id-index .theme-doc-footer {
+  display: none !important;
+}
+
+/* Let the content span the viewport: Infima's `.container` caps at ~1140px and
+   pads 2rem, which would letterbox a full-bleed hero.
+   These target Docusaurus's internal wrappers by class *prefix*. Their full
+   names carry a build hash (`docMainContainer_TBSr`) that changes whenever the
+   theme's CSS modules are rebuilt, so matching the literal name would silently
+   stop working on a Docusaurus upgrade; the prefix is the stable part. */
+html.scv-landing [class*='docMainContainer'],
+html.docs-doc-id-index [class*='docMainContainer'],
+html.scv-landing [class*='docItemContainer'],
+html.docs-doc-id-index [class*='docItemContainer'],
+html.scv-landing main > .container,
+html.docs-doc-id-index main > .container,
+html.scv-landing main .row,
+html.docs-doc-id-index main .row,
+html.scv-landing main .row > .col,
+html.docs-doc-id-index main .row > .col {
+  max-width: none !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  flex: 0 0 100% !important;
+}
+
+html.scv-landing .markdown,
+html.docs-doc-id-index .markdown {
+  --ifm-h1-vertical-rhythm-bottom: 0;
+}
+
+/* The landing's own sections carry all the vertical rhythm, so the doc layout
+   must contribute none of its own. */
+html.scv-landing article,
+html.docs-doc-id-index article {
+  padding: 0;
+}
+
+/* The landing composes its own measure per section, so the global prose cap
+   must not apply there. */
+html.scv-landing .markdown > p,
+html.docs-doc-id-index .markdown > p {
+  max-width: none;
+}
+
+/* The landing body is entirely React components; the grid backdrop belongs to
+   the sections themselves, not to the page behind them. */
+html.scv-landing body,
+html.docs-doc-id-index body {
+  background-image: none;
+}
+
+/* ==========================================================================
+   7. Motion policy
+   --------------------------------------------------------------------------
+   One rule, applied last, that neutralises every animation and transition on
+   the site. Components that run a JS render loop check the same media query in
+   script and draw a single static frame instead.
+   ========================================================================== */
+
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
   ::after {
     animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

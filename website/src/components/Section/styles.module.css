@@ -1,0 +1,95 @@
+.section {
+  position: relative;
+  padding: clamp(3rem, 6vw, 5.5rem) 0;
+  border-bottom: 1px solid var(--scv-line);
+}
+
+/* A tinted section sits on the alternate surface AND loses the page grid, which is what makes the
+   alternation read as two different materials rather than two shades of one. */
+.tinted {
+  background: var(--scv-surface-2);
+}
+
+[data-theme='dark'] .tinted {
+  background: linear-gradient(180deg, var(--scv-surface) 0%, var(--scv-void) 100%);
+}
+
+.inner {
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 0 clamp(1rem, 4vw, 2.5rem);
+}
+
+.head {
+  max-width: 46rem;
+  margin-bottom: clamp(1.8rem, 3.5vw, 2.8rem);
+}
+
+.wide .head {
+  max-width: none;
+}
+
+.eyebrow {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--scv-accent);
+  margin: 0 0 0.7rem;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+/* A short rule trailing the eyebrow — the same scan-mark motif as the `##` headings in the docs. */
+.eyebrow::after {
+  content: '';
+  flex: 0 0 auto;
+  width: 2.4rem;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+.title {
+  font-size: clamp(1.7rem, 3.4vw, 2.5rem);
+  line-height: 1.12;
+  letter-spacing: -0.028em;
+  font-weight: 720;
+  margin: 0;
+  color: var(--scv-text);
+}
+
+.lede {
+  margin: 0.9rem 0 0;
+  font-size: 1.03rem;
+  line-height: 1.62;
+  color: var(--scv-dim);
+  max-width: 54ch;
+}
+
+/* Body copy written as plain markdown inside a section still needs a measure. The global
+   `.markdown > p` rule cannot reach it — these paragraphs are grandchildren of `.markdown`, not
+   children — so the cap is reapplied here. Code blocks, tables and the component grids are
+   deliberately exempt: they earn the full column. */
+.inner > p,
+.inner > ul,
+.inner > ol,
+.inner > blockquote {
+  max-width: var(--scv-content-measure);
+  font-size: 1.02rem;
+  line-height: 1.68;
+}
+
+/* A section's own code blocks read better a little narrower than the grid sections, but wider than
+   prose — long Scala signatures should not wrap. */
+.inner > div[class*='codeBlockContainer'] {
+  max-width: 62rem;
+}
+
+/* `wide` is set on `.inner` itself, not on an ancestor of it — hence the compound selector. */
+.inner.wide > p,
+.inner.wide > ul,
+.inner.wide > ol {
+  max-width: none;
+}
