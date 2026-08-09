@@ -62,17 +62,35 @@ enum CaptureBackend(val cvValue: Int):
   * every local file to configure something local files never need is the wrong default. Set them for network
   * sources — RTSP, HTTP — where a hang is the failure mode you actually face.
   *
+  * ==Why a camera needs warming up and a file does not==
+  *
+  * A webcam is not ready the instant `open` returns. Auto-exposure, auto-white-balance and auto-gain are
+  * closed loops running on the device, and they need a handful of real frames to converge — which is why a
+  * naive `open`-then-`snapshot` so often yields a black or badly-under-exposed image and reports it as a
+  * success. There is no property to poll for "converged", so the only fix is to pull some frames and throw
+  * them away.
+  *
+  * `warmupFrames` is how many to discard before the capture is handed back. It defaults to `None`, which
+  * means "let the source decide": `Video.open(index, …)` discards 5 and `Video.open(source, …)` discards 0.
+  * That split is the point — a file or an RTSP URL has no exposure loop, its first frame is exactly as
+  * correct as its hundredth, and discarding frames there would silently skip real content. Set it explicitly
+  * to override either default (`Some(0)` disables warm-up on a camera).
+  *
   * @param backend
   *   which videoio backend to ask for; see [[CaptureBackend]].
   * @param openTimeout
   *   best-effort cap on how long opening the source may block.
   * @param readTimeout
   *   best-effort cap on how long a single frame read may block.
+  * @param warmupFrames
+  *   how many frames to grab and discard immediately after opening; `None` takes the per-source default
+  *   described above.
   */
 final case class CaptureOptions(
     backend: CaptureBackend = CaptureBackend.Any,
     openTimeout: Option[FiniteDuration] = None,
-    readTimeout: Option[FiniteDuration] = None
+    readTimeout: Option[FiniteDuration] = None,
+    warmupFrames: Option[Int] = None
 ):
   require(
     openTimeout.forall(d => d.toMillis > 0 && d.toMillis <= Int.MaxValue),
@@ -81,6 +99,10 @@ final case class CaptureOptions(
   require(
     readTimeout.forall(d => d.toMillis > 0 && d.toMillis <= Int.MaxValue),
     s"readTimeout must be between 1ms and ${Int.MaxValue}ms, got $readTimeout"
+  )
+  require(
+    warmupFrames.forall(_ >= 0),
+    s"warmupFrames cannot be negative, got $warmupFrames"
   )
 
 object CaptureOptions:
@@ -178,7 +200,9 @@ object Video:
     */
   def open(index: Int, options: CaptureOptions): Either[CvError, Managed[VideoCapture]] =
     require(index >= 0, s"a camera index cannot be negative, got $index")
-    openCapture(s"camera $index", options)(
+    // 5 discarded frames by default: this is a device with auto-exposure to converge, and the first frame
+    // off a cold webcam is routinely black. See CaptureOptions for why a file gets 0 instead.
+    openCapture(s"camera $index", options, options.warmupFrames.getOrElse(5))(
       (c, p) => c.open(index, options.backend.cvValue, p),
       c => c.open(index, options.backend.cvValue)
     )
@@ -199,7 +223,9 @@ object Video:
     */
   def open(source: String, options: CaptureOptions): Either[CvError, Managed[VideoCapture]] =
     require(source.nonEmpty, "a capture source cannot be empty")
-    openCapture(source, options)(
+    // No warm-up by default: a file or a network stream has no exposure loop to converge, so a discarded
+    // frame here is not a throwaway, it is content the caller silently never sees.
+    openCapture(source, options, options.warmupFrames.getOrElse(0))(
       (c, p) => c.open(source, options.backend.cvValue, p),
       c => c.open(source, options.backend.cvValue)
     )
@@ -282,8 +308,11 @@ object Video:
     *
     * `withParams` and `plain` are the same call with and without the timeout parameters; see
     * [[CaptureOptions]] for why the parameterised form needs a fallback rather than being the only attempt.
+    *
+    * `warmup` is the already-resolved frame count — the caller has applied the per-source default, so this
+    * takes a plain `Int` and not the `Option`.
     */
-  private def openCapture(source: String, options: CaptureOptions)(
+  private def openCapture(source: String, options: CaptureOptions, warmup: Int)(
       withParams: (VideoCapture, MatOfInt) => Boolean,
       plain: VideoCapture => Boolean
   ): Either[CvError, Managed[VideoCapture]] =
@@ -306,6 +335,16 @@ object Video:
                 "may be in use, or no available backend can read it"
             )
           capture.setExceptionMode(false)
+          // Strictly AFTER exception mode goes off, and that ordering is load-bearing. With it still on, a
+          // camera that merely drops a frame during warm-up throws a CvException, the enclosing Cv.attempt
+          // turns it into a Left and the catch below releases the capture — so a working device would be
+          // reported as "could not open" because of a single dropped frame. Off, a failed grab is a plain
+          // `false` and we simply stop discarding.
+          //
+          // grab() rather than read(): warm-up only needs the device to advance its pipeline, and grab
+          // skips the decode and the copy into a Mat that read() would pay for a frame nobody looks at.
+          var discarded = 0
+          while discarded < warmup && capture.grab() do discarded += 1
           Managed(capture)
       catch
         case e: Throwable =>

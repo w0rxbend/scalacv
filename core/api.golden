@@ -166,16 +166,18 @@ final class scalacv.CaptureInfo
 final class scalacv.CaptureOptions
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
-  def <init>(scalacv.CaptureBackend, scala.Option<scala.concurrent.duration.FiniteDuration>, scala.Option<scala.concurrent.duration.FiniteDuration>): void
+  def <init>(scalacv.CaptureBackend, scala.Option<scala.concurrent.duration.FiniteDuration>, scala.Option<scala.concurrent.duration.FiniteDuration>, scala.Option<java.lang.Object>): void
   def _1(): scalacv.CaptureBackend
   def _2(): scala.Option<scala.concurrent.duration.FiniteDuration>
   def _3(): scala.Option<scala.concurrent.duration.FiniteDuration>
+  def _4(): scala.Option<java.lang.Object>
   def backend(): scalacv.CaptureBackend
   def canEqual(java.lang.Object): boolean
   def copy$default$1(): scalacv.CaptureBackend
   def copy$default$2(): scala.Option<scala.concurrent.duration.FiniteDuration>
   def copy$default$3(): scala.Option<scala.concurrent.duration.FiniteDuration>
-  def copy(scalacv.CaptureBackend, scala.Option<scala.concurrent.duration.FiniteDuration>, scala.Option<scala.concurrent.duration.FiniteDuration>): scalacv.CaptureOptions
+  def copy$default$4(): scala.Option<java.lang.Object>
+  def copy(scalacv.CaptureBackend, scala.Option<scala.concurrent.duration.FiniteDuration>, scala.Option<scala.concurrent.duration.FiniteDuration>, scala.Option<java.lang.Object>): scalacv.CaptureOptions
   def equals(java.lang.Object): boolean
   def hashCode(): int
   def openTimeout(): scala.Option<scala.concurrent.duration.FiniteDuration>
@@ -185,6 +187,7 @@ final class scalacv.CaptureOptions
   def productPrefix(): java.lang.String
   def readTimeout(): scala.Option<scala.concurrent.duration.FiniteDuration>
   def toString(): java.lang.String
+  def warmupFrames(): scala.Option<java.lang.Object>
 final class scalacv.Contour
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
@@ -411,7 +414,8 @@ final class scalacv.Image
   def morphology(scalacv.MorphOp, int, scalacv.MorphShape): scalacv.Image
   def normalize$default$1(): double
   def normalize$default$2(): double
-  def normalize(double, double): scalacv.Image
+  def normalize$default$3(): scalacv.OutputDepth
+  def normalize(double, double, scalacv.OutputDepth): scalacv.Image
   def pad$default$2(): scalacv.BorderType
   def pad$default$3(): scalacv.Scalar
   def pad(int, scalacv.BorderType, scalacv.Scalar): scalacv.Image
@@ -821,6 +825,7 @@ object scalacv.BorderType
   implements java.io.Serializable, scala.deriving.Mirror$Sum
   def fromOrdinal(int): scalacv.BorderType
   def ordinal(scalacv.BorderType): int
+  def requireFilterSupport(java.lang.String, scalacv.BorderType): void
   def valueOf(java.lang.String): scalacv.BorderType
   def values(): scalacv.BorderType[]
   static val Constant: scalacv.BorderType
@@ -873,8 +878,9 @@ object scalacv.CaptureOptions
   def <init>$default$1(): scalacv.CaptureBackend
   def <init>$default$2(): scala.Option<scala.concurrent.duration.FiniteDuration>
   def <init>$default$3(): scala.Option<scala.concurrent.duration.FiniteDuration>
+  def <init>$default$4(): scala.Option<java.lang.Object>
   def Default(): scalacv.CaptureOptions
-  def apply(scalacv.CaptureBackend, scala.Option<scala.concurrent.duration.FiniteDuration>, scala.Option<scala.concurrent.duration.FiniteDuration>): scalacv.CaptureOptions
+  def apply(scalacv.CaptureBackend, scala.Option<scala.concurrent.duration.FiniteDuration>, scala.Option<scala.concurrent.duration.FiniteDuration>, scala.Option<java.lang.Object>): scalacv.CaptureOptions
   def fromProduct(scala.Product): scalacv.CaptureOptions
   def unapply(scalacv.CaptureOptions): scalacv.CaptureOptions
   def withTimeout$default$2(): scalacv.CaptureBackend
@@ -1304,10 +1310,13 @@ object scalacv.NativeFinalizer
 object scalacv.OpenCv
   extends java.lang.Object
   implements java.io.Serializable
+  def bulkLoadIsSafe(java.lang.String): boolean
+  def collectLibs(java.io.File, java.io.File): scala.collection.immutable.Seq<java.io.File>
   def isLoaded(): boolean
   def isNativeLib(java.lang.String): boolean
   def load(): void
   def missingSoname(java.lang.String): scala.Option<java.lang.String>
+  def withinRoot(java.io.File, java.io.File): boolean
 object scalacv.Ops.package
   extends java.lang.Object
   implements java.io.Serializable
@@ -1380,7 +1389,8 @@ object scalacv.Ops.package
   def morphology(org.opencv.core.Mat, scalacv.MorphOp, int, scalacv.MorphShape, int): scalacv.Managed<org.opencv.core.Mat>
   def normalize$default$2(org.opencv.core.Mat): double
   def normalize$default$3(org.opencv.core.Mat): double
-  def normalize(org.opencv.core.Mat, double, double): scalacv.Managed<org.opencv.core.Mat>
+  def normalize$default$4(org.opencv.core.Mat): scalacv.OutputDepth
+  def normalize(org.opencv.core.Mat, double, double, scalacv.OutputDepth): scalacv.Managed<org.opencv.core.Mat>
   def normalizeSkew(org.opencv.core.Mat, double): double
   def pencilSketch$default$2(org.opencv.core.Mat): float
   def pencilSketch$default$3(org.opencv.core.Mat): float

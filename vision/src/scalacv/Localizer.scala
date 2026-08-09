@@ -23,7 +23,16 @@ final case class CameraPose(rotation: Seq[Seq[Double]], translation: Seq[Double]
 object Localizer:
 
   /** The camera pose from `worldPoints` (3D map points) and their `imagePoints` (matched 2D projections), via
-    * `solvePnP`. Needs at least four correspondences; `None` if `solvePnP` cannot converge.
+    * `solvePnP`.
+    *
+    * How many correspondences are needed depends on the shape of the map points, because this uses OpenCV's
+    * default iterative solver: four are enough when the world points are coplanar (they all lie on one flat
+    * surface, such as a wall or a floor), but six are needed when they are not, since the non-planar
+    * initialiser is a direct linear transform that has no solution below six points. OpenCV decides which of
+    * the two cases applies, so scalacv does not try to predict it.
+    *
+    * Returns `None` — never throws — whenever the pose cannot be recovered: fewer than four correspondences,
+    * four or five non-coplanar ones, or a degenerate configuration that makes `solvePnP` fail or refuse.
     *
     * @param intrinsics
     *   the pinhole camera model, including any lens distortion — use [[Intrinsics.approx]] when uncalibrated.
@@ -48,9 +57,19 @@ object Localizer:
             Managed.use(intrinsics.distCoeffs): distortion =>
               Managed.use(Mat()): rvec =>
                 Managed.use(Mat()): tvec =>
-                  val ok = Calib3d.solvePnP(objectPoints, imgPoints, camera, distortion, rvec, tvec)
-                  if !ok then None
-                  else
-                    Managed.use(Mat()): rotation =>
-                      Calib3d.Rodrigues(rvec, rotation)
-                      Some(CameraPose(Mats.readMatrix(rotation, 3, 3), Mats.readColumn(tvec, 3)))
+                  // The solvePnP block runs inside Cv.attempt because the default SOLVEPNP_ITERATIVE solver
+                  // does not always answer with `ok = false`: on four or five non-coplanar points it aborts
+                  // inside its DLT initialiser with a native CV_Assert ("needs at least 6 points"), which
+                  // arrives here as a raw org.opencv.core.CvException. That is not even a CvError, so a
+                  // caller catching scalacv's own error type would miss it, and this method promises an
+                  // Option. Guarding by counting points instead was rejected: OpenCV decides planarity
+                  // itself, by an SVD on the point covariance, and a re-implemented threshold would
+                  // disagree with it on near-planar inputs and let the same assertion through.
+                  Cv.attempt("solvePnP") {
+                    val ok = Calib3d.solvePnP(objectPoints, imgPoints, camera, distortion, rvec, tvec)
+                    if !ok then None
+                    else
+                      Managed.use(Mat()): rotation =>
+                        Calib3d.Rodrigues(rvec, rotation)
+                        Some(CameraPose(Mats.readMatrix(rotation, 3, 3), Mats.readColumn(tvec, 3)))
+                  }.getOrElse(None)

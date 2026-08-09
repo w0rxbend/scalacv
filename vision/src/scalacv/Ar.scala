@@ -47,41 +47,54 @@ object Ar:
     * whatever unit you want the pose expressed in — metres is conventional). `None` if `solvePnP` fails to
     * converge, which for four coplanar corners is rare but not impossible.
     *
+    * Every Mat this needs is owned for the duration of the call and freed before it returns, on the throwing
+    * path as well as the normal one — the returned [[Pose3D]] is plain `Seq[Double]`, so nothing native
+    * escapes and the caller has nothing to release.
+    *
     * @throws IllegalArgumentException
     *   if the marker does not have four corners or `markerLength` is not positive.
     */
   def estimatePose(marker: ArucoMarker, markerLength: Double, intrinsics: Intrinsics): Option[Pose3D] =
+    // The two preconditions stay above the first acquisition, so a rejected marker throws while there is
+    // still nothing native to free.
     require(marker.corners.size == 4, s"a marker pose needs four corners, got ${marker.corners.size}")
     require(markerLength > 0, s"markerLength must be positive, got $markerLength")
-    val obj = MatOfPoint3f(markerObjectPoints(markerLength).map(_.toCv)*)
-    val img = MatOfPoint2f(marker.corners.map(_.toCv)*)
-    val camera = intrinsics.cameraMatrix
-    val dist = intrinsics.distCoeffs
-    val rvec = Mat()
-    val tvec = Mat()
-    try
-      val ok = Cv.orThrow("solvePnP")(
-        Calib3d.solvePnP(obj, img, camera, dist, rvec, tvec, false, Calib3d.SOLVEPNP_IPPE_SQUARE)
-      )
-      Option.when(ok)(Pose3D(matColumn(rvec), matColumn(tvec)))
-    finally
-      obj.release(); img.release(); camera.release(); dist.release(); rvec.release(); tvec.release()
+    // Every native Mat is acquired through Managed.use, so a throw from any constructor frees the ones
+    // already allocated — the plain val-before-try form leaked the earlier Mats when a later constructor
+    // (Intrinsics.cameraMatrix or distCoeffs here) threw before the try began. Mirrors Localizer.locate.
+    Managed.use(MatOfPoint3f(markerObjectPoints(markerLength).map(_.toCv)*)): obj =>
+      Managed.use(MatOfPoint2f(marker.corners.map(_.toCv)*)): img =>
+        Managed.use(intrinsics.cameraMatrix): camera =>
+          Managed.use(intrinsics.distCoeffs): dist =>
+            Managed.use(Mat()): rvec =>
+              Managed.use(Mat()): tvec =>
+                val ok = Cv.orThrow("solvePnP")(
+                  Calib3d.solvePnP(obj, img, camera, dist, rvec, tvec, false, Calib3d.SOLVEPNP_IPPE_SQUARE)
+                )
+                // matColumn copies the rotation and translation out into Seq[Double] before rvec/tvec are
+                // released, which is why it has to run inside this block rather than after it.
+                Option.when(ok)(Pose3D(matColumn(rvec), matColumn(tvec)))
 
-  /** Projects model `points` (in the marker's frame) to pixel coordinates through `pose` and the camera. */
+  /** Projects model `points` (in the marker's frame) to pixel coordinates through `pose` and the camera.
+    *
+    * As with [[estimatePose]], every Mat is owned for the duration of the call and freed before it returns,
+    * including when a native call or an allocation throws; the returned [[Point]]s are copies.
+    */
   def project(points: Seq[Point3], pose: Pose3D, intrinsics: Intrinsics): Seq[Point] =
     if points.isEmpty then Seq.empty
     else
-      val obj = MatOfPoint3f(points.map(_.toCv)*)
-      val out = MatOfPoint2f()
-      val camera = intrinsics.cameraMatrix
-      val dist = intrinsics.distCoeffs
-      val rvec = pose.rvecMat
-      val tvec = pose.tvecMat
-      try
-        Cv.orThrow("projectPoints")(Calib3d.projectPoints(obj, rvec, tvec, camera, dist, out))
-        out.toArray.map(Point.from).toSeq
-      finally
-        obj.release(); out.release(); camera.release(); dist.release(); rvec.release(); tvec.release()
+      // Same exception-safe acquisition as estimatePose: a throw from any of these constructors must not
+      // strand the ones before it, which the val-before-try form this replaced did.
+      Managed.use(MatOfPoint3f(points.map(_.toCv)*)): obj =>
+        Managed.use(MatOfPoint2f()): out =>
+          Managed.use(intrinsics.cameraMatrix): camera =>
+            Managed.use(intrinsics.distCoeffs): dist =>
+              Managed.use(pose.rvecMat): rvec =>
+                Managed.use(pose.tvecMat): tvec =>
+                  Cv.orThrow("projectPoints")(Calib3d.projectPoints(obj, rvec, tvec, camera, dist, out))
+                  // toArray copies the projected corners onto the JVM heap, so this must read `out` before
+                  // the enclosing use releases it.
+                  out.toArray.map(Point.from).toSeq
 
   /** The eight corners of a `size`-sided cube resting on the marker plane (base on `z = 0`, rising toward the
     * camera), ordered base 0–3 then top 4–7 above them. Feed to [[project]] to draw a wireframe.

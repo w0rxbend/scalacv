@@ -99,3 +99,46 @@ class GraphicsTest extends munit.FunSuite:
 
   test("Scalar.toColor clamps and rounds out-of-gamut channels"):
     assertEquals(Scalar(-10.0, 127.6, 300.0).toColor, Color(red = 255, green = 128, blue = 0))
+
+  test("Animation.frames renders every canvas before returning, rather than lazily"):
+    // Pins the return type against a regression to LazyList. A lazy sequence would have rendered
+    // nothing by the time `frames` returns (so `rendered` would still be 0), and would then memoise
+    // every canvas it yielded — the shape Video documents as forbidden, because a caller who obeys
+    // "each image is yours to close" gets spent handles back on the second traversal.
+    var rendered = 0
+    val images = Animation.frames(3, 32, 32) { i =>
+      rendered += 1
+      Picture.marker(Point(16, 16), Color.White, radius = 2 + i)
+    }
+    try
+      assertEquals(rendered, 3, "every canvas must exist before the Seq reaches the caller")
+      assertEquals(images.size, 3)
+      assertEquals(images.map(_.width).toList, List(32, 32, 32))
+      // Reference equality: Image is a final class, so this is identity, not pixel comparison.
+      assertEquals(images.distinct.size, 3, "each frame must be its own canvas")
+    finally images.foreach(_.close())
+
+  test("Animation.frames rejects a negative count"):
+    intercept[IllegalArgumentException](Animation.frames(-1, 16, 16)(_ => Picture.empty))
+
+  test("Animation.foreach hands over one live canvas at a time and closes each one"):
+    // The images are captured here only so the test can prove they were released afterwards. Letting
+    // an Image escape the scope that owns it is exactly what this method exists to spare callers.
+    val handedOut = scala.collection.mutable.ArrayBuffer.empty[Image]
+    Animation.foreach(4, 24, 24)(i => Picture.marker(Point(12, 12), Color.White, radius = 2 + i)) { img =>
+      handedOut += img
+      assertEquals(img.width, 24)
+      assertEquals(
+        handedOut.count(_.toString.contains("<closed>")),
+        handedOut.size - 1,
+        "only the canvas currently being handled may be alive"
+      )
+    }
+    assertEquals(handedOut.size, 4)
+    handedOut.foreach(img => intercept[IllegalStateException](img.width))
+
+  test("Animation.foreach rejects a negative count and draws nothing for zero"):
+    intercept[IllegalArgumentException](Animation.foreach(-1, 8, 8)(_ => Picture.empty)(_ => ()))
+    var calls = 0
+    Animation.foreach(0, 8, 8)(_ => Picture.empty)(_ => calls += 1)
+    assertEquals(calls, 0)

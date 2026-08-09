@@ -17,7 +17,9 @@ import org.opencv.objdetect.FaceDetectorYN
   * @param box
   *   the face's bounding box. It is **not** clipped to the image: YuNet regresses boxes from anchors, so a
   *   face at the edge of the frame legitimately yields a negative `x`/`y` or a box running past
-  *   `cols`/`rows`. Crop with `Rect`-intersection before using it as a submat.
+  *   `cols`/`rows`. `Image.crop` and `Mat.submat` both reject such a rectangle outright, so clip it with
+  *   [[clippedBox]] before cropping — that is the intersection with the frame, and it answers `None` for a
+  *   box that lies entirely outside it.
   * @param landmarks
   *   exactly five points, always in this order: right eye, left eye, nose tip, right mouth corner, left mouth
   *   corner. "Right" is the *subject's* right, so it appears on the left of the image.
@@ -35,6 +37,55 @@ final case class Face(box: Rect, landmarks: Seq[Point], score: Float):
   def noseTip: Point = landmarks(2)
   def rightMouthCorner: Point = landmarks(3)
   def leftMouthCorner: Point = landmarks(4)
+
+  /** This face's [[box]] intersected with a `width`×`height` frame, or `None` when the box falls entirely
+    * outside that frame.
+    *
+    * This is the clip [[box]]'s own documentation asks for, and it is a method rather than a note because
+    * every caller would otherwise write it by hand: `Image.crop` and `Mat.submat` both reject a region of
+    * interest that runs past an edge, YuNet produces exactly such a box for any face at the border of the
+    * frame, and a hand-rolled four-way `min`/`max` is the classic home of an off-by-one.
+    *
+    * The intersection is **half-open** on both axes — the region is `[x, x + width)` — matching what
+    * [[Rect.bottomRight]] already documents ("one past the last enclosed pixel") and what `submat` expects. A
+    * box that merely *touches* the frame along an edge therefore answers `None` rather than a zero-extent
+    * `Rect`: `Rect` permits a zero extent but `submat` throws on one, so an empty overlap must not be
+    * representable as something a caller can hand to `crop`.
+    *
+    * {{{
+    * val boxes  = frame.faces(detector).flatMap(_.clippedBox(frame.width, frame.height))
+    * val thumbs = boxes.map(r => frame.copy.crop(r))
+    * }}}
+    *
+    * @param width
+    *   the frame's width in pixels — the image this face was detected in.
+    * @param height
+    *   the frame's height in pixels.
+    * @return
+    *   a rectangle that lies wholly inside the frame and has a positive extent on both axes, so it always
+    *   satisfies `Image.crop`'s precondition; `None` when there is no overlap at all.
+    * @throws IllegalArgumentException
+    *   if `width` or `height` is negative. A frame has no such shape, and clipping to it would silently
+    *   answer `None` for every face rather than reporting the mistake.
+    */
+  def clippedBox(width: Int, height: Int): Option[Rect] =
+    require(width >= 0 && height >= 0, s"a frame cannot have a negative extent: ${width}x$height")
+    // Long, not Int, because the box is decoded with `.round` from the model's floats: a degenerate
+    // detection can land Int.MaxValue in x or width, and `x + width` in Int arithmetic would then wrap
+    // negative and turn a box far off the right edge into one that appears to overlap. Each value below is
+    // bounded by the frame, so narrowing back to Int afterwards cannot lose anything.
+    val x0 = math.max(box.x.toLong, 0L)
+    val y0 = math.max(box.y.toLong, 0L)
+    val x1 = math.min(box.x.toLong + box.width, width.toLong)
+    val y1 = math.min(box.y.toLong + box.height, height.toLong)
+    if x1 <= x0 || y1 <= y0 then None
+    else Some(Rect(x0.toInt, y0.toInt, (x1 - x0).toInt, (y1 - y0).toInt))
+
+  /** `clippedBox(image.width, image.height)` — the convenience form for the usual case, where the frame to
+    * clip to is the image the detection was run on. `image` is only queried for its size, so it stays alive
+    * and owned by the caller, exactly as [[FaceDetect.detect]] left it.
+    */
+  def clippedBox(image: Image): Option[Rect] = clippedBox(image.width, image.height)
 
 /** YuNet face detection over `org.opencv.objdetect.FaceDetectorYN`.
   *
@@ -200,7 +251,8 @@ object FaceDetect:
     *
     * @return
     *   one [[Face]] per detection, in OpenCV's order — descending score after NMS. Empty when there is no
-    *   face, which is not an error.
+    *   face, which is not an error. Boxes are not clipped to `image`; clip with [[Face.clippedBox]] before
+    *   cropping one out.
     * @throws IllegalArgumentException
     *   if `image` is empty or is not 8-bit 3-channel. Both are programmer errors: YuNet's blob step needs BGR
     *   `CV_8UC3` and fails inside the DNN module otherwise, with a message about layer shapes that says

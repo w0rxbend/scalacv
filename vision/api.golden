@@ -163,6 +163,8 @@ final class scalacv.Face
   def _3(): float
   def box(): scalacv.Rect
   def canEqual(java.lang.Object): boolean
+  def clippedBox(int, int): scala.Option<scalacv.Rect>
+  def clippedBox(scalacv.Image): scala.Option<scalacv.Rect>
   def copy$default$1(): scalacv.Rect
   def copy$default$2(): scala.collection.immutable.Seq<scalacv.Point>
   def copy$default$3(): float

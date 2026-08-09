@@ -170,6 +170,29 @@ class DnnTest extends munit.FunSuite:
         assert(out.get.dataAddr != blob.get.dataAddr)
       .get
 
+  test("each forward owns its output — a later run does not rewrite an earlier result"):
+    val f = tempFile("relu.onnx", TinyOnnx.relu(Seq(1, 3, Height, Width)))
+    Using
+      .Manager: use =>
+        val net = use(Dnn.fromOnnx(f.toString).fold(e => fail(s"load failed: $e"), identity))
+        // Two *different* inputs, which is the whole point: with one input a shared buffer is
+        // indistinguishable from two copies, and every assertion below would hold either way.
+        val srcA = use(Managed(bgrFixture())) // B=10
+        val srcB = use(Managed(Mat(Height, Width, CvType.CV_8UC3, CvScalar(70, 80, 90))))
+        val blobA = use(Dnn.blobFromImage(srcA.get))
+        val blobB = use(Dnn.blobFromImage(srcB.get))
+
+        val outA = use(Dnn.forward(net.get, blobA.get))
+        assertEqualsFloat(at(outA.get, 0, 0, 0), 10f, 1e-4f)
+        val outB = use(Dnn.forward(net.get, blobB.get))
+        // Two headers onto the net's own reused output blob share an address; two owned copies cannot.
+        assert(outA.get.dataAddr != outB.get.dataAddr, "each forward must hand back a buffer of its own")
+        assertEqualsFloat(at(outA.get, 0, 0, 0), 10f, 1e-4f) // still A's answer, not overwritten by B's
+        assertEqualsFloat(at(outB.get, 0, 0, 0), 70f, 1e-4f)
+        // The copy must not flatten the blob back to a 2-D Mat on the way out.
+        assertEquals(sizes(outA.get), Seq(1, 3, Height, Width))
+      .get
+
   test("forward by output name gives the same result as forwarding to the end"):
     val f = tempFile("relu.onnx", TinyOnnx.relu(Seq(1, 3, Height, Width)))
     Using
@@ -179,6 +202,9 @@ class DnnTest extends munit.FunSuite:
         val blob = use(Dnn.blobFromImage(src.get, mean = Scalar(50, 0, 0)))
         val byName = use(Dnn.forward(net.get, blob.get, Some("out")))
         val toEnd = use(Dnn.forward(net.get, blob.get))
+        // Distinct buffers first: while the two results aliased the net's own output blob, the float
+        // comparison below held for any implementation at all, including a broken one.
+        assert(byName.get.dataAddr != toEnd.get.dataAddr, "each forward must hand back a buffer of its own")
         assertEquals(floats(byName.get).toSeq, floats(toEnd.get).toSeq)
       .get
 

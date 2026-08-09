@@ -261,8 +261,19 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
   /** Unsharp-mask sharpening; `amount` ~1 is a firm sharpen, higher haloes the edges. */
   def sharpen(amount: Double = 1.0): Image = transform(_.sharpen(amount))
 
-  /** Min-max normalises values into `[min, max]` — a quick contrast stretch. */
-  def normalize(min: Double = 0, max: Double = 255): Image = transform(_.normalize(min, max))
+  /** Min-max normalises values into `[min, max]` — a quick contrast stretch, and the standard way of making a
+    * non-8-bit result (a disparity map, a distance transform, a float Sobel response) displayable.
+    *
+    * `depth` defaults to [[OutputDepth.Unsigned8]], so a `CV_32F` image comes back as `CV_8U` and is actually
+    * viewable; for an already-8-bit image that is a no-op conversion, so a plain contrast stretch is
+    * unaffected. Pass [[OutputDepth.SameAsSource]] to rescale without giving up the source's precision — a
+    * float image stretched into `[0, 1]` for a model's input, say. See `Mat.normalize` for the full argument.
+    */
+  def normalize(
+      min: Double = 0,
+      max: Double = 255,
+      depth: OutputDepth = OutputDepth.Unsigned8
+  ): Image = transform(_.normalize(min, max, depth))
 
   /** Extracts a single channel as its own single-channel image. */
   def channel(index: Int): Image = transform(_.extractChannel(index))
@@ -432,8 +443,9 @@ object Image:
 
   private[scalacv] def apply(handle: Managed[Mat]): Image = new Image(handle)
 
-  /** Reads an image from the filesystem. `Left` if the path is missing, a directory, or not a decodable image
-    * — the three cases OpenCV reports identically (see [[Images.read]]).
+  /** Reads an image from the filesystem. `Left` if the path is missing, is a directory, is empty, or does not
+    * decode — four cases the error message tells apart, because the read goes through the JVM's own file I/O
+    * rather than through `imread`, which reports all of them as one bare `false` (see [[Images.read]]).
     */
   def read(path: String, flags: ImreadFlags = ImreadFlags.Color): Either[CvError, Image] =
     Images.read(path, flags).map(apply)

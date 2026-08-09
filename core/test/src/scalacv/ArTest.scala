@@ -13,6 +13,26 @@ class ArTest extends munit.FunSuite:
         .use(_.border(60, 60, 60, 60, color = Scalar.White))
     Image.wrap(bordered)
 
+  /** What [[ExplodingDistortion]] throws — one instance, so a test can assert on identity and so prove the
+    * exception was neither swallowed nor replaced on its way out of the method.
+    */
+  private object Boom extends RuntimeException("simulated native allocation failure in distCoeffs")
+
+  /** A distortion vector that throws the moment OpenCV reads it.
+    *
+    * `Intrinsics.distCoeffs` is the fourth of the six native acquisitions `Ar.estimatePose` and `Ar.project`
+    * each make, and the only documented way it fails is a native allocation failure — `std::bad_alloc`, which
+    * the OpenCV bindings hand back as a plain `java.lang.Exception` (see `Cv.attempt`). A 72-byte
+    * `MatOfDouble` cannot be made to fail on demand, so this stands in for it and fails at the same instant:
+    * `Intrinsics` validates only `fx`/`fy` when it is built, and `distCoeffs` reads `distortion` only when it
+    * splats it into the `MatOfDouble` constructor.
+    */
+  private final class ExplodingDistortion extends scala.collection.immutable.Seq[Double]:
+    def length: Int = 2
+    override def isEmpty: Boolean = false
+    def apply(i: Int): Double = if i == 0 then 0.01 else throw Boom
+    def iterator: Iterator[Double] = Iterator.range(0, length).map(i => apply(i))
+
   test("Intrinsics.approx centres the principal point and grows f with a narrower FoV"):
     val narrow = Intrinsics.approx(Size(640, 480), horizontalFovDegrees = 30)
     val wide = Intrinsics.approx(Size(640, 480), horizontalFovDegrees = 90)
@@ -70,3 +90,30 @@ class ArTest extends munit.FunSuite:
     intercept[IllegalArgumentException](
       Ar.estimatePose(ArucoMarker(1, Seq(Point(0, 0))), 0.1, Intrinsics.approx(Size(100, 100)))
     )
+
+  test("a throw part-way through acquisition propagates unchanged and leaves Ar usable"):
+    // Both entry points acquire six native objects before they can call OpenCV. They used to be plain vals
+    // in front of the try/finally that freed them, so a throw from the fourth left the first three with no
+    // owner; each is now held by Managed.use, whose finally frees whatever was acquired before the throw.
+    //
+    // The freeing itself is not observable from here — those Mats never escape the method, so there is no
+    // handle to check dataAddr() on, and this test does pass against the old shape. What it does pin is the
+    // half of the contract that is observable and that a botched conversion breaks: the caller's exception
+    // arrives unmasked (a release that threw on the way out would replace it, which is how a wrongly nested
+    // use block usually shows up) and an aborted call leaves nothing behind that stops the next one.
+    val scene = markerScene()
+    try
+      val intr = Intrinsics.approx(scene.size)
+      val broken = intr.copy(distortion = ExplodingDistortion())
+      val marker = scene.arucoMarkers().head
+      assert(
+        intercept[RuntimeException](Ar.estimatePose(marker, 0.1, broken)) eq Boom,
+        "estimatePose must let the original failure through, not one raised while unwinding"
+      )
+      val pose = Ar.estimatePose(marker, 0.1, intr).get
+      assert(
+        intercept[RuntimeException](Ar.project(Ar.cubeCorners(0.1), pose, broken)) eq Boom,
+        "project must let the original failure through, not one raised while unwinding"
+      )
+      assertEquals(Ar.project(Ar.cubeCorners(0.1), pose, intr).size, 8, "an aborted call wedged the next one")
+    finally scene.close()

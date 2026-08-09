@@ -80,6 +80,24 @@ class OpsTest extends munit.FunSuite:
       val e = intercept[IllegalArgumentException](colour.gaussianBlur(Size(4, 4), 1.0))
       assert(e.getMessage.contains("odd"), e.getMessage)
 
+  test("every imgproc filter rejects the border mode OpenCV's filter engine aborts on"):
+    withImages: (colour, grey) =>
+      // BorderType.Wrap reaches cv::FilterEngine::init, which asserts columnBorderType != BORDER_WRAP.
+      // The native behaviour is depth-dependent — GaussianBlur on CV_8U takes a SIMD path that skips the
+      // assertion and silently ignores the mode, CV_32F aborts — so a call developed against an 8-bit
+      // frame crashes the first time it meets a float one. All four filters must fail here instead, and
+      // identically, whatever the source depth. `border` and `rotated` are deliberately not in this list:
+      // copyMakeBorder and warpAffine do honour Wrap.
+      val calls: Seq[(String, () => Managed[Mat])] = Seq(
+        "gaussianBlur" -> (() => colour.gaussianBlur(Size(5, 5), 1.5, border = BorderType.Wrap)),
+        "boxBlur" -> (() => colour.boxBlur(Size(3, 3), border = BorderType.Wrap)),
+        "sobel" -> (() => grey.sobel(dx = 1, dy = 0, border = BorderType.Wrap)),
+        "laplacian" -> (() => grey.laplacian(border = BorderType.Wrap))
+      )
+      calls.foreach: (op, call) =>
+        val e = intercept[IllegalArgumentException](call())
+        assert(e.getMessage.contains(op), s"the failure must name $op, got: ${e.getMessage}")
+
   test("boxBlur keeps size and type"):
     withImages: (colour, _) =>
       scoped: use =>
@@ -177,12 +195,36 @@ class OpsTest extends munit.FunSuite:
     withImages: (colour, _) =>
       intercept[IllegalArgumentException](colour.resize(Size(0, 0)))
 
+  test("resize rejects a target that is positive as a Double but empty once truncated"):
+    withImages: (colour, _) =>
+      // `Size(w * 0.005, h * 0.005)` is the shape of every fit-to-box computation. Both extents are
+      // above zero, so the old guard passed them straight to OpenCV, which truncates them to 0x0 and
+      // aborts with `inv_scale_x > 0` — a native error where this file promises IllegalArgumentException.
+      val e = intercept[IllegalArgumentException](colour.resize(Size(0.5, 0.5)))
+      assert(e.getMessage.contains("1x1"), e.getMessage)
+
   test("scaled applies independent x and y factors"):
     withImages: (colour, _) =>
       scoped: use =>
         val s = use(colour.scaled(0.5, 0.25))
         assertEquals(s.get.cols(), Width / 2)
         assertEquals(s.get.rows(), Height / 4)
+
+  test("scaled rejects factors that round this image away entirely"):
+    withImages: (colour, _) =>
+      // 120 * 0.004 = 0.48, which OpenCV rounds to 0 rows and then rejects with `!dsize.empty()`.
+      // The factors themselves are positive, so only a check against the receiver's own size catches it.
+      val e = intercept[IllegalArgumentException](colour.scaled(0.004, 0.004))
+      assert(e.getMessage.contains("empty"), e.getMessage)
+
+  test("scaled still accepts the smallest factors OpenCV itself accepts"):
+    withImages: (colour, _) =>
+      // The guard must mirror OpenCV's round-half-to-even, not truncate: 160 * 0.006 = 0.96 and
+      // 120 * 0.006 = 0.72 both round up to 1, so this is a legal 1x1 result that `.toInt` would reject.
+      scoped: use =>
+        val tiny = use(colour.scaled(0.006, 0.006))
+        assertEquals(tiny.get.cols(), 1)
+        assertEquals(tiny.get.rows(), 1)
 
   test("convertScaleAbs turns a signed derivative back into 8-bit unsigned"):
     withImages: (_, grey) =>
@@ -192,6 +234,43 @@ class OpsTest extends munit.FunSuite:
         assertEquals(abs.get.`type`(), CvType.CV_8UC1)
         assertEquals(abs.get.size(), grey.size())
         assertOwnership(dx.get, abs)
+
+  /** A float image with a single hot pixel — a stand-in for a disparity map or a raw filter response, the
+    * inputs `normalize` exists to make displayable. Its range is exactly [0, 1000], so where each value has
+    * to land after a rescale is arithmetic rather than a guess.
+    */
+  private def floatFixture(): Mat =
+    val m = Mat(Height, Width, CvType.CV_32FC1, cv.Scalar(0))
+    val _ = m.put(0, 0, 1000.0)
+    m
+
+  test("normalize brings a float image down to 8-bit, which is what makes it displayable"):
+    scoped: use =>
+      val raw = use(Managed(floatFixture()))
+      val stretched = use(raw.get.normalize())
+      assertEquals(stretched.get.`type`(), CvType.CV_8UC1, "a CV_32F source must come back as CV_8U")
+      assertEquals(stretched.get.get(0, 0)(0), 255.0, "the maximum must land at the top of the range")
+      assertEquals(stretched.get.get(1, 1)(0), 0.0, "the minimum must land at the bottom")
+      // The remedy `toBufferedImage`'s own error message prescribes has to work afterwards: applyColorMap
+      // takes CV_8UC1/CV_8UC3 only and aborted in native code on the CV_32F this used to hand back.
+      val heat = use(stretched.get.colorMap(Colormap.Jet))
+      assertEquals(heat.get.`type`(), CvType.CV_8UC3)
+      assertOwnership(raw.get, stretched)
+
+  test("normalize keeps the source depth when explicitly asked to"):
+    scoped: use =>
+      val raw = use(Managed(floatFixture()))
+      val unitRange = use(raw.get.normalize(0, 1, OutputDepth.SameAsSource))
+      assertEquals(unitRange.get.`type`(), CvType.CV_32FC1, "SameAsSource keeps a float stretch in float")
+      assertEquals(unitRange.get.get(0, 0)(0), 1.0, "[0, 1] must survive in full precision, not as 0 and 1")
+
+  test("normalize leaves an already-8-bit image at its own type"):
+    withImages: (colour, _) =>
+      scoped: use =>
+        val stretched = use(colour.normalize())
+        assertEquals(stretched.get.`type`(), colour.`type`(), "the 8-bit default must not change the type")
+        assertEquals(stretched.get.size(), colour.size())
+        assertOwnership(colour, stretched)
 
   test("addWeighted borrows both operands"):
     withImages: (colour, _) =>

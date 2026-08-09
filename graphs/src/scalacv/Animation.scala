@@ -10,7 +10,8 @@ import org.opencv.imgcodecs.{Animation as CvAnimation, Imgcodecs}
   * data animation, a synthetic test clip — all fall out of the same graphics vocabulary.
   *
   * {{{
-  * Animation.record("spin.mp4", frames = 60, width = 320, height = 240) { i =>
+  * // `.avi`, not `.mp4`: the default codec is MJPG, which opens only in an AVI container — see [[Codec.Mjpg]].
+  * Animation.record("spin.avi", frames = 60, width = 320, height = 240) { i =>
   *   Picture.regularPolygon(Point(160, 120), sides = 5, radius = 80, rotation = i * 6)
   *     .strokeColor(Color.hsl(i * 6, 0.8, 0.6)).strokeWidth(3)
   * }
@@ -31,6 +32,12 @@ object Animation:
   /** Renders `frames` frames — each the picture `frame(i)` drawn on a `width`×`height` `background` canvas —
     * and writes them to `path` as a video at `fps`. Returns the number of frames written, or a `Left` if the
     * recorder cannot open or a frame fails to encode.
+    *
+    * @param codec
+    *   defaults to [[Codec.Mjpg]], the one codec videoio can always write, because it is served by the
+    *   built-in MJPEG writer rather than by an FFmpeg plugin the natives may not ship. That makes `path`'s
+    *   extension part of the contract: MJPG opens only in an `.avi`, so a `.mp4` fails to open even though
+    *   the codec itself is present. Pass [[Codec.Mp4v]] with an `.mp4` only on a build you know has FFmpeg.
     */
   def record(
       path: String,
@@ -39,7 +46,7 @@ object Animation:
       height: Int,
       fps: Double = 30,
       background: Color = Color.Black,
-      codec: Codec = Codec.Mp4v
+      codec: Codec = Codec.Mjpg
   )(frame: Int => Picture): Either[CvError, Long] =
     require(frames >= 0, s"frames cannot be negative, got $frames")
     Recorder
@@ -65,13 +72,63 @@ object Animation:
               case cv: CvError => Left(cv)
               case other => throw other
 
-  /** Renders `frames` frames as owned [[Image]]s (each `frame(i)` on a fresh canvas) — for feeding elsewhere
-    * than a file. **Each image is yours to close.**
+  /** Renders `count` frames as owned [[Image]]s (each `frame(i)` on a fresh `width`×`height` `background`
+    * canvas) — for feeding elsewhere than a file. **Each image is yours to close.**
+    *
+    * These are live resources in a bare collection, which the type cannot warn you about: prefer [[foreach]],
+    * which closes each canvas for you, unless you specifically need to hold the frames past a scope. All
+    * `count` canvases are alive at once here, so the peak native cost is `count × width × height × 3` bytes —
+    * about 6 MB per frame at 1080p.
+    *
+    * Strict, and deliberately not a `LazyList`: a lazy sequence memoises, so every canvas it has ever yielded
+    * stays reachable behind ~16 bytes of JVM heap — no GC pressure at all against a multi-megabyte native
+    * buffer — and a second traversal after the caller has closed them, which is the whole reason to reach for
+    * a re-traversable lazy type, hands back spent handles that throw. [[Video]] spells the argument out.
+    *
+    * If `frame` throws partway through, the canvases already rendered are closed before the exception
+    * propagates: the `Seq` that would have carried them never reaches the caller, so nobody else can.
     */
   def frames(count: Int, width: Int, height: Int, background: Color = Color.Black)(
       frame: Int => Picture
-  ): LazyList[Image] =
-    LazyList.range(0, count).map(i => frame(i).render(width, height, background))
+  ): Seq[Image] =
+    require(count >= 0, s"count cannot be negative, got $count")
+    // Accumulated in a buffer under a catch rather than by `List.tabulate`: tabulate has nowhere to put the
+    // canvases it already built when element k throws, so they leak. Same argument as `gif` below.
+    val rendered = scala.collection.mutable.ArrayBuffer.empty[Image]
+    try
+      var i = 0
+      while i < count do
+        rendered += frame(i).render(width, height, background)
+        i += 1
+      rendered.toList
+    catch
+      case e =>
+        rendered.foreach(_.close())
+        throw e
+
+  /** Renders `count` frames one at a time and hands each to `f` as an owned [[Image]] that is **closed for
+    * you** when `f` returns — on success, on failure, and on exception.
+    *
+    * This is the streaming form to reach for, and the one to use for anything long: exactly one canvas is
+    * live at a time, so the peak native cost is a single frame however large `count` is. [[frames]] is the
+    * counterpart for when the frames must outlive a scope, at `count` canvases held at once.
+    *
+    * {{{
+    * Animation.foreach(900, 1920, 1080)(myPicture) { canvas =>
+    *   recorder.write(canvas).fold(e => throw e, _ => ())
+    * }
+    * }}}
+    */
+  def foreach(count: Int, width: Int, height: Int, background: Color = Color.Black)(
+      frame: Int => Picture
+  )(f: Image => Unit): Unit =
+    require(count >= 0, s"count cannot be negative, got $count")
+    var i = 0
+    while i < count do
+      val canvas = frame(i).render(width, height, background)
+      try f(canvas)
+      finally canvas.close()
+      i += 1
 
   /** Renders `frames` frames and writes them to `path` as an **animated GIF** at `fps` — the shareable format
     * for a short loop (a demo, a rendered chart animation). `loop` true repeats forever. Returns the number

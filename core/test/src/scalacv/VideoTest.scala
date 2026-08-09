@@ -207,6 +207,39 @@ class VideoTest extends munit.FunSuite:
           val count = Video.frames(c)(_.size)
           assertEquals(count, FrameCount)
 
+  test("a file source is not warmed up, so its very first frame is still frame 0"):
+    // The per-source default split is the whole point of warmupFrames: a file has no auto-exposure loop
+    // to converge, so discarding frames there would silently skip content the caller asked for. This is
+    // the guard against someone "simplifying" the two defaults into one non-zero number.
+    val file = writeFixtureVideo()
+    withFixtureCapture(file): capture =>
+      Video.frames(capture)(frames => assertIsFrame(frames.next(), 0))
+
+  test("an explicit warmupFrames discards exactly that many frames before the first read"):
+    // Pinned on a file rather than a camera because CI has no camera; the discard loop is the same code
+    // either way, and the fixture's per-frame marker makes "which frame arrived first" observable.
+    val file = writeFixtureVideo()
+    val Warmup = 3
+    Video.open(file.toString, CaptureOptions(warmupFrames = Some(Warmup))) match
+      case Left(e) => fail(s"warmupFrames broke a local open: $e")
+      case Right(capture) =>
+        capture.use: c =>
+          Video.frames(c): frames =>
+            assertIsFrame(frames.next(), Warmup)
+            // and the rest of the file is still there, three frames shorter
+            assertEquals(1 + frames.size, FrameCount - Warmup)
+
+  test("a warm-up longer than the source stops at the end instead of spinning"):
+    // grab() returns false past the last frame; the loop has to break on that rather than run the full
+    // count, or a short source would cost `warmup` pointless native calls.
+    val file = writeFixtureVideo()
+    Video.open(file.toString, CaptureOptions(warmupFrames = Some(FrameCount * 10))) match
+      case Left(e) => fail(s"an over-long warm-up should not fail the open: $e")
+      case Right(capture) => capture.use(c => assertEquals(Video.frames(c)(_.size), 0))
+
+  test("a negative warmupFrames is a programmer error"):
+    intercept[IllegalArgumentException](CaptureOptions(warmupFrames = Some(-1)))
+
   test("info reports the geometry the file was written with"):
     val file = writeFixtureVideo()
     withFixtureCapture(file): capture =>

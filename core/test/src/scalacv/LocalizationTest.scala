@@ -55,6 +55,35 @@ class LocalizationTest extends munit.FunSuite:
       None
     )
 
+  /** Runs `locate` on an exact, noise-free projection of `points`, so any `None` is the solver refusing the
+    * configuration rather than a fit that failed to converge.
+    */
+  private def locateExact(points: Seq[(Double, Double, Double)]): Option[CameraPose] =
+    Localizer.locate(points, points.map((x, y, z) => project(x, y, z)), Intrinsics(focal, focal, cx, cy))
+
+  test("localizer answers None, not a native exception, on four or five non-coplanar correspondences"):
+    // The default iterative solver initialises with a direct linear transform that aborts in native code
+    // ("DLT algorithm needs at least 6 points") rather than reporting failure, so before the Cv.attempt
+    // wrapper these two calls threw org.opencv.core.CvException straight through the Option return type.
+    assertEquals(locateExact(world.take(4)), None)
+    assertEquals(locateExact(world.take(5)), None)
+
+  test("localizer still solves four coplanar correspondences"):
+    // A single flat surface (constant Z) is the planar case OpenCV solves from four points, so the fix must
+    // not have turned the whole 4-point band into None.
+    val planar = Seq((-1.0, -1.0, 6.0), (1.0, -1.0, 6.0), (-1.0, 1.0, 6.0), (1.0, 1.0, 6.0))
+    locateExact(planar) match
+      case None => fail("solvePnP should solve four coplanar correspondences")
+      case Some(pose) =>
+        assert(
+          pose.rotation(0)(0) > 0.99 && pose.rotation(1)(1) > 0.99 && pose.rotation(2)(2) > 0.99,
+          s"expected identity rotation, got ${pose.rotation}"
+        )
+        assert(
+          pose.translation.forall(v => math.abs(v) < 0.05),
+          s"expected zero translation, got ${pose.translation}"
+        )
+
   // -- Navigator -----------------------------------------------------------------------------------
 
   /** A disparity map whose left/centre/right thirds have the given near-ness (0..255). */
