@@ -125,7 +125,13 @@ export default function MorphText({
         {text}
         <i className={styles.caret} />
       </span>
-      <span className={styles.srOnly}>{words.join(', ')}</span>
+      {/* What assistive technology actually announces. The animated copy above is aria-hidden and
+          the width-reserving copy is `visibility: hidden`, so this span alone supplies the
+          heading's accessible name — which means it has to read as a sentence, not as a list
+          dump. "edges, contours … and depth" completes "Teach the JVM to see …" grammatically. */}
+      <span className={styles.srOnly}>
+        {words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words.at(-1)}` : words[0]}
+      </span>
     </span>
   );
 }

@@ -572,15 +572,35 @@ export default function VisionPipeline(): React.ReactElement {
       ctx.drawImage(buf, 0, y0, W, h, 0, y0 * scale, canvas.width, h * scale);
     };
 
+    /**
+     * The one frame drawn when motion is suppressed: the final stage, with every target acquired.
+     * It is the most informative single picture of the sequence.
+     *
+     * `renderStage` is a pure function of its arguments, so a fixed `t` gives a fixed composition —
+     * which is what makes it safe to call this again after a resize.
+     */
+    const drawStatic = () => {
+      renderStage('detect', 6.2, 1);
+      blitBand(0, H);
+    };
+
     const resize = () => {
       const rect = wrap.getBoundingClientRect();
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const cssW = Math.max(1, rect.width);
       const cssH = cssW * (H / W);
       canvas.style.height = `${cssH}px`;
+      // Assigning width/height RESETS the canvas — it clears the bitmap and the context state.
+      // Harmless while the animation loop is running, because the next frame repaints in ~33ms.
+      // Under reduced motion there is no next frame, so the static picture has to be redrawn here
+      // or the panel is left blank: `ro.observe` fires once on registration, immediately after the
+      // initial draw, which is exactly the case that broke.
       canvas.width = Math.round(cssW * dpr);
       canvas.height = Math.round(cssH * dpr);
       ctx.imageSmoothingEnabled = true;
+      if (reduced) {
+        drawStatic();
+      }
     };
 
     resize();
@@ -629,10 +649,8 @@ export default function VisionPipeline(): React.ReactElement {
     };
 
     if (reduced) {
-      // One frame, held. `renderStage` is deterministic in `t`, so a fixed value gives a composed
-      // picture with everything detected — the most informative single frame of the sequence.
-      renderStage('detect', 6.2, 1);
-      blitBand(0, H);
+      // One frame, held. The draw itself already happened inside `resize()` above, and will happen
+      // again on any later resize; all that is left is to point the caption at the stage on screen.
       setStageIndex(STAGES.length - 1);
       return () => {
         observer?.disconnect();
