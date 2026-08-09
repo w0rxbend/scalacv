@@ -115,20 +115,16 @@ final class FaceRecognizer private (private val handle: Managed[FaceRecognizerSF
     * image must be the BGR frame the face was detected in.
     */
   def embed(image: Image, face: Face): FaceEmbedding =
-    val row = FaceRecognizer.faceRow(face)
-    val aligned = Mat()
-    val feature = Mat()
-    try
+    Managed.scope: own =>
+      val row = own(FaceRecognizer.faceRow(face))
+      val aligned = own(Mat())
+      val feature = own(Mat())
       Cv.orThrow("FaceRecognizerSF.alignCrop")(handle.get.alignCrop(image.mat, row, aligned))
       Cv.orThrow("FaceRecognizerSF.feature")(handle.get.feature(aligned, feature))
       // feature() reuses an internal buffer across calls, so copy the row out before it is overwritten.
       val out = Array.ofDim[Float](feature.cols)
       feature.get(0, 0, out)
       FaceEmbedding(out.toVector)
-    finally
-      row.release()
-      aligned.release()
-      feature.release()
 
   def close(): Unit = handle.release()
 

@@ -32,16 +32,13 @@ object OpticalFlow:
   ): Seq[Point] =
     require(maxPoints > 0, s"maxPoints must be positive, got $maxPoints")
     require(quality > 0, s"quality must be positive, got $quality")
-    Mats
-      .grayscale(image.mat)
-      .use: gray =>
-        val corners = MatOfPoint()
-        try
-          Cv.orThrow("goodFeaturesToTrack")(
-            Imgproc.goodFeaturesToTrack(gray, corners, maxPoints, quality, minDistance)
-          )
-          corners.toArray.map(Point.from).toSeq
-        finally corners.release()
+    Managed.scope: own =>
+      val gray = own.adopt(Mats.grayscale(image.mat))
+      val corners = own(MatOfPoint())
+      Cv.orThrow("goodFeaturesToTrack")(
+        Imgproc.goodFeaturesToTrack(gray, corners, maxPoints, quality, minDistance)
+      )
+      corners.toArray.map(Point.from).toSeq
 
   /** Follows `points` from `previous` to `current` with pyramidal Lucas–Kanade. The returned [[Track]]s are
     * in the same order as `points`; a point the tracker lost has `found == false` (ignore its `to`).
@@ -49,30 +46,21 @@ object OpticalFlow:
   def track(previous: Image, current: Image, points: Seq[Point]): Seq[Track] =
     if points.isEmpty then Seq.empty
     else
-      Mats
-        .grayscale(previous.mat)
-        .use: prevGray =>
-          Mats
-            .grayscale(current.mat)
-            .use: currentGray =>
-              val prevPts = MatOfPoint2f(points.map(p => CvPoint(p.x, p.y))*)
-              val nextPts = MatOfPoint2f()
-              val status = MatOfByte()
-              val err = MatOfFloat()
-              try
-                Cv.orThrow("calcOpticalFlowPyrLK")(
-                  org.opencv.video.Video
-                    .calcOpticalFlowPyrLK(prevGray, currentGray, prevPts, nextPts, status, err)
-                )
-                val next = nextPts.toArray
-                val kept = status.toArray
-                points.indices.map: i =>
-                  Track(points(i), Point(next(i).x, next(i).y), kept(i) != 0)
-              finally
-                prevPts.release()
-                nextPts.release()
-                status.release()
-                err.release()
+      Managed.scope: own =>
+        val prevGray = own.adopt(Mats.grayscale(previous.mat))
+        val currentGray = own.adopt(Mats.grayscale(current.mat))
+        val prevPts = own(MatOfPoint2f(points.map(p => CvPoint(p.x, p.y))*))
+        val nextPts = own(MatOfPoint2f())
+        val status = own(MatOfByte())
+        // `err` carries the per-point matching error, which this API does not expose; the tracker still
+        // needs somewhere to write it.
+        val err = own(MatOfFloat())
+        Cv.orThrow("calcOpticalFlowPyrLK")(
+          org.opencv.video.Video.calcOpticalFlowPyrLK(prevGray, currentGray, prevPts, nextPts, status, err)
+        )
+        val next = nextPts.toArray
+        val kept = status.toArray
+        points.indices.map(i => Track(points(i), Point(next(i).x, next(i).y), kept(i) != 0))
 
   /** Seeds good features on `previous` and tracks them into `current` — the one-call form. */
   def track(previous: Image, current: Image): Seq[Track] =

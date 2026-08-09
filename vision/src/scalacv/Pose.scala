@@ -248,37 +248,37 @@ object HeadPose:
     * uncalibrated guess use the [[Size]] overload.
     */
   def estimate(face: Face, intrinsics: Intrinsics): Option[HeadPose] =
-    // Every native Mat is acquired through Managed.use, so a throw from any constructor frees the ones
-    // already allocated — the plain val-before-try form leaked them. The whole solvePnP block runs in
-    // Cv.attempt: degenerate landmarks can make OpenCV *throw* rather than return `ok = false`, and the
-    // documented contract here is `None` on failure, not a raw CvException.
-    Managed.use(MatOfPoint3f(model*)): objectPoints =>
-      Managed.use(MatOfPoint2f(face.landmarks.map(p => CvPoint(p.x, p.y))*)): imagePoints =>
-        Managed.use(intrinsics.cameraMatrix): camera =>
-          Managed.use(intrinsics.distCoeffs): distortion =>
-            Managed.use(Mat()): rvec =>
-              Managed.use(Mat()): tvec =>
-                Cv.attempt("solvePnP") {
-                  val ok = org.opencv.calib3d.Calib3d.solvePnP(
-                    objectPoints,
-                    imagePoints,
-                    camera,
-                    distortion,
-                    rvec,
-                    tvec,
-                    false,
-                    org.opencv.calib3d.Calib3d.SOLVEPNP_EPNP
-                  )
-                  if !ok then None
-                  else
-                    Managed.use(Mat()): rotation =>
-                      org.opencv.calib3d.Calib3d.Rodrigues(rvec, rotation)
-                      Managed.use(Mat()): mtxR =>
-                        Managed.use(Mat()): mtxQ =>
-                          // RQDecomp3x3 returns the Euler angles (degrees) about x, y, z.
-                          val euler = org.opencv.calib3d.Calib3d.RQDecomp3x3(rotation, mtxR, mtxQ)
-                          Some(HeadPose(yaw = euler(1), pitch = euler(0), roll = euler(2)))
-                }.getOrElse(None)
+    // `Managed.scope` owns every Mat below: each is registered as it is built, so a throw from a later
+    // constructor frees the earlier ones. The whole solvePnP block runs in Cv.attempt: degenerate landmarks
+    // can make OpenCV *throw* rather than return `ok = false`, and the documented contract here is `None` on
+    // failure, not a raw CvException.
+    Managed.scope: own =>
+      val objectPoints = own(MatOfPoint3f(model*))
+      val imagePoints = own(MatOfPoint2f(face.landmarks.map(p => CvPoint(p.x, p.y))*))
+      val camera = own(intrinsics.cameraMatrix)
+      val distortion = own(intrinsics.distCoeffs)
+      val rvec = own(Mat())
+      val tvec = own(Mat())
+      Cv.attempt("solvePnP") {
+        val ok = org.opencv.calib3d.Calib3d.solvePnP(
+          objectPoints,
+          imagePoints,
+          camera,
+          distortion,
+          rvec,
+          tvec,
+          false,
+          org.opencv.calib3d.Calib3d.SOLVEPNP_EPNP
+        )
+        if !ok then None
+        else
+          val rotation = own(Mat())
+          org.opencv.calib3d.Calib3d.Rodrigues(rvec, rotation)
+          // RQDecomp3x3 returns the Euler angles (degrees) about x, y, z. mtxR and mtxQ are the
+          // decomposition's factors, which this only needs as somewhere for OpenCV to write.
+          val euler = org.opencv.calib3d.Calib3d.RQDecomp3x3(rotation, own(Mat()), own(Mat()))
+          Some(HeadPose(yaw = euler(1), pitch = euler(0), roll = euler(2)))
+      }.getOrElse(None)
 
   /** Estimates the head orientation for `face` in an image of `imageSize`, using an uncalibrated pinhole
     * guess — focal length ≈ image width, principal point at the centre, no lens distortion. Enough for

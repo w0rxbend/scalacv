@@ -1,7 +1,5 @@
 package scalacv
 
-import scala.util.Using
-
 import org.opencv.core.{Core, CvType, Mat, Scalar as CvScalar}
 import org.opencv.dnn.Net
 import org.opencv.imgproc.Imgproc
@@ -34,36 +32,33 @@ object BackgroundEffect:
     // failing C++ expression; what it cannot say is which scalacv call it came from. A `CvError` raised
     // further in (by `Mats.produce` at the end) is a `CvError` already and passes through unchanged.
     Cv.orThrow("alphaBlend"):
-      Using
-        .Manager: use =>
-          // A feathered soft mask, then a 3-channel float alpha in [0, 1] and its complement.
-          val side = (feather * 2 + 1).toDouble
-          val soft =
-            if feather > 0 then use(mask.gaussianBlur(Size(side, side))).get
-            else use(Managed(mask.clone())).get
-          val alpha1 = use(Managed(Mat())).get
-          soft.convertTo(alpha1, CvType.CV_32F, 1.0 / 255.0)
-          val alpha3 = use(Managed(Mat())).get
-          Imgproc.cvtColor(alpha1, alpha3, Imgproc.COLOR_GRAY2BGR)
-          val ones = use(Managed(Mat(alpha3.size(), CvType.CV_32FC3, CvScalar.all(1.0)))).get
-          val inv3 = use(Managed(Mat())).get
-          Core.subtract(ones, alpha3, inv3)
-          // fg*alpha + bg*(1-alpha), in float, back to 8-bit.
-          val fgF = use(Managed(Mat())).get
-          fg.convertTo(fgF, CvType.CV_32F)
-          val bgF = use(Managed(Mat())).get
-          bg.convertTo(bgF, CvType.CV_32F)
-          val fgP = use(Managed(Mat())).get
-          Core.multiply(fgF, alpha3, fgP)
-          val bgP = use(Managed(Mat())).get
-          Core.multiply(bgF, inv3, bgP)
-          val sumF = use(Managed(Mat())).get
-          Core.add(fgP, bgP, sumF)
-          // The result escapes the Using.Manager alive, so it must be allocated under its own guard:
-          // if convertTo throws between `Mat()` and the `Managed` wrap, `out` would otherwise be a bare
-          // native buffer no `use` registered and nobody frees. `Mats.produce` releases it on any throw.
-          Mats.produce("alphaBlend")(sumF.convertTo(_, CvType.CV_8U))
-        .get
+      Managed.scope: own =>
+        // A feathered soft mask, then a 3-channel float alpha in [0, 1] and its complement.
+        val side = (feather * 2 + 1).toDouble
+        val soft =
+          own.adopt(if feather > 0 then mask.gaussianBlur(Size(side, side)) else Managed(mask.clone()))
+        val alpha1 = own(Mat())
+        soft.convertTo(alpha1, CvType.CV_32F, 1.0 / 255.0)
+        val alpha3 = own(Mat())
+        Imgproc.cvtColor(alpha1, alpha3, Imgproc.COLOR_GRAY2BGR)
+        val ones = own(Mat(alpha3.size(), CvType.CV_32FC3, CvScalar.all(1.0)))
+        val inv3 = own(Mat())
+        Core.subtract(ones, alpha3, inv3)
+        // fg*alpha + bg*(1-alpha), in float, back to 8-bit.
+        val fgF = own(Mat())
+        fg.convertTo(fgF, CvType.CV_32F)
+        val bgF = own(Mat())
+        bg.convertTo(bgF, CvType.CV_32F)
+        val fgP = own(Mat())
+        Core.multiply(fgF, alpha3, fgP)
+        val bgP = own(Mat())
+        Core.multiply(bgF, inv3, bgP)
+        val sumF = own(Mat())
+        Core.add(fgP, bgP, sumF)
+        // The result escapes the scope alive, so it is the one Mat here that must NOT be owned by it:
+        // `Mats.produce` allocates it, releases it if `convertTo` throws, and hands the caller the only
+        // reference. Registering it with `own` as well would free the Mat this method returns.
+        Mats.produce("alphaBlend")(sumF.convertTo(_, CvType.CV_8U))
 
   /** Blurs the background behind `mask`, keeping the person sharp. Borrows `image` and `mask`. */
   private[scalacv] def blur(image: Mat, mask: Mat, strength: Int, feather: Int): Managed[Mat] =
