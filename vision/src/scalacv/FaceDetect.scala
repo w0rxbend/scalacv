@@ -1,10 +1,6 @@
 package scalacv
 
-import java.net.URI
-import java.net.http.{HttpClient, HttpRequest, HttpResponse}
-import java.nio.file.{Files, Path, StandardCopyOption}
-import java.security.MessageDigest
-import java.time.Duration
+import java.nio.file.{Files, Path}
 
 import org.opencv.core.{CvType, Mat, Size as CvSize}
 import org.opencv.objdetect.FaceDetectorYN
@@ -173,10 +169,8 @@ object FaceDetect:
   /** This detector's model as a [[ModelSpec]] for the generic [[Models.fetch]] downloader — the registry form
     * of [[downloadModel]], carrying the same file name, mirrors and pinned checksum.
     */
-  val modelSpec: ModelSpec = ModelSpec(ModelFileName, ModelUrls, ModelSha256)
-
-  private val ConnectTimeout = Duration.ofSeconds(20)
-  private val RequestTimeout = Duration.ofSeconds(120)
+  val modelSpec: ModelSpec =
+    ModelSpec(ModelFileName, ModelUrls, ModelSha256, sizeBytes = Some(ModelSizeBytes))
 
   /** Builds a detector from an ONNX model on disk.
     *
@@ -319,100 +313,19 @@ object FaceDetect:
     * Idempotent: if `into/`[[ModelFileName]] is already there and already hashes correctly, it is returned
     * without touching the network. Call it freely at start-up.
     *
+    * This is the named, discoverable form of `Models.fetch(FaceDetect.modelSpec, into)` and nothing more —
+    * the two were separate implementations of the same download-verify-move dance until they were merged,
+    * which is how one of them ended up with a bug the other had already fixed. If you are fetching several
+    * models, prefer [[Models.fetch]] and a list of specs.
+    *
     * @param into
     *   a **directory**, created if absent. The file name is fixed — that is what makes the check above
     *   possible.
     * @return
     *   the path to the verified model, or a `Left` describing which stage failed: the directory, every URL
-    *   tried, or the checksum.
+    *   tried, the size, or the checksum.
     */
-  def downloadModel(into: Path): Either[CvError, Path] =
-    val target = into.resolve(ModelFileName)
-    if Files.isRegularFile(target) && verified(target).isRight then Right(target)
-    else
-      try
-        Files.createDirectories(into)
-        fetchFirst(target)
-      catch
-        case e: Exception =>
-          Left(CvError.LoadFailed(into.toString, s"could not create the download directory: $e"))
-
-  /** Tries each mirror in turn, keeping the first that downloads *and* verifies. */
-  private def fetchFirst(target: Path): Either[CvError, Path] =
-    val client = HttpClient.newBuilder
-      .connectTimeout(ConnectTimeout)
-      .followRedirects(HttpClient.Redirect.NORMAL) // LFS media URLs redirect to object storage
-      .build()
-    val failures = List.newBuilder[String]
-    val ok = ModelUrls.iterator
-      .map(url => url -> fetchOne(client, url, target))
-      .find:
-        case (url, Left(e)) => failures += s"$url: ${e.getMessage}"; false
-        case _ => true
-      .map(_._2)
-    ok.getOrElse(
-      Left(
-        CvError.LoadFailed(
-          ModelFileName,
-          s"could not be downloaded from any known mirror.\n  ${failures.result().mkString("\n  ")}"
-        )
-      )
-    )
-
-  /** Downloads one URL to a sibling temp file, verifies it, and only then moves it onto `target`. */
-  private def fetchOne(client: HttpClient, url: String, target: Path): Either[CvError, Path] =
-    val tmp = Files.createTempFile(target.getParent, ".yunet-", ".part")
-    try
-      val request = HttpRequest.newBuilder
-        .uri(URI.create(url))
-        .timeout(RequestTimeout)
-        .GET()
-        .build()
-      // ofFile writes the body whatever the status is, so a 404's HTML page lands in tmp too. Hence the
-      // explicit status check before anything else looks at those bytes.
-      val response = client.send(request, HttpResponse.BodyHandlers.ofFile(tmp))
-      if response.statusCode != 200 then Left(CvError.LoadFailed(url, s"HTTP ${response.statusCode}"))
-      else
-        verified(tmp).map: _ =>
-          Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING)
-          target
-    catch case e: Exception => Left(CvError.LoadFailed(url, s"${e.getClass.getSimpleName}: ${e.getMessage}"))
-    finally Files.deleteIfExists(tmp): Unit
-
-  /** Size then digest, so a truncated download or an error page is reported as what it is. */
-  private def verified(file: Path): Either[CvError, Path] =
-    val size = Files.size(file)
-    if size != ModelSizeBytes then
-      Left(
-        CvError.LoadFailed(
-          file.toString,
-          s"expected $ModelSizeBytes bytes for $ModelFileName but got $size — the download is truncated, " +
-            "or the server answered with something that is not the model"
-        )
-      )
-    else
-      val actual = sha256(file)
-      if actual == ModelSha256 then Right(file)
-      else
-        Left(
-          CvError.LoadFailed(
-            file.toString,
-            s"SHA-256 mismatch for $ModelFileName: expected $ModelSha256, got $actual. Refusing to load " +
-              "an unverified model."
-          )
-        )
-
-  private def sha256(file: Path): String =
-    val digest = MessageDigest.getInstance("SHA-256")
-    val in = Files.newInputStream(file)
-    try
-      val buf = Array.ofDim[Byte](64 * 1024)
-      var n = in.read(buf)
-      while n > 0 do
-        digest.update(buf, 0, n)
-        n = in.read(buf)
-    finally in.close()
-    digest.digest().map(b => f"$b%02x").mkString
+  def downloadModel(into: Path): Either[CvError, Path] = Models.fetch(modelSpec, into)
 
 /** The high-level face verbs on [[Image]] — extension methods so YuNet detection lives beside [[FaceDetect]]
   * rather than in the image class. `import scalacv.*` gives `image.faces(detector)` and `image.markFaces(…)`.

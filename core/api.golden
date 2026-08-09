@@ -519,10 +519,11 @@ final class scalacv.Managed<A>
 final class scalacv.ModelSpec
   extends java.lang.Object
   implements java.io.Serializable, scala.Product
-  def <init>(java.lang.String, scala.collection.immutable.Seq<java.lang.String>, scala.Option<java.lang.String>): void
+  def <init>(java.lang.String, scala.collection.immutable.Seq<java.lang.String>, scala.Option<java.lang.String>, scala.Option<java.lang.Object>): void
   def _1(): java.lang.String
   def _2(): scala.collection.immutable.Seq<java.lang.String>
   def _3(): scala.Option<java.lang.String>
+  def _4(): scala.Option<java.lang.Object>
   def canEqual(java.lang.Object): boolean
   def equals(java.lang.Object): boolean
   def fileName(): java.lang.String
@@ -532,6 +533,7 @@ final class scalacv.ModelSpec
   def productElementName(int): java.lang.String
   def productPrefix(): java.lang.String
   def sha256(): scala.Option<java.lang.String>
+  def sizeBytes(): scala.Option<java.lang.Object>
   def toString(): java.lang.String
   def urls(): scala.collection.immutable.Seq<java.lang.String>
 final class scalacv.Point
@@ -1279,7 +1281,8 @@ object scalacv.Mats
 object scalacv.ModelSpec
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
-  def apply(java.lang.String, scala.collection.immutable.Seq<java.lang.String>, java.lang.String): scalacv.ModelSpec
+  def apply$default$4(): scala.Option<java.lang.Object>
+  def apply(java.lang.String, scala.collection.immutable.Seq<java.lang.String>, java.lang.String, scala.Option<java.lang.Object>): scalacv.ModelSpec
   def fromProduct(scala.Product): scalacv.ModelSpec
   def unapply(scalacv.ModelSpec): scalacv.ModelSpec
   def unverified(java.lang.String, scala.collection.immutable.Seq<java.lang.String>): scalacv.ModelSpec
