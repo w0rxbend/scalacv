@@ -65,7 +65,7 @@ The mid-level [extension methods on `Mat`](/low-level) (`mat.cvtColor(...)`, `ma
 
 ## Gotchas that bite migrants
 
-:::warning You can't reuse a value after a transform
+:::warning[You can't reuse a value after a transform]
 `Image` has [move semantics](/mat-lifecycle): `image.gray` *consumes* `image`. In Python `g = cv2.cvtColor(img, ...)` leaves `img` usable; here `image` is spent. To use one image two ways, take `image.copy` first. This is what makes a chain leak-free.
 :::
 

@@ -49,7 +49,7 @@ There are two ways to reach these ops, and they sit at different levels:
   consume the `Image`, mutate its Mat in place (no copy), and hand back a new `Image` to chain from. See
   [the last section](#the-high-level-image-transforms).
 
-:::note Two levels, one behaviour
+:::note[Two levels, one behaviour]
 The mid-level Mat op returns `Unit` and mutates in place. The high-level `Image` op returns a new
 `Image` and *also* mutates in place — it just moves the Mat into the returned `Image` (no pixel copy)
 so the pipeline can chain. Neither one copies the frame. The difference is who tracks ownership: you,
@@ -183,7 +183,7 @@ val labelBytes =
 Draw.textSize("gravity", scale = 1.0).baseline
 ```
 
-:::tip A readable label needs a backing box
+:::tip[A readable label needs a backing box]
 Text drawn straight onto a busy photo is unreadable where the background is the same colour. The
 `textSize` → filled `Rect` → `drawText` sequence above is the standard "label with a plate behind it"
 recipe. Add a pixel or two of padding to the box for breathing room.
@@ -322,7 +322,7 @@ All six Hershey vector fonts, the only fonts OpenCV can render:
 | `Scalar.Green` | `(0, 255, 0)` |
 | `Scalar.Blue` | `(255, 0, 0)` |
 
-:::warning BGR, not RGB
+:::warning[BGR, not RGB]
 `Scalar(255, 0, 0)` is **blue**, not red. OpenCV stores pixels in blue-green-red order, and `Scalar`
 is a raw pixel value, so it inherits that order. When a colour comes out wrong, this is almost always
 why. The named constants (`Scalar.Red` etc.) are the safe way to avoid thinking about it.
@@ -354,7 +354,7 @@ val mixedBytes: Either[CvError, Array[Byte]] =
   img.drawText("go", Point(130, 66), Scalar.White).bytes(".png") // back to the high-level pipeline
 ```
 
-:::warning `.mat` borrows — don't close it
+:::warning[`.mat` borrows — don't close it]
 `img.mat` hands you the underlying `Mat` without transferring ownership. Draw on it, but let the
 `Image` release it (via a terminal or `close()`); don't call `.release()` on the borrowed Mat yourself
 or the `Image` is left pointing at freed memory. See [Mat lifecycle](/mat-lifecycle).

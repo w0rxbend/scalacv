@@ -16,7 +16,7 @@ scope. Knowing where that line falls is half the battle:
 | **Mapping** | [`LoopDetector`](#mapping-loop-closure--occupancy) — revisit detection; [`OccupancyGrid`](#mapping-loop-closure--occupancy) | — |
 | **Full SLAM** | all of the above as the front end | pose-graph optimisation, bundle adjustment |
 
-:::tip New to visual navigation? Start here.
+:::tip[New to visual navigation? Start here.]
 Everything on this page turns *pixels* into *geometry*. The chain, roughly: find distinctive points
 ([`OpticalFlow`](#optical-flow) / [`Features`](#features--matching)) → work out how the camera moved
 ([`VisualOdometry`](#visual-odometry)) or where it is ([`Localizer`](#absolute-localization)) → avoid
@@ -86,7 +86,7 @@ s"seeded ${corners.size} corners, tracked ${tracked.count(_.found)} into the nex
 | `quality` | keep corners at least this fraction as strong as the best | `0.01` |
 | `minDistance` | minimum pixel spacing between kept corners | `7.0` |
 
-:::note The returned tracks line up with the seeds
+:::note[The returned tracks line up with the seeds]
 `track(prev, cur, points)` returns one `Track` per input point, **in order**. A point the tracker lost
 has `found == false` — filter on it before you trust its `to`.
 :::
@@ -148,7 +148,7 @@ scale). Here the correspondences come from projecting known 3D points before and
 }
 ```
 
-:::warning Monocular odometry is up-to-scale, and it drifts
+:::warning[Monocular odometry is up-to-scale, and it drifts]
 A single camera cannot tell a small nearby motion from a large distant one, so `translation` is a unit
 *direction*, not metres. Recover scale by fusing wheel odometry, an IMU, or a known stereo baseline.
 And chaining the per-frame motions is dead-reckoning — error accumulates. Cancelling that drift is the
@@ -185,7 +185,7 @@ The disparity search itself is tunable too — `StereoDepth.disparity(left, righ
 blockSize = 9)`, where `numDisparities` (the depth range searched) must be a positive multiple of 16 and
 `blockSize` an odd matching window.
 
-:::note Rectification is assumed
+:::note[Rectification is assumed]
 The pair must already be **rectified** (row-aligned). That is a one-time stereo-calibration step
 (`stereoRectify`) done off the hot path, so it is not wrapped here — see [calibration](/calibration).
 :::

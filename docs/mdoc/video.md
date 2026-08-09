@@ -15,7 +15,7 @@ that, and this page leads with the one to reach for first.
 The whole surface is headless: it decodes and computes, and never draws to a window (see
 [displaying frames](#displaying-frames)).
 
-:::note Nothing on this page runs under mdoc
+:::note[Nothing on this page runs under mdoc]
 A real capture needs a camera, a file, or a codec that CI does not have, so **every runnable snippet
 is `compile-only`** — it type-checks against the real library but is not executed. The paths
 (`"clip.mp4"`), indices (`0`) and sizes are realistic stand-ins; swap in your own. If you are new
@@ -94,7 +94,7 @@ Camera.using(0) { cam =>
 Both forms accept [`CaptureOptions`](#backends-and-options) — the same options `Video.open` takes,
 for picking a backend or setting network timeouts.
 
-:::tip Every `using` returns `Either[CvError, A]`
+:::tip[Every `using` returns `Either[CvError, A]`]
 `Camera.using` and `usingFile` wrap your block's result in the `Right`, and surface a failed open as
 the `Left` — so the whole capture-and-process is one value you can `.map` / `.flatMap`. The inner
 `snapshot()` is itself an `Either`, which is why the example above uses `flatMap` (the outer `map`
@@ -157,7 +157,7 @@ Camera.usingFile("clip.mp4") { cam =>
 }
 ```
 
-:::warning Ownership inside the loop
+:::warning[Ownership inside the loop]
 The `Image` `foreach` hands you is closed **when your function returns** — do not stash it in a
 field or a collection to use later (that is a use-after-free; see [Mat lifecycle](/mat-lifecycle)).
 And remember [`Image`](/image-api)'s move semantics: `frame.markFaces(...)` *consumes* `frame` and
@@ -244,7 +244,7 @@ Camera.usingFile("clip.mp4") { cam =>
 | `frameCount` | `Long` | reported total frames | `0`/`-1` for a live source; off by a frame or two for some containers |
 | `backendName` | `String` | which videoio backend opened it | — |
 
-:::danger Never loop on `frameCount`
+:::danger[Never loop on `frameCount`]
 `for (i <- 0 until cam.info.frameCount.toInt)` is a bug: a live camera reports `0` (you process
 nothing) and some containers over- or under-report by a frame (you read past the end, or stop
 short). **The only frame count that is true is the one the frame loop actually delivers.** Let
@@ -369,7 +369,7 @@ Video.open("clip.mp4").flatMap { capture =>
 `writer` borrows the raw `VideoWriter` as the escape hatch, and `size` is the fixed frame size.
 `Recorder.open` also takes `color = false` for a single-channel (greyscale) output stream.
 
-:::warning Frame size is fixed, and enforced
+:::warning[Frame size is fixed, and enforced]
 A `Recorder` is opened at one size and never changes it. Writing a frame of any other dimensions
 throws `IllegalArgumentException` immediately — this is a programming error (a mismatched pipeline),
 not a data-dependent failure, so it throws rather than returning a `Left`. If your transform changes
@@ -425,7 +425,7 @@ priority order and uses the first that can read the source.
 | `ImageSequence` | Read a numbered image sequence (`frame_%04d.png`) as a video. |
 | `BuiltinMjpeg` | OpenCV's own MJPEG reader — always built in, depends on nothing external. |
 
-:::warning Naming a backend can turn a working open into a failing one
+:::warning[Naming a backend can turn a working open into a failing one]
 A backend that is not compiled into the OpenCV build on your classpath cannot open anything, so
 forcing it makes `open` fail. The bytedeco 4.13.0 builds do not all carry the same set. This is a
 portability lever, not a tuning knob — leave it `Any` unless you have a concrete reason.

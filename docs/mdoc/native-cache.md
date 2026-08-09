@@ -6,7 +6,7 @@ downloaded model files) are not on your classpath as loadable code; they are pay
 bytedeco jars, extracted or fetched **once** and cached. This page explains where those caches live, how
 to relocate them, and how to make container cold-starts instant and air-gapped runs possible.
 
-:::tip The one-line version
+:::tip[The one-line version]
 The first `OpenCv.load()` unpacks ~196 MB of libraries into `~/.javacpp` and reuses it forever after.
 For a lean, fast deployment: add exactly **one** platform classifier, and **pre-warm or relocate** that
 cache so cold starts don't pay the unpack. The [checklist](#checklist-for-a-lean-fast-deployment) at the
@@ -30,7 +30,7 @@ OpenCv.load()   // …a no-op on every call after
 OpenCv.isLoaded
 ```
 
-:::note Why not `Loader.load(classOf[opencv_java])`?
+:::note[Why not `Loader.load(classOf[opencv_java])`?]
 The obvious javacpp one-liner initialises the whole preset graph, and `opencv_highgui` is GTK2-linked on
 Linux — so on a headless box it throws and takes `objdetect`, `calib3d`, `features2d` and `video` down
 with it. `OpenCv.load()` brings javacpp up through a GUI-free preset and loads only the JNI shim plus what
@@ -81,7 +81,7 @@ ENV JAVA_TOOL_OPTIONS="-Dorg.bytedeco.javacpp.cachedir=/opt/javacpp"
 
 To keep the *application* layer thin instead, do the opposite: relocate the cache to a mounted volume so it lives outside the image and is shared across replicas.
 
-:::tip Two strategies, one trade-off
+:::tip[Two strategies, one trade-off]
 **Bake** the cache into the image → fat image, instant and self-contained cold start (best for autoscaling
 where a fresh pod must be ready immediately). **Mount** the cache on a shared volume → thin image, cold
 start waits on the volume being warm (best when image size or registry cost dominates). Pick per workload.
@@ -156,7 +156,7 @@ val sfaceSpec: ModelSpec = FaceRecognizer.modelSpec   // SFace, checksum pinned
 faceSpec.fileName
 ```
 
-:::note Opting out of the checksum
+:::note[Opting out of the checksum]
 For a model with no published hash, `ModelSpec.unverified(name, urls)` builds a spec with **no** integrity
 check. It is a deliberate, named opt-out — you lose the tamper/corruption guard — so prefer the verifying
 `ModelSpec(...)` whenever a checksum exists.
@@ -176,7 +176,7 @@ The classifier jar you add decides the size and capabilities of the payload:
 
 GPU variants exist for `linux-x86_64`, `linux-arm64` and `windows-x86_64`. There is **no** `windows-arm64` build. For CI and most services, a single CPU classifier is the right, lean choice — see [Getting Started](/getting-started).
 
-:::warning Both lines, always
+:::warning[Both lines, always]
 `libopencv_core` links `libopenblas`, so the `openblas` classifier is not optional — omit it and `load()`
 fails with an `UnsatisfiedLinkError` that scalacv turns into a `CvError.NativesMissing` telling you exactly
 what to add. `opencv-platform` bundles both for every platform, at the ~408 MB cost above.

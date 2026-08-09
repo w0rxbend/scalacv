@@ -7,7 +7,7 @@ does not work. scalacv's answer is a single ownership type, `Managed`, and one s
 what. Read the [problem](#the-problem) once, learn the [cheat sheet](#the-cheat-sheet), and the rest of
 the library follows from it.
 
-:::tip New here?
+:::tip[New here?]
 The one thing to internalise: a scalacv **`Image` has move semantics** — a transform like `gray` or `blur`
 *consumes* the image and hands you a new one. Take `.copy` first if you need the original again. Everything
 else on this page elaborates that idea.
@@ -98,7 +98,7 @@ have them in a table:
 | a `mask` you pass to `applyMask`/`inpaint`/`blend`/`seamlessCloneInto` | **borrowed** by the call | you — close it yourself; the receiver *is* consumed |
 | a `Managed[Mat]` from `Video.framesCopied` / `Camera.take` | an **owned** copy | you |
 
-:::note Queries borrow, transforms and terminals consume
+:::note[Queries borrow, transforms and terminals consume]
 A **query** (`width`, `height`, `channels`, `contours`, `isEmpty`) *borrows* the image — it stays alive
 afterwards. A **transform** (`gray`, `blur`, `canny`, `crop`, `draw*`, …) *consumes* it and returns a new
 one. A **terminal** (`write`, `bytes`, `close`) consumes it and produces no new image.
@@ -138,7 +138,7 @@ gray.close()
 consumed.width            // throws IllegalStateException — `consumed` was spent by .gray
 ```
 
-:::tip Diagnosing use-after-move
+:::tip[Diagnosing use-after-move]
 The `IllegalStateException` fires at the *reuse* line, which is rarely the interesting one. Start the JVM
 with `-Dscalacv.trackOwnership=true` and the exception carries, as its cause, the stack of the transform
 that actually spent the handle. It is off by default because it allocates a `Throwable` on every consume;
@@ -213,7 +213,7 @@ val chained: Either[CvError, Array[Byte]] =
   }
 ```
 
-:::note Why not just `use`?
+:::note[Why not just `use`?]
 `src.gaussianBlur(...).use(_.canny(...))` frees the blur output — but `use` *returns* the canny Mat,
 which then outlives its own `Managed` and leaks. `pipe` exists precisely for the "feed the intermediate
 forward and free it" shape; reach for `use` only at the **terminal** stage that produces a non-Mat
@@ -246,7 +246,7 @@ frame (and is freed when the loop ends).
 There is no `row`/`col`/`submat` view API to trip over here — `Image.crop` returns an independent
 copy, not a view. This borrowed frame is the only alias you have to reason about.
 
-:::danger Use-after-free
+:::danger[Use-after-free]
 `frames` yields a **borrowed** Mat — one buffer, refilled each step. Collecting the iterator keeps N
 references to that single buffer (all showing the last frame), freed when the block returns.
 
@@ -262,7 +262,7 @@ Video.open(0).map { capture =>
 ```
 :::
 
-:::tip Right
+:::tip[Right]
 ```scala mdoc:compile-only
 import scalacv.*
 

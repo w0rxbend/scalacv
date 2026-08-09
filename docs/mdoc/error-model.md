@@ -133,7 +133,7 @@ im.gray   // consumes im
 im.width  // IllegalStateException — use after move
 ```
 
-:::warning Do not pattern-match a programmer error
+:::warning[Do not pattern-match a programmer error]
 `IllegalArgumentException` and `IllegalStateException` are deliberately *not* part of `CvError`. If you find yourself catching them to recover, that is a signal the bug should be fixed at the call site instead. [Troubleshooting](/troubleshooting#move-semantics) explains the tracking flag that points at the consuming call.
 :::
 

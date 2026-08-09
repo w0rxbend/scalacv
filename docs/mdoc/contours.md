@@ -14,7 +14,7 @@ import org.opencv.imgproc.Imgproc
 OpenCv.load()
 ```
 
-:::tip When you reach for contours
+:::tip[When you reach for contours]
 Contours are the workhorse of classical (non-neural) shape analysis: counting objects on a conveyor,
 measuring blobs under a microscope, finding the paper in a document scan, isolating a coloured region after
 [colour masking](/color-masking), turning a segmentation mask back into per-object boxes. If you can get your
@@ -41,7 +41,7 @@ Image.reading("coins.jpg")(_.gray.threshold(127).contours())
 Image.reading("coins.jpg")(_.gray.canny(80, 160).contours())
 ```
 
-:::note Threshold vs. Canny
+:::note[Threshold vs. Canny]
 Threshold gives you the outline of a **filled region** — one contour per blob, ready to measure area and
 centroid. Canny gives you the outline of **edges** — you may get the outer boundary *and* an inner one for a
 thick stroke, because both sides of the stroke are edges. For counting and measuring solid objects, threshold
@@ -174,7 +174,7 @@ val quad = Managed.use(shapes())(_.findContours(approximation = ContourApproxima
 quad.approx(0.02 * quad.perimeter).points.size
 ```
 
-:::tip Counting sides
+:::tip[Counting sides]
 `approx(0.02 * perimeter).points.size` is the idiom behind shape classifiers: 3 → triangle, 4 → quad, and a
 count that stays high as you shrink `epsilon` → a circle. Tune the `0.02` up to tolerate more noise, down to
 keep more detail.
@@ -211,7 +211,7 @@ Managed.use(ring())(_.findContours(retrieval = ContourRetrieval.List).size) // o
 | `CComp` | every contour, organised two-level (outer boundaries + their holes) | two-level |
 | `Tree` | every contour, in a full parent/child nesting tree | full tree |
 
-:::note Hierarchy is not exposed (yet)
+:::note[Hierarchy is not exposed (yet)]
 `CComp` and `Tree` compute a parent/child hierarchy, but scalacv does not currently surface it — handing back
 OpenCV's raw `Nx1 CV_32SC4` index Mat would be exactly the untyped, unmanaged shape this library exists to
 remove. A typed nesting API can be added later. Until then, choose between `External` and `List` unless you
@@ -306,7 +306,7 @@ Image.reading("parts.png") { img =>
 }
 ```
 
-:::warning `contours` borrows, transforms consume
+:::warning[`contours` borrows, transforms consume]
 `img.contours(...)` is a **query**: it leaves `img` alive, so you can keep chaining or must `close()` it
 yourself. `img.gray`, `img.threshold(...)` and every `draw*` on an `Image` are **transforms**: they consume
 the receiver and hand back a new image. Reusing a consumed `Image` throws — take a `.copy` first if you need

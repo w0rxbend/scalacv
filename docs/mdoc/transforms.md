@@ -11,7 +11,7 @@ Drop to the mid-level `Mat` extension ops from [Image processing](/image-process
 want a knob `Image` does not surface (an `iterations`, a border colour on a rotation) or you are
 already holding a raw `Mat` handed to you by a detector or a video frame.
 
-:::note Transforms consume the image
+:::note[Transforms consume the image]
 Every verb here is a **transform**: it spends the `Image` it is called on and returns a fresh one.
 Reusing the old handle throws `IllegalStateException`. To branch — build a mask from one copy and
 keep the pixels from another — take [`.copy`](/image-api) first. Queries like `width`/`height` only
@@ -84,7 +84,7 @@ picks how, and the right choice depends on whether you are growing or shrinking 
 | `Area` | Downscaling | Averages the shrunk-away pixels; avoids moiré and aliasing |
 | `Lanczos4` | Highest-quality upscale | Sharpest, slowest |
 
-:::tip Downscale with `Area`, upscale with `Cubic`
+:::tip[Downscale with `Area`, upscale with `Cubic`]
 The default `Linear` is fine most of the time, but the two ends of the range have better tools. When
 you make an image smaller, `Area` avoids the shimmer a linear downscale leaves in fine textures; when
 you make it larger, `Cubic` (or `Lanczos4`) keeps edges crisp.
@@ -122,7 +122,7 @@ back a fresh one:
 Image.blank(160, 120).flip(Flip.Horizontal).close()
 ```
 
-:::tip Mirroring a webcam preview
+:::tip[Mirroring a webcam preview]
 A front-facing camera feels natural only when the preview is mirrored, so `frame.flip(Flip.Horizontal)`
 is the standard first step in a selfie or [conferencing](/conferencing) pipeline.
 :::
@@ -186,7 +186,7 @@ val spun: Either[CvError, Array[Byte]] =
 toTurn.release()
 ```
 
-:::note Straightening scanned text
+:::note[Straightening scanned text]
 When the tilt you want to remove is *text* skew rather than a known angle, reach for
 [`deskew`](/ocr) instead — it finds the dominant text angle itself and rotates upright. `rotate` is
 for when you already know the angle.

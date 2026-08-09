@@ -9,7 +9,7 @@ If you have never touched OpenCV, that is fine — this page takes you from an e
 working edge-detection pipeline. If you *have*, the short version is: add one platform jar, call
 `OpenCv.load()` once, and reach for `Image`.
 
-:::tip The 30-second mental model
+:::tip[The 30-second mental model]
 scalacv has **two tiers** (the high-level [`Image`](/image-api) and mid-level `Mat` extensions),
 **three modules** (`core`, `vision`, `graphs`), **one ownership rule** (a transform consumes the
 image it was called on), and **one error policy** (expected failures are `Either`, bugs throw). The
@@ -74,7 +74,7 @@ Which modules do you actually need?
 `vision` and `graphs` depend only on `core`, so you pull exactly what you use — see
 [Architecture](/architecture#three-modules-split-along-real-lines).
 
-:::note If you forget the native lines
+:::note[If you forget the native lines]
 `scalacv` alone compiles without them, but it will not run: the OpenCV symbols are absent until you
 add them. `OpenCv.load()` does not fail with a cryptic link error — it prints a copy-pasteable fix
 naming the platform you are actually on. See [Troubleshooting](/troubleshooting) if you hit it.
@@ -102,7 +102,7 @@ the extension methods. You import once per file, not per feature.
 OpenCv.isLoaded
 ```
 
-:::warning Load before you build
+:::warning[Load before you build]
 `Image.blank`, `Image.read`, `Camera.open` and friends all cross into native code. Calling them
 before `OpenCv.load()` is the single most common first-run mistake. Put the call in your `main` (or
 a test fixture) so it always runs first.
@@ -227,7 +227,7 @@ shapes.close()                            // done: release it ourselves
 shapeCount
 ```
 
-:::note Who closes what
+:::note[Who closes what]
 `Image.reading` and `Managed.use` close for you. When you build an `Image` by hand and never reach a
 terminal (`write`/`bytes`/`close`), *you* must close it — as we did above — or it leaks. In a
 long-running program a leak is silent until you run out of native memory, so prefer the scoped forms.

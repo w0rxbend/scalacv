@@ -27,7 +27,7 @@ val bytesFromSomewhere: Array[Byte] = Array.emptyByteArray
 lazy val detector: org.opencv.objdetect.FaceDetectorYN = ??? // built with FaceDetect.create(model, size)
 ```
 
-:::tip New to scalacv? Start here.
+:::tip[New to scalacv? Start here.]
 Every runnable example on this page begins from a helper called `scene()` — a small synthetic image of a
 rectangle and a circle. It exists only so the docs can run without shipping a photo. In your own code you
 would start from [`Image.read("photo.jpg")`](#getting-an-image) instead. Everything else is identical.
@@ -81,7 +81,7 @@ val g = img.gray   // consumes img
 img.width          // img is spent: this throws IllegalStateException, it does not read freed memory
 ```
 
-:::note Why it throws instead of crashing
+:::note[Why it throws instead of crashing]
 Calling into a freed OpenCV object segfaults the JVM from native code — no stack trace, no `catch`. So
 `Image` (via [`Managed`](/mat-lifecycle)) flips that into an ordinary `IllegalStateException` on the Scala
 side. If the error fires somewhere far from the real mistake, start the JVM with
@@ -127,7 +127,7 @@ the same as after a transform.
 scene().gray.bytes(".png").map(_.length)
 ```
 
-:::warning A value that never reaches a terminal leaks
+:::warning[A value that never reaches a terminal leaks]
 An `Image` you build but never `write`, `bytes`, `close`, or hand off via `managed` holds a native Mat that
 the garbage collector will not free promptly. If the body of your work does not end in a terminal, wrap it
 in [`Image.reading`](#scoping-with-reading), which closes for you.
@@ -179,7 +179,7 @@ Image.read("huge.png", ImreadFlags(ImreadColor.Color, ImreadScale.Half))   // de
 Image.read("photo.jpg", ImreadFlags(ImreadColor.Color, ignoreOrientation = true))
 ```
 
-:::tip Reduced-size decode beats read-then-resize
+:::tip[Reduced-size decode beats read-then-resize]
 A reduced-size decode (`ImreadScale.Half` and friends) is cheaper than a full read followed by
 `resize`, because the codec skips the discarded detail rather than producing every pixel and throwing most
 away. Reach for it when you only need a thumbnail. Only `Grayscale` and `Color` support it — the type
@@ -208,7 +208,7 @@ scene().scale(0.5).close()                     // half on both axes
 scene().crop(Rect(10, 10, 60, 60)).close()     // an independent copy of a region
 ```
 
-:::note `crop` is a copy, not a view
+:::note[`crop` is a copy, not a view]
 `crop` returns an independent image, not an aliasing window into the parent's pixels. That means the crop
 outlives the parent safely, and writing to one never disturbs the other. The rectangle must lie fully
 inside the image, or the call throws `IllegalArgumentException` up front.
@@ -245,7 +245,7 @@ An arbitrary-angle rotation expands the canvas so no corner is clipped:
 scene().rotate(degrees = 30, scale = 1.0).close()   // canvas grows to fit the tilted image
 ```
 
-:::tip Name your thresholds
+:::tip[Name your thresholds]
 `canny(threshold1, threshold2)` takes two doubles in a fixed order, and swapping them silently changes the
 result. When the numbers are not obviously ordered, name them — `canny(threshold1 = 80, threshold2 = 160)`.
 The same advice applies to `adaptiveThreshold(blockSize = 15, c = 4)`.
@@ -332,7 +332,7 @@ scene()
   .close()
 ```
 
-:::note Text is anchored on its baseline
+:::note[Text is anchored on its baseline]
 `drawText`'s point is the *left end of the baseline*, not the top-left corner — a `y` of `0` draws the
 whole string above the image and shows nothing. Use `Draw.textSize(...)` to measure a string first when you
 need to place or box it. Only the built-in Hershey vector fonts exist; non-ASCII characters render as `?`.
@@ -361,7 +361,7 @@ val onlyBright = src.applyMask(mask).bytes(".png")  // `src` consumed, `mask` bo
 mask.close()                                        // the borrowed mask is ours to free
 ```
 
-:::warning A borrowed mask is yours to close
+:::warning[A borrowed mask is yours to close]
 `applyMask`, `inpaint`, `blend`, and `seamlessCloneInto` consume the **receiver** but only *borrow* the
 mask/other image you pass in. Whatever you passed is still live afterwards — `close()` it, or it leaks. The
 [Colour & masking](/color-masking) guide walks through the full segmentation workflow.
@@ -393,7 +393,7 @@ val a = base.gray.bytes(".png")             // consumes base
 val b = branch.canny(80, 160).bytes(".png") // consumes the copy
 ```
 
-:::tip `copy` is the one deliberate pixel copy
+:::tip[`copy` is the one deliberate pixel copy]
 Every other transform threads one live Mat through the chain with no copying. `copy` is where you opt into a
 second buffer on purpose, precisely because you want two independent lifetimes. If you find yourself copying
 inside a per-frame video loop, that is a signal to restructure — see [/performance](/performance).

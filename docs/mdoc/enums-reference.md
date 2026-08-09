@@ -87,7 +87,7 @@ ColorConversion.BgrToGray.cvValue
 
 **`TrackerKind`** — single-object trackers: `Csrt` (accurate), `Kcf` (fast), `Mil`.
 
-:::tip Discover values in your editor
+:::tip[Discover values in your editor]
 Every enum has `.values` — `CascadeName.values` lists them all — and autocomplete shows the cases as you type `ColorConversion.`. You rarely need this page once your IDE is set up.
 :::
 

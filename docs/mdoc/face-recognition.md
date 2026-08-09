@@ -22,7 +22,7 @@ import scalacv.*
 OpenCv.load()
 ```
 
-:::tip What you need before you start
+:::tip[What you need before you start]
 Recognition builds on detection, so you need **two** models: the YuNet detector (232 kB, see
 [Object detection](/object-detection#yunet-the-modern-face-detector)) to find and align faces, and
 the SFace recognizer (~37 MB, below) to embed them. The detector supplies the five landmarks SFace
@@ -62,7 +62,7 @@ caught before OpenCV ever sees it:
 (FaceRecognizer.modelSpec.fileName, FaceRecognizer.modelSpec.sha256.isDefined)
 ```
 
-:::note `load` fails as a value
+:::note[`load` fails as a value]
 A path with no file, or a file that is not an SFace network, comes back as a `Left(CvError)` — not
 a thrown `CvException`. Pattern-match or `map`/`flatMap` it; there is no happy-path assumption to
 trip over.
@@ -125,7 +125,7 @@ The same pair by L2 distance — note the direction flips (the lookalike is the 
 }
 ```
 
-:::warning Comparisons must be same-length
+:::warning[Comparisons must be same-length]
 `cosineSimilarity` and `l2Distance` `require` both embeddings to have the same dimension — real
 SFace embeddings are always 128, so this only bites when you accidentally mix in a stand-in vector
 of a different length.
@@ -225,7 +225,7 @@ FaceRecognizer.load("sface.onnx").foreach { rec =>
 }
 ```
 
-:::danger Threading
+:::danger[Threading]
 `FaceDetectorYN` (the detector) is **stateful and not thread-safe** — `detect` resets its input
 size on every call. Give each thread its own detector. A `FaceRecognizer` and a `Gallery`, by
 contrast, are safe to share: the gallery is immutable, and embeddings are plain data.

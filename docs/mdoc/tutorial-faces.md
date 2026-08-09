@@ -18,7 +18,7 @@ A Haar **cascade** is a small, fast, classic detector defined by an XML file. sc
 val detector = Cascades.load(CascadeName.FrontalFaceAlt) // Either[CvError, Managed[CascadeClassifier]]
 ```
 
-:::note Why a *typed* name matters
+:::note[Why a *typed* name matters]
 Building a classifier from a mistyped path (`"frontalfaec.xml"`) does **not** throw — OpenCV returns an *empty* classifier that silently detects nothing, forever. `CascadeName` makes that mistake impossible. See [Object detection](/object-detection).
 :::
 

@@ -9,7 +9,7 @@ scalacv wraps `org.opencv.dnn` as three small, honest functions — **load a mod
 blob the model expects, run one forward pass** — and nothing else. Everything they hand back is a
 [`Managed`](/mat-lifecycle), so the native memory frees itself when its scope ends.
 
-:::note What this is not
+:::note[What this is not]
 This is an *inference* engine, not a *training* one. You bring a model that was already trained
 elsewhere and exported to ONNX; scalacv runs it. There is no autograd, no optimiser, no fine-tuning here.
 :::
@@ -85,7 +85,7 @@ entry points would imply a breadth of support this library cannot honestly stand
 format the other frameworks *export to*, so a single importer covers the realistic cases — and you convert
 a model to ONNX once, rather than debugging a different importer per framework.
 
-:::tip Getting a model into ONNX
+:::tip[Getting a model into ONNX]
 Most training frameworks export in one line — `torch.onnx.export(...)` in PyTorch,
 `tf2onnx` for TensorFlow, `skl2onnx` for scikit-learn. Model zoos such as the
 [ONNX Model Zoo](https://github.com/onnx/models) publish ready-to-run `.onnx` files for common
@@ -298,7 +298,7 @@ Dnn.forward(net, blob = ???).use { output =>
 }
 ```
 
-:::note Logits vs. probabilities
+:::note[Logits vs. probabilities]
 `maxVal` is whatever the last layer emits. Many exported graphs stop *before* the softmax, so the numbers
 are unbounded logits, not `[0,1]` probabilities. The argmax is identical either way; only apply a softmax
 yourself if you need a calibrated confidence.
@@ -358,7 +358,7 @@ val result: Either[CvError, Float] =
 The nesting is the ownership made visible: each `Managed` frees at the end of its `use`, innermost first,
 so nothing leaks even if a step throws.
 
-:::tip Load once, infer many
+:::tip[Load once, infer many]
 For a video or camera loop, hoist the `fromOnnx` *out* of the loop — parse the model once, then per frame
 only `blobFromImage` → `forward` → read. Loading per frame would dwarf the inference cost. See
 [Performance](/performance) for measuring where the time actually goes.

@@ -20,7 +20,7 @@ Almost everything is offered at **two levels**, and a lot of the page is about k
   surface (the threshold value Otsu chose, a signed-depth Sobel), or when you are already working with
   raw `Mat`s from a detector or a video frame.
 
-:::tip Beginner path
+:::tip[Beginner path]
 If you are just starting, stay on the high-level side: `Image.read(...).map(_.gray.blur(2).canny(80,
 160).write("edges.png"))`. Every verb consumes the image and returns a new one, so a chain never leaks.
 Come back to the mid-level ops when you hit something `Image` does not expose.
@@ -106,7 +106,7 @@ The available conversions, and when each matters:
 | `BgrToRgb` / `RgbToBgr` | swap R/B | hand pixels to a library that expects RGB |
 | `BgrToBgra` / `BgraToBgr` | add / drop alpha | gain or discard a transparency channel |
 
-:::warning OpenCV is BGR, not RGB
+:::warning[OpenCV is BGR, not RGB]
 Channels are **blue, green, red** — the reverse of what most other imaging code assumes. `Scalar.Red` is
 `Scalar(0, 0, 255)`. If colours come out swapped after talking to another library, you need a
 `BgrToRgb`.
@@ -135,7 +135,7 @@ val boxed: Either[CvError, Array[Byte]] =
 srcBlur.release()
 ```
 
-:::note Why `boxBlur`, not `blur`, at the mid level
+:::note[Why `boxBlur`, not `blur`, at the mid level]
 The high-level [`Image.blur`](/image-api) is a radius-based *Gaussian*. A mid-level method sharing that
 name would silently switch filter families — and change the output — the moment you dropped from
 `image.blur(2)` to `image.mat.blur(...)`. They are different algorithms, so the names differ.
@@ -193,7 +193,7 @@ srcEdge.release()
 
 `scene().gray.canny(60, 180)` is the high-level equivalent.
 
-:::tip Name Canny's thresholds
+:::tip[Name Canny's thresholds]
 `canny(threshold1, threshold2)` — the weak (linking) and strong edge levels — are both `Double` and
 silently swappable. Name them at the call site (`canny(threshold1 = 80, threshold2 = 160)`) when the
 ordering is not obvious. A rough starting point is a 1:2 or 1:3 ratio.
@@ -322,7 +322,7 @@ srcAdapt.release()
 scene().gray.adaptiveThreshold(blockSize = 15, c = 4).close()
 ```
 
-:::note Parameter order differs by tier — on purpose
+:::note[Parameter order differs by tier — on purpose]
 High-level `adaptiveThreshold` leads with `(blockSize, c)`, the two you actually tune; mid-level mirrors
 OpenCV's own `(maxValue, method, blockSize, c)`. The leading params have different types across tiers, so
 a positional call meant for one will not compile against the other — use named arguments and the order
@@ -656,7 +656,7 @@ scene().gray.equalizeHist.canny(80, 160).close()
 
 That is the same guarantee as `Mats.chain`, surfaced as a type.
 
-:::danger Move semantics: no reuse
+:::danger[Move semantics: no reuse]
 An `Image` transform *consumes* its receiver. Reusing a consumed handle throws `IllegalStateException` —
 it does not read freed memory. To branch a pipeline, take a `.copy` first.
 :::

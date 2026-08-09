@@ -109,7 +109,7 @@ val adopt: _root_.zio.ZIO[Any, Throwable, Int] =
   }
 ```
 
-:::warning Do not escape the scope
+:::warning[Do not escape the scope]
 The `Mat` is freed the instant the scope closes. Returning it — or a value that aliases its native
 buffer — from `ZIO.scoped` is a use-after-release waiting to happen. Reduce it to an *owned* value
 (a number, an encoded `Array[Byte]`, a fresh `Image`) **inside** the scope, and yield that.
@@ -185,7 +185,7 @@ file, end-of-stream; for a camera, a dropped connection — the two being indist
 OpenCV's API. For the duration of the stream the capture's exception mode is forced off and restored
 afterwards, so a finished file *completes* the stream instead of failing it.
 
-:::danger These combinators break on `frameStream`
+:::danger[These combinators break on `frameStream`]
 Anything that retains elements sees N references to one reused buffer holding the *newest* content —
 not N distinct frames. On `frameStream`, avoid:
 
@@ -216,7 +216,7 @@ def frameSizes(source: String): _root_.zio.ZIO[Any, Throwable, Long] =
   }
 ```
 
-:::warning Consume each clone in the fiber that pulls it
+:::warning[Consume each clone in the fiber that pulls it]
 Ownership of a clone transfers to the consumer, so release it promptly on the same fiber —
 `.mapZIO(m => m.use(process))`. A clone dropped because the fiber was **interrupted** before a
 downstream `use`/scope took it over leaks, exactly as a dropped `Managed` would in synchronous code.

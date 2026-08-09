@@ -57,7 +57,7 @@ Image.reading("input.jpg") { img =>
 }
 ```
 
-:::warning Match the model's numbers exactly
+:::warning[Match the model's numbers exactly]
 Wrong `size`, `scaleFactor`, `mean`, or `swapRB` won't error — the net just returns garbage. These four values come from how the model was trained; copy them from its model card.
 :::
 

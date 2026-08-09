@@ -60,7 +60,7 @@ different arguments), and even that cannot bite silently — the leading types d
 call meant for one tier will not compile against the other. See
 [Working with the raw OpenCV API](/low-level) for the full escape-hatch story.
 
-:::tip When to drop a tier
+:::tip[When to drop a tier]
 Stay on `Image` for read → transform → detect → annotate → write. Drop to `Mat` extensions when you
 need an operation `Image` doesn't surface, when you're processing borrowed video frames (below), or
 when you want to thread one `Mat` through several stages without an `Image` wrapper per step.
@@ -100,7 +100,7 @@ The dependency graph is a shallow star — `vision` and `graphs` each depend onl
 So someone who only wants `Image.read(…).gray.canny(…)` never pulls a SLAM loop-closure detector
 into their jar. A fourth artifact, `scalacv-zio`, adds the [ZIO](/zio) bindings on top of `core`.
 
-:::warning The split is a build invariant, not a suggestion
+:::warning[The split is a build invariant, not a suggestion]
 `core` must never depend on `vision` or `graphs` — a new `core → vision/graphs` edge introduces a
 cycle and breaks the build. Domain code that "starts from an image" (face detection, marker AR,
 pose overlays) therefore lives in `vision` as **extension methods** on `Image`, not as members of

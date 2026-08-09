@@ -7,7 +7,7 @@ straight lines. Those numbers are the [`Intrinsics`](/api/core/scalacv/Intrinsic
 measure them you are stuck with `Intrinsics.approx`, a field-of-view *guess* — good enough to watch an
 overlay track, not good enough to measure with. **Calibration replaces the guess with measurement.**
 
-:::tip New here? Read this first.
+:::tip[New here? Read this first.]
 Calibration is a one-time step you do per camera (per lens, per zoom setting). You print a chessboard,
 photograph it from a dozen angles, and scalacv reads the camera's true focal length and lens distortion
 off those photos. Feed the result to [Marker AR](/marker-ar), [pose estimation](/pose-estimation) or
@@ -58,7 +58,7 @@ the intrinsics, which are always in pixels. The total corner count the detector 
 board.corners
 ```
 
-:::note Why an asymmetric grid?
+:::note[Why an asymmetric grid?]
 Prefer a board with an **odd × even** inner grid (like 9×6), not square (like 8×8). A symmetric board
 has a rotational ambiguity — the solver cannot tell which way is up — while an asymmetric one has a
 single unambiguous orientation in every view.
@@ -109,7 +109,7 @@ Camera.using(0) { cam =>
 // `keep` now holds up to 15 views spanning whatever angles you moved the board through.
 ```
 
-:::tip Why `Option`, not `Either`?
+:::tip[Why `Option`, not `Either`?]
 "The board is not in this frame" is an ordinary query result, not a failure — the same reason the
 [detectors](/object-detection) and [trackers](/tracking) return `Option`/`Seq`. It is
 [`fromChessboard`](#recovering-the-camera), where *too few* boards or a non-converging solver truly is a
@@ -167,7 +167,7 @@ every view, between where a corner actually sat and where the recovered model pr
 | **1–2 px** | marginal | some blur, too few angles |
 | **> 2 px** | poor — recapture | motion blur, bad board, or the board flexed |
 
-:::warning The intrinsics are tied to the resolution
+:::warning[The intrinsics are tied to the resolution]
 `fx, fy, cx, cy` are in **pixels at `imageSize`**. If you calibrate at 1920×1080 but run the camera at
 960×540, halve them (or recalibrate at the running resolution). Changing zoom or swapping the lens
 invalidates the calibration entirely.
@@ -224,7 +224,7 @@ val calibration: Calibration = ???
 Image.reading("wide-angle.jpg")(_.undistort(calibration).write("straightened.jpg"))
 ```
 
-:::note `undistort` consumes the image
+:::note[`undistort` consumes the image]
 Like every transform, `undistort` follows [move semantics](/mat-lifecycle): it *consumes* the receiver
 and returns a new `Image`. Take `.copy` first if you also need the original.
 :::

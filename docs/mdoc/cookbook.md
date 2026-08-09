@@ -10,7 +10,7 @@ if a recipe here stopped compiling, the docs build would fail. The recipes lead 
 [lower-level recipes](#lower-level-recipes) at the end show the same kind of work on a raw `Mat`, for when you
 want the extra control the mid-level [ownership contract](/image-processing) gives you.
 
-:::note New to scalacv?
+:::note[New to scalacv?]
 Read [Getting started](/getting-started) first for install and your very first program, then skim
 [The Image API](/image-api) for how the chain works. This page assumes you have `OpenCv.load()` behind you.
 :::

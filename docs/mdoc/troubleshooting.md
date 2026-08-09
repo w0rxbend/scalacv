@@ -34,7 +34,7 @@ mvn"org.bytedeco:opencv:4.13.0-1.5.13;classifier=linux-x86_64",
 mvn"org.bytedeco:openblas:0.3.31-1.5.13;classifier=linux-x86_64"
 ```
 
-:::warning Both lines are required
+:::warning[Both lines are required]
 `libopencv_core` links `libopenblas` — omit the second and the first will not resolve. And pick the classifier for where the code *runs*, not where you build it: a `linux-x86_64` jar does nothing on an Apple-silicon Mac.
 :::
 
@@ -54,7 +54,7 @@ If you would rather not pick, `org.bytedeco:opencv-platform:4.13.0-1.5.13` bundl
 
 Call `OpenCv.load()`, **not** `Loader.load(classOf[opencv_java])`. The latter eagerly initialises OpenCV's `highgui` module, which is GTK2-linked on Linux and drags `objdetect`/`calib3d`/`features2d`/`video` down with it on a box with no GTK — and `objdetect` is exactly what this library needs most. `OpenCv.load()` brings the natives up through a GUI-free path and needs no `apt-get install libgtk2.0-0`. This is the entire reason the loader exists; do not "simplify" it back to `Loader.load`.
 
-:::note The failure is loud, not silent
+:::note[The failure is loud, not silent]
 The bundled `libopencv_highgui.so` carries *unversioned* dependency names, so on a machine that happens to have a different OpenCV installed, a naive bulk load can bind the wrong ABI and later die inside `cv::Mat::release()` with no Java stack trace. `OpenCv.load()` resolves dependencies on demand precisely to avoid that. If you see a JVM crash with no stack near a `Mat` operation, suspect a stray load path, not scalacv.
 :::
 

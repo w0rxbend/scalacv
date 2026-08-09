@@ -13,7 +13,7 @@ touches a pixel until you call `render` (onto a fresh canvas) or `image.draw` (o
 that moment you are only assembling and transforming plain data, so a picture can be reused, moved, coloured,
 or laid out as many times as you like without side effects.
 
-:::note Where this lives
+:::note[Where this lives]
 `Picture`, `Color`, `Chart`, and `Animation` are in the **`scalacv-graphs`** module. `import scalacv.*`
 brings all of them in, along with the `image.draw(picture)` extension. The module depends only on `core`.
 :::
@@ -47,7 +47,7 @@ same picture can be reused, transformed, or laid out freely.
 | `picture.renderOn(image)` | Draws onto an **existing** image | Consumes `image`, returns the annotated one |
 | `image.draw(picture)` | Same as `renderOn`, spelled from the image side | Consumes `image`, returns the annotated one |
 
-:::warning Move semantics
+:::warning[Move semantics]
 `image.draw(...)` (and `renderOn`) **consume** the image — the receiver is spent, exactly like any other
 [`Image`](/image-api) transform. Reusing it afterwards throws. Take `image.copy` first if you need to branch,
 and remember terminals like `write`/`bytes` release the result. See [Mat lifecycle](/mat-lifecycle).
@@ -168,7 +168,7 @@ a whole overlay at once.
 | `font(f)` / `fontScale(s)` | Text font and size |
 | `smooth(on)` | Antialiasing (default on) |
 
-:::tip Fill vs stroke
+:::tip[Fill vs stroke]
 A shape can carry **both** a fill and a stroke — the fill paints first, the outline over it. `noStroke` on a
 `fillColor` shape gives you flat-filled swatches (as in the palette below); `noFill` on an outline-only shape
 avoids a solid interior.
@@ -252,7 +252,7 @@ Image.reading("crowd.jpg") { img =>
 }
 ```
 
-:::tip Why `label`, not raw `text`
+:::tip[Why `label`, not raw `text`]
 `label` measures the string with its font metrics (including the descender room `y` and `g` need), then sizes
 a filled box around it — so the tag is always legible over a busy frame, and never clipped. Placing bare
 `text` on a light image often leaves it unreadable.
@@ -371,7 +371,7 @@ beneath it rather than replacing them:
 }
 ```
 
-:::note How alpha composites
+:::note[How alpha composites]
 Each translucent shape blends only the region it covers back toward the pixels underneath — bit-identical to
 blending the whole image, but far cheaper for a small overlay on a big frame. Note that OpenCV's own drawing
 verbs ignore alpha; the `Picture` layer honours it.
@@ -450,7 +450,7 @@ Image.reading("frame.jpg") { frame =>
 }
 ```
 
-:::warning Positive chart box
+:::warning[Positive chart box]
 Every chart requires a positive `width`×`height` — a non-positive box throws rather than drawing a degenerate
 shape. `histogram` likewise requires `bins >= 1`.
 :::
@@ -497,7 +497,7 @@ val firstWidth = frames.headOption.map { img =>
 firstWidth
 ```
 
-:::note GIF vs video
+:::note[GIF vs video]
 GIF is 256 colours per frame and OpenCV dithers to fit — great for a short, shareable loop. For full-colour
 or long clips, encode a video with `record` and one of the [`Codec`](/video) options (`Mp4v`, `Avc1`,
 `Xvid`). Both delete a half-written output on a failed encode, so a `Left` never leaves a misleading partial

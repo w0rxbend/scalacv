@@ -6,7 +6,7 @@ capture?**. Neither needs a model — both are ordinary template matching and di
 wraps them so every answer crosses the boundary as plain immutable data (a `TemplateMatch`, a `Rect`) that
 outlives the images it came from.
 
-:::tip The two questions, the two calls
+:::tip[The two questions, the two calls]
 `Screen.locate(screen, button)` answers *where is it?* with an `Option[TemplateMatch]`.
 `Screen.diff(before, after)` answers *what changed?* with a `Seq[Rect]`. Everything else on this page is
 tuning those two.
@@ -34,7 +34,7 @@ def screen(x: Int, y: Int): Image =
     .drawRect(Rect(x, y, 20, 20), Scalar.Black, Thickness.Stroke(2))
 ```
 
-:::warning The template needs contrast
+:::warning[The template needs contrast]
 The helper *outlines* the square rather than filling a flat block on purpose: `Screen` matches with
 normalised correlation, which is **undefined for a template of one uniform colour** (a zero-variance patch
 has nothing to correlate against). A real button, icon or piece of text has plenty of variance; a solid
@@ -138,7 +138,7 @@ The count matches the two icons we painted:
 hits.size
 ```
 
-:::note `locate` is `findAll` capped at one
+:::note[`locate` is `findAll` capped at one]
 `locate(img, tmpl)` is exactly `findAll(img, tmpl, maxMatches = 1).headOption`, so reach for it whenever
 you only care about the single best occurrence. `maxMatches` (default `20`) exists so a noisy image with
 many near-peaks does not run the suppression loop forever.
@@ -202,7 +202,7 @@ before.close(); after.close()
 The single reported `Rect` bounds the icon that appeared. Feed captures that differ in size and `diff`
 throws rather than guessing an alignment.
 
-:::tip Tuning the two knobs
+:::tip[Tuning the two knobs]
 Getting *too many* regions from a live capture? Raise `threshold` (compression and sub-pixel jitter add
 low-amplitude noise) or `minArea` (drop the specks). Getting *too few*, or one giant merged blob? Lower
 `threshold` to catch subtler change; the internal dilation merges anything close, so widely-separated

@@ -30,7 +30,7 @@ Because both copy, the source you pass in stays yours to keep or dispose, and th
 independently owned object. That is the whole reason the bridge is safe to sprinkle through
 notebook cells without thinking about the [Mat lifecycle](/mat-lifecycle).
 
-:::warning `toBufferedImage` needs an **8-bit** image
+:::warning[`toBufferedImage` needs an **8-bit** image]
 It supports depth `CV_8U` only. A 16-bit or float image — a depth map, a disparity map, a raw filter
 response — throws. Bring it to 8-bit first: `normalize` rescales it to 0–255 grey, `colorMap` renders
 it in false colour. See [Showing non-8-bit results](#showing-non-8-bit-results) below.
@@ -110,7 +110,7 @@ def show(img: Image): java.awt.image.BufferedImage = img.toBufferedImage
 Image.reading("photo.jpg")(img => show(img.gray.canny(80, 160)))
 ```
 
-:::tip Show a branch without consuming the pipeline
+:::tip[Show a branch without consuming the pipeline]
 Transforms **move** the image, so `show(img.blur(5))` consumes `img` and you cannot keep processing
 it. To display an intermediate step and continue, `show` a `.copy`:
 
@@ -217,7 +217,7 @@ val custom = ModelSpec(
 val trusted = ModelSpec.unverified("other.onnx", Seq("https://example.com/other.onnx"))
 ```
 
-:::note `unverified` is a named opt-out, not a shortcut
+:::note[`unverified` is a named opt-out, not a shortcut]
 It loses the tamper/corruption guard, so a corrupt or swapped download loads without complaint.
 Reach for it only when a model genuinely has no published checksum — and prefer publishing one
 yourself (`sha256Of` the file once) over trusting bytes forever.

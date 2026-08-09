@@ -109,7 +109,7 @@ A transform on a consumed image throws — take `.copy` first to branch. Extensi
 | `seamlessCloneInto(background, mask, center)` | Poisson clone into a background |
 | `blurBackground(mask, …)` / `replaceBackground(mask, bg, …)` | [virtual background](/conferencing) |
 
-:::note Masks and other-image args are borrowed
+:::note[Masks and other-image args are borrowed]
 `applyMask`, `inpaint`, `blend`, `blurBackground`, … **consume the receiver** but **borrow** the mask/other image — you close those yourself.
 :::
 

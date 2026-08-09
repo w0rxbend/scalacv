@@ -51,7 +51,7 @@ val grey = photo.copy.gray // `photo` survives; `grey` is a new one-channel imag
 val binary = grey.threshold(value = 128) // consumes `grey`; result is 0/255 black-and-white
 ```
 
-:::tip When lighting is uneven
+:::tip[When lighting is uneven]
 A single global cutoff struggles if one corner is brighter than another (scanned documents, angled light). `adaptiveThreshold` computes the cutoff *per neighbourhood* instead — see [Image processing](/image-processing).
 :::
 

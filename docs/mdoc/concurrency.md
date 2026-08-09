@@ -44,7 +44,7 @@ Two rows carry most of the weight:
 - The **safe** results row is why the "detect on a worker, combine on the main thread" pattern below needs no locks.
 - The **`Managed` release** row is subtler than it looks: `release()` is a `getAndSet(null)` compare-and-set, so even if two threads race to close the same handle, the buffer is freed **exactly once** and the loser is a no-op. You still shouldn't *use* a handle from two threads — but you can't double-free one. (See [Mat lifecycle](/mat-lifecycle).)
 
-:::danger A write during a read is still a race
+:::danger[A write during a read is still a race]
 "Reads are safe" means *concurrent reads of a buffer nobody writes.* The moment one thread writes a `Mat` another is reading, you are back to undefined behaviour. When in doubt, give each thread its own buffer.
 :::
 
@@ -131,7 +131,7 @@ The two borrowing contracts carry over unchanged from the synchronous world:
 - `frameStream` borrows one reused buffer — reduce each frame *inside* the stream (`.mapZIO(...)`), don't buffer the borrowed `Mat` across stages.
 - `framesCopied` hands out owned `Managed[Mat]` clones — consume each in the pulling fiber (`.mapZIO(m => m.use(...))`). A clone dropped because the fiber is interrupted before a downstream `use`/scope takes it over leaks, exactly as a dropped `Managed` would in synchronous code — which is why `Scope`, not a bare clone, is how you keep frames in effectful code.
 
-:::tip Fibers do not change the rule
+:::tip[Fibers do not change the rule]
 "One owner per handle" is about the *handle*, not the concurrency primitive. A ZIO fiber is still a thread as far as native memory is concerned — a native object still belongs to exactly one fiber at a time, and `Scope` is how you make that ownership survive interruption.
 :::
 
