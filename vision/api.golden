@@ -1085,6 +1085,9 @@ object scalacv.OccupancyGrid
   implements java.io.Serializable
   def apply$default$3(): double
   def apply(int, int, double): scalacv.OccupancyGrid
+  static val scalacv$OccupancyGrid$$$Clamp: double
+  static val scalacv$OccupancyGrid$$$LogHit: double
+  static val scalacv$OccupancyGrid$$$LogMiss: double
 object scalacv.Ocr
   extends java.lang.Object
   implements java.io.Serializable

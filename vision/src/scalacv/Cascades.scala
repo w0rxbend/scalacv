@@ -83,7 +83,7 @@ object Cascades:
       // which is exactly the Windows case and also what a missing classifier jar looks like.
       Option(Loader.cacheResource(classOf[org.bytedeco.opencv.opencv_java], resource)) match
         case Some(f) if f.isFile && f.canRead => Right(f)
-        case Some(f) => Left(CvError.LoadFailed(f.getPath, s"extracted, but not a readable file"))
+        case Some(f) => Left(CvError.LoadFailed(f.getPath, "extracted, but not a readable file"))
         case None => Left(CvError.LoadFailed(resource, unavailable(platform)))
     catch
       case e: IOException => Left(CvError.LoadFailed(resource, s"could not be extracted: ${e.getMessage}"))

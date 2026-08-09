@@ -17,10 +17,9 @@ import org.opencv.core.{CvType, Mat}
   */
 final class OccupancyGrid private (val cols: Int, val rows: Int, val resolution: Double):
 
+  import OccupancyGrid.{Clamp, LogHit, LogMiss}
+
   private val logOdds = Array.fill(cols * rows)(0.0)
-  private val LogHit = 0.85
-  private val LogMiss = 0.4
-  private val Clamp = 4.0
 
   /** The `(column, row)` cell containing world point `(x, y)`. The grid is centred on the origin. */
   def cellOf(x: Double, y: Double): (Int, Int) =
@@ -110,6 +109,19 @@ final class OccupancyGrid private (val cols: Int, val rows: Int, val resolution:
     cells.toSeq
 
 object OccupancyGrid:
+
+  /** The log-odds a single obstacle reading adds to a cell. */
+  private val LogHit = 0.85
+
+  /** The log-odds a single see-through reading subtracts from a cell. Smaller than [[LogHit]] on purpose:
+    * seeing nothing is weaker evidence of free space than a return is of an obstacle.
+    */
+  private val LogMiss = 0.4
+
+  /** The bound each cell's log-odds is clamped to, so a long run of identical readings cannot saturate a cell
+    * beyond what a few contrary ones can undo.
+    */
+  private val Clamp = 4.0
 
   /** A `cols`×`rows` grid, each cell `resolution` world-units square, centred on the origin. */
   def apply(cols: Int, rows: Int, resolution: Double = 0.05): OccupancyGrid =

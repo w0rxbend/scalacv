@@ -210,16 +210,19 @@ object Camera:
   /** Opens camera `index`, runs `use`, and closes the camera afterwards — even on an exception. */
   def using[A](index: Int, options: CaptureOptions = CaptureOptions.Default)(
       use: Camera => A
-  ): Either[CvError, A] =
-    open(index, options).map: camera =>
-      try use(camera)
-      finally camera.close()
+  ): Either[CvError, A] = scoped(open(index, options))(use)
 
   /** Opens `source`, runs `use`, and closes the camera afterwards. */
   def usingFile[A](source: String, options: CaptureOptions = CaptureOptions.Default)(
       use: Camera => A
-  ): Either[CvError, A] =
-    openFile(source, options).map: camera =>
+  ): Either[CvError, A] = scoped(openFile(source, options))(use)
+
+  /** Runs `use` over a successfully opened camera and closes it afterwards. The shared body of [[using]] and
+    * [[usingFile]], which differ only in how the camera is opened — a failed open is passed straight through,
+    * so there is nothing to close.
+    */
+  private def scoped[A](opened: Either[CvError, Camera])(use: Camera => A): Either[CvError, A] =
+    opened.map: camera =>
       try use(camera)
       finally camera.close()
 
@@ -256,7 +259,7 @@ final class Recorder private (private val handle: Managed[VideoWriter], val size
       s"a recorder needs 8-bit frames, got ${CvType.typeToString(frame.`type`())} — convert first, for " +
         "example with convertScaleAbs, or by normalising to 0..255 and converting to CV_8U"
     )
-    Cv.attempt(s"VideoWriter.write")(handle.get.write(frame)).map(_ => ())
+    Cv.attempt("VideoWriter.write")(handle.get.write(frame)).map(_ => ())
 
   /** The raw `VideoWriter`, **borrowed** — the low-level escape hatch. Owned by this `Recorder`. */
   def writer: VideoWriter = handle.get

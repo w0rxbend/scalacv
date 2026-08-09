@@ -81,7 +81,7 @@ private object NativeDelete:
       case e: NoSuchMethodException =>
         throw CvError.NativesMissing(
           s"${cls.getName} has no delete(long): this build of the OpenCV bindings is not one " +
-            s"scalacv can free. Please report the bytedeco version.",
+            "scalacv can free. Please report the bytedeco version.",
           e
         )
       case e: RuntimeException =>
