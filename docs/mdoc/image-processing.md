@@ -253,7 +253,10 @@ flat.release()
 ```
 
 High-level: `scene().gray.equalizeHist`. For a gentler linear stretch instead, `normalize(min, max)`
-rescales into a range without redistributing:
+rescales into a range without redistributing. It also brings the result down to 8-bit by default,
+which is what makes a float or 16-bit intermediate — a Sobel response, a distance transform, a
+disparity map — actually displayable; pass `OutputDepth.SameAsSource` when you need to keep the
+source's precision:
 
 ```scala mdoc:silent
 scene().gray.equalizeHist.close()

@@ -17,9 +17,9 @@ Every operation falls into one of four kinds — knowing which is how you reason
 | **query** | borrows — the image stays alive | plain data |
 | **transform** | **consumes** — the image is spent | a new `Image` |
 | **draw** | **consumes**, mutating in place (no copy) | a new `Image` |
-| **terminal** | consumes and **releases** | a result / nothing |
+| **terminal** | consumes and **releases** — except `managed`, which consumes but hands ownership on instead of freeing | a result / nothing |
 
-A transform on a consumed image throws — take `.copy` first to branch. Extension verbs from `vision`/`graphs` (faces, AR, OCR, Picture drawing) activate with `import scalacv.*`.
+A transform on a consumed image throws — take `.copy` first to branch. Extension verbs from `vision`/`graphs` (faces, AR, OCR, `Picture` drawing) activate with `import scalacv.*` **once the `scalacv-vision` / `scalacv-graphs` jar is on the classpath**. The import cannot conjure a module you have not added as a dependency: if `image.faces(...)` does not resolve, the missing piece is the build file, not the import. See [Getting started](/getting-started).
 
 ## Queries — read without consuming
 
@@ -41,7 +41,7 @@ A transform on a consumed image throws — take `.copy` first to branch. Extensi
 | `toHsv` | BGR → HSV (the space to [threshold colour](/color-masking) in) |
 | `invert` | `255 − v` per channel |
 | `adjust(brightness, contrast)` | linear brightness/contrast |
-| `normalize(min, max)` | min-max contrast stretch |
+| `normalize(min, max, depth)` | min-max contrast stretch; `depth` defaults to `OutputDepth.Unsigned8`, so a float or 16-bit source comes back displayable — pass `OutputDepth.SameAsSource` to keep its precision |
 | `gamma(g)` | gamma correction (`<1` darkens, `>1` lifts) |
 | `saturate(factor)` | saturation (`0` grey, `>1` vivid) |
 | `temperature(shift)` | colour temperature (`>0` warm, `<0` cool) |
@@ -54,9 +54,9 @@ A transform on a consumed image throws — take `.copy` first to branch. Extensi
 
 | Operation | Does |
 |---|---|
-| `blur(radius)` | quick radius-based Gaussian (`0` = identity) |
+| `blur(radius)` | quick radius-based Gaussian; the kernel side is `2 * radius + 1`, so `blur(2)` is a 5×5. `radius = 0` is the identity **but still consumes the receiver** — it moves the Mat into a fresh `Image` rather than copying it. A negative radius throws `IllegalArgumentException` |
 | `gaussianBlur(kernel, sigmaX, sigmaY)` | full-control Gaussian |
-| `medianBlur(radius)` | median — kills salt-and-pepper noise, keeps edges |
+| `medianBlur(radius)` | median — kills salt-and-pepper noise, keeps edges. `radius` starts at `1` (a 3×3), so unlike `blur` there is no "do nothing" value: to make the step optional, branch around the call — `if denoise then img.medianBlur(1) else img` |
 | `bilateralFilter(diameter, sigmaColor, sigmaSpace)` | edge-preserving smooth (slower) |
 | `edgePreserving(strength, detail)` | flatten texture, keep edges |
 
@@ -64,20 +64,21 @@ A transform on a consumed image throws — take `.copy` first to branch. Extensi
 
 | Operation | Does |
 |---|---|
-| `canny(t1, t2, apertureSize, l2Gradient)` | Canny edges → always `CV_8UC1` |
-| `threshold(value, maxValue, kind)` | fixed/Otsu binarise |
+| `canny(threshold1, threshold2, apertureSize, l2Gradient)` | Canny edges → always `CV_8UC1`. `threshold1` is the weak (edge-linking) level and `threshold2` the strong one — both `Double`, so name them at the call site; `apertureSize` is the internal Sobel window and must be `3`, `5` or `7`; `l2Gradient = true` uses the exact gradient magnitude instead of the cheaper approximation. Parameter by parameter in [Image processing](/image-processing) |
+| `threshold(value, maxValue, kind)` | fixed or automatic binarise. **Discards** the level OpenCV computed — with `Threshold.otsu()` or `Threshold.triangle()` that number *is* usually the point, so reach for the mid-level `mat.threshold(...)`, which returns `(Managed[Mat], ThresholdResult)` |
 | `adaptiveThreshold(blockSize, c, method, inverse)` | per-neighbourhood threshold (uneven light) |
 
 ## Geometry — *transforms*
 
 | Operation | Does |
 |---|---|
-| `resize(width, height)` / `resizeTo(size, interp)` | absolute resize |
-| `scale(factor, interp)` | scale both axes by a factor |
+| `resize(width, height)` | absolute resize in pixels. **No interpolation parameter** — it always uses `Interpolation.Linear` |
+| `resizeTo(size, interpolation)` | absolute resize to a `Size`, with the interpolation of your choice |
+| `scale(factor, interpolation)` | scale both axes by a factor, with the interpolation of your choice |
 | `crop(rect)` | crop to an **independent copy** (not a view) |
 | `flip(how)` | mirror — see `Flip` |
-| `rotate(rotation)` | lossless 90°/180° quarter-turn |
-| `rotate(degrees, scale)` | arbitrary angle, canvas expanded to fit |
+| `rotate(rotation)` | lossless 90°/180° quarter-turn — see `Rotation` |
+| `rotate(degrees, scale)` | arbitrary angle, measured **counter-clockwise**, canvas expanded to fit. `rotate(90.0)` equals `rotate(Rotation.CounterClockwise)` |
 | `pad(size, …)` / `border(top, bottom, left, right, …)` | add a border |
 | `undistort(intrinsics)` | remove lens distortion — see [Calibration](/calibration) |
 | `deskew(maxAngle)` | straighten text skew (OCR prep) |
@@ -104,7 +105,7 @@ A transform on a consumed image throws — take `.copy` first to branch. Extensi
 |---|---|
 | `inRange(lo, hi)` | binary mask of pixels within a colour range |
 | `applyMask(mask)` | keep pixels where `mask` is non-zero |
-| `blend(other, weight)` | alpha-composite `other` over this |
+| `blend(other, weight)` | convex mix: `this * weight + other * (1 - weight)`. `weight` is **this image's** share, not `other`'s — it ranges over `[0, 1]` and defaults to `0.5`; anything outside that range throws `IllegalArgumentException`. `other` is borrowed and must match this image in size and type |
 | `inpaint(mask, radius)` | fill the masked region from its surroundings |
 | `seamlessCloneInto(background, mask, center)` | Poisson clone into a background |
 | `blurBackground(mask, …)` / `replaceBackground(mask, bg, …)` | [virtual background](/conferencing) |
@@ -115,15 +116,19 @@ A transform on a consumed image throws — take `.copy` first to branch. Extensi
 
 ## Drawing — *draw* (mutate in place, consume the receiver)
 
-| Operation | Draws |
-|---|---|
-| `drawRect(rect, color, thickness)` | a rectangle (filled with `Thickness.Filled`) |
-| `drawRects(rects, …)` | many rectangles in one pass |
-| `drawCircle(center, radius, …)` | a circle |
-| `drawText(text, at, …)` | text (baseline-anchored — see [Drawing](/drawing)) |
-| `drawContours(contours, …)` | contour outlines / filled masks |
-| `draw(picture)` | a [`Picture`](/graphics) scene graph |
-| `markFaces` · `drawSkeleton` · `drawMarkerAxes/Cube` · `drawTracks` | domain overlays (vision) |
+| Operation | Draws | From |
+|---|---|---|
+| `drawRect(rect, color, thickness)` | a rectangle (filled with `Thickness.Filled`) | `scalacv` |
+| `drawRects(rects, …)` | many rectangles in one pass | `scalacv` |
+| `drawCircle(center, radius, …)` | a circle | `scalacv` |
+| `drawText(text, at, color, scale)` | text (baseline-anchored — see [Drawing](/drawing)) | `scalacv` |
+| `drawContours(contours, …)` | contour outlines / filled masks | `scalacv` |
+| `draw(picture)` | a [`Picture`](/graphics) scene graph | `scalacv-graphs` |
+| `markFaces(faces, color)` | a box per face and a dot per landmark | `scalacv-vision` |
+| `drawSkeleton(pose, minScore, …)` | a line per bone, a dot per confident keypoint — see [Pose estimation](/pose-estimation) | `scalacv-vision` |
+| `drawTracks(tracks, color)` | a box and a `#id` label per [tracked object](/tracking) | `scalacv-vision` |
+| `drawMarkerAxes(intrinsics, markerLength, …)` | a 3-D X/Y/Z frame on every ArUco marker | `scalacv-vision` |
+| `drawMarkerCube(intrinsics, markerLength, …)` | a wireframe cube standing on every marker — see [Marker AR](/marker-ar) | `scalacv-vision` |
 
 ## Detection & analysis — extension *queries* (return plain data)
 
@@ -132,9 +137,19 @@ A transform on a consumed image throws — take `.copy` first to branch. Extensi
 | `faces(detector)` | `Seq[Face]` (YuNet) | [Face recognition](/face-recognition) |
 | `detectHaar(classifier, …)` | `Seq[Rect]` (Haar cascade) | [Object detection](/object-detection) |
 | `qrCodes` / `arucoMarkers(dict, …)` | decoded codes / markers | [Object detection](/object-detection) · [Marker AR](/marker-ar) |
-| `arMarkers(…)` / `estimatePose(…)` | markers with 3-D pose | [Marker AR](/marker-ar) |
+| `estimatePose(net, inputSize, layout, …)` | a `Pose` — **human** keypoints | [Pose estimation](/pose-estimation) |
+| `arMarkers(intrinsics, markerLength, dictionary)` | `Seq[MarkerPose]` — markers with 3-D pose | [Marker AR](/marker-ar) |
 | `segment(net, …)` | a person mask | [Conferencing](/conferencing) |
-| `recognize` / `forOcr` | text / OCR-prepped image | [OCR](/ocr) |
+| `forOcr(denoise, blockSize, c)` | an OCR-prepped `Image` — **a transform**, not a query: it consumes the receiver | [OCR](/ocr) |
+
+Two symbols in this area are *not* methods on `Image`, and looking for them there is a common wrong turn:
+
+- **Recognising text** is `Ocr.read(image, engine)`, an object method that borrows the image. `recognize`
+  is the one method **you implement** on the `OcrEngine` trait, because scalacv does the OpenCV
+  preparation and leaves the recognition engine for you to supply.
+- **Marker pose from a marker you have already detected** is `Ar.estimatePose(marker, markerLength, intrinsics)`,
+  also an object method. The `estimatePose` in the table above is a different operation entirely — human
+  body keypoints from a neural network.
 
 ## Terminals & lifecycle
 
@@ -144,7 +159,7 @@ A transform on a consumed image throws — take `.copy` first to branch. Extensi
 | `bytes(format)` | encode to in-memory bytes, then **release** → `Either[CvError, Array[Byte]]` |
 | `close()` | release now (idempotent) |
 | `copy` | **query** — an independent deep copy (to branch a chain) |
-| `managed` | hand the underlying `Managed[Mat]` over (consumes) |
+| `managed` | hand the underlying `Managed[Mat]` over → `Managed[Mat]`. Consumes the `Image` but does **not** free the Mat: ownership moves to you, so `use` it, `release()` it, or hand it to `Image.wrap` |
 
 ## Constructors
 
@@ -155,7 +170,7 @@ A transform on a consumed image throws — take `.copy` first to branch. Extensi
 | `Image.decode(bytes, flags)` | decode in-memory bytes → `Either` |
 | `Image.fromBufferedImage(bi)` | from AWT |
 | `Image.wrap(managed)` | adopt a `Managed[Mat]` |
-| `Image.reading(path)(use)` | read **and** scope-close — the safest entry point |
+| `Image.reading(path, flags)(use)` | read **and** scope-close — the safest entry point. `flags` is the same `ImreadFlags` `read` takes, so a scoped greyscale or reduced-size decode is one argument away |
 
 A quick taste — a chain drawn from several categories at once:
 

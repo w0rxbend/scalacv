@@ -116,10 +116,28 @@ def countObjects(path: String, minArea: Double = 50.0): Either[CvError, Int] =
 
 ## Make it yours
 
-- **Real photos** — swap the drawn scene for `Image.read(...)`. If your objects are *dark on a light* background, invert the threshold (`Threshold.BinaryInv`) or the image first.
-- **Touching objects** — if blobs merge, `erode` them apart before counting, or use the watershed approach (drop to the [mid-level Ops](/low-level)).
+- **Real photos** — swap the drawn scene for `Image.read(...)`. If your objects are *dark on a light* background, flip the threshold mode: see [Dark objects on a light background](#dark-objects-on-a-light-background) below.
+- **Touching objects** — if two coins touch, they come back as **one** contour and your count is short. `erode` shrinks every white blob by a few pixels, which pulls the join apart; `dilate` afterwards grows them back. The [cookbook recipe](/cookbook#separate-two-touching-blobs) does it end to end. Both verbs are on `Image`, so you stay in the same chain.
 - **Not just counting** — you already have each `boundingRect`; crop each one (`photo.crop(rect)`) to run a classifier, read text with [OCR](/ocr), or measure it.
 - **Live video** — wrap the same function in [`Camera.foreach`](/video) to count objects in every frame of a stream.
+
+### Dark objects on a light background
+
+Our coins were bright on a dark tray, so the default threshold mode — keep everything **brighter** than the cutoff — was the one we wanted. Photograph dark objects on a white sheet and that same rule keeps the *sheet* and throws the objects away. You want the opposite rule: keep everything **darker** than the cutoff.
+
+That mode is called `BinaryInv` — "binary, inverted". It is a case of the `Threshold.Mode` enumeration, and `threshold`'s `kind` parameter takes a `Threshold`, a small case class pairing a mode with an optional automatic method. So the value to pass is `Threshold(Threshold.Mode.BinaryInv)`:
+
+```scala mdoc:silent
+val darkOnLight =
+  Image.blank(200, 120, Scalar.White) // a white sheet…
+    .drawCircle(Point(60, 60), 25, Scalar.Black, Thickness.Filled) // …with one dark object on it
+    .gray
+    .threshold(128, kind = Threshold(Threshold.Mode.BinaryInv)) // dark pixels become white
+
+darkOnLight.close() // nothing below uses it, so release it here
+```
+
+`Threshold.Binary` is the default you have been using all along. `Threshold.otsu()` and `Threshold.triangle()` go one better and pick the cutoff value for you — handy when lighting varies between photos. See [Image processing](/image-processing).
 
 ## Next
 

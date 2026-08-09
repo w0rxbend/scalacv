@@ -76,24 +76,31 @@ Mat().drawLine(Point(0, 0), Point(10, 10), Scalar.White)
 
 ## The primitive catalog
 
-Every drawing op at a glance — which level exposes it, and whether it can be filled:
+Every drawing op at a glance. The two right-hand columns are the important ones: **the two tiers do not
+take the same arguments**, and the mid-level signature is the richer of the two. An op that exists at
+both tiers still loses knobs on the way up to `Image`.
 
-| Op | On `Mat` | On `Image` | Thickness accepted |
-| --- | :---: | :---: | --- |
-| `drawLine` | ✅ | — | `Thickness.Stroke` only |
-| `drawArrow` | ✅ | — | `Thickness.Stroke` only |
-| `drawRect` | ✅ | ✅ | `Thickness` (`Filled` ok) |
-| `drawCircle` | ✅ | ✅ | `Thickness` (`Filled` ok) |
-| `drawText` | ✅ | ✅ | `Thickness.Stroke` only |
-| `drawPolyline` | ✅ | — | `Thickness.Stroke` only |
-| `fillPolygon` | ✅ | — | always filled |
-| `drawContours` | ✅ | ✅ | `Thickness` (`Filled` ok) |
-| `drawSegments` | ✅ | — | `Thickness.Stroke` only |
-| `drawRects` | — | ✅ | `Thickness` (`Filled` ok) |
+| Op | On `Mat` (mid-level) | On `Image` (high-level) | Style knobs the `Mat` version takes | …and what survives on `Image` |
+| --- | :---: | :---: | --- | --- |
+| `drawLine` | ✅ | — | `thickness: Thickness.Stroke`, `lineType` | — |
+| `drawArrow` | ✅ | — | `thickness: Thickness.Stroke`, `lineType`, `tipLength` | — |
+| `drawRect` | ✅ | ✅ | `thickness: Thickness` (`Filled` ok), `lineType` | `thickness` |
+| `drawCircle` | ✅ | ✅ | `thickness: Thickness` (`Filled` ok), `lineType` | `thickness` |
+| `drawText` | ✅ | ✅ | `font`, `scale`, `thickness: Thickness.Stroke`, `lineType` | `scale` **only** |
+| `drawPolyline` | ✅ | — | `closed`, `thickness: Thickness.Stroke`, `lineType` | — |
+| `fillPolygon` | ✅ | — | always filled; `lineType` | — |
+| `drawContours` | ✅ | ✅ | `thickness: Thickness` (`Filled` ok), `lineType` | `thickness` |
+| `drawSegments` | ✅ | — | `thickness: Thickness.Stroke`, `lineType` | — |
+| `drawRects` | — | ✅ | — (no `Mat` form) | `thickness` |
 
-The rule behind the last column: only **closed shapes** can be filled. Lines, arrows, text and segments
-accept `Thickness.Stroke` only, so the fill sentinel is not even expressible — the mistake stops
-compiling instead of aborting native code (see [Style](#style-thickness-line-type-font-colour)).
+Two rules are encoded in those columns.
+
+- **Only closed shapes can be filled.** Lines, arrows, text and segments take `Thickness.Stroke`, so the
+  fill sentinel is not even expressible — the mistake stops compiling instead of aborting native code
+  (see [Style](#style-thickness-line-type-font-colour)).
+- **`lineType` never survives the trip to `Image`, and `drawText` also loses `font` and `thickness`.**
+  `Image.drawText` takes `(text, at, color, scale)` and nothing else, so bold or anti-aliased text has to
+  be drawn through the borrowed Mat — [there is a worked example below](#the-high-level-image-transforms).
 
 ## The primitives
 
@@ -344,15 +351,35 @@ val annotatedBytes: Either[CvError, Array[Byte]] =
 ```
 
 `Image` exposes the everyday subset — `drawRect`, `drawRects`, `drawCircle`, `drawText`, `drawContours` —
-and drops the rarely-chained knobs (`lineType`, `font`, arrows, raw polylines). For those, borrow the
-Mat with `.mat` and use the mid-level ops shown above; the image stays yours.
+and drops the rarely-chained knobs: `lineType` on every verb, plus **`font` and `thickness` on
+`drawText`** (its full signature is `drawText(text, at, color, scale)`), arrows, and raw polylines. For
+any of those, borrow the Mat with `.mat` and use the mid-level ops shown above; the image stays yours,
+so the chain picks up again on the next line.
 
 ```scala mdoc:silent
 val mixedBytes: Either[CvError, Array[Byte]] =
   val img = Image.blank(200, 120)
   img.mat.drawArrow(Point(10, 60), Point(120, 60), Scalar.Green) // mid-level knob on the borrowed Mat
+
+  // Bold, anti-aliased, non-default font: none of these three arguments exists on `Image.drawText`,
+  // so this heading has to be drawn through the borrowed Mat.
+  img.mat.drawText(
+    "bold",
+    Point(10, 30),
+    Scalar.White,
+    font = Font.Duplex,
+    scale = 0.8,
+    thickness = Thickness.Stroke(2),
+    lineType = LineType.AntiAliased
+  )
+
   img.drawText("go", Point(130, 66), Scalar.White).bytes(".png") // back to the high-level pipeline
 ```
+
+The `"go"` on the last line is drawn by `Image.drawText`, which fixes the font at `Font.Simplex`, the
+thickness at one pixel and the line type at `LineType.Connected8`. The `"bold"` above it is the same
+pixels-into-the-same-Mat operation with all three of those chosen explicitly. Nothing is copied either
+way — the only difference is which signature you are calling.
 
 :::warning[`.mat` borrows — don't close it]
 `img.mat` hands you the underlying `Mat` without transferring ownership. Draw on it, but let the

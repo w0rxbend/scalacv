@@ -38,14 +38,15 @@ Every term the docs use, in plain language, with a link to where it's put to wor
 - **Contour** — the outline of a connected blob, as a list of points; the output of `findContours`. See [Contours](/contours).
 - **Histogram** — a count of how many pixels fall in each intensity bucket; equalising it stretches contrast.
 - **Inpainting** — filling a masked-out region from its surroundings, to erase a scratch or object. See the [Cookbook](/cookbook).
-- **Hough transform** — detects lines (and circles) in an edge image. See [Hough](/hough).
+- **Hough transform** — detects straight **lines** in an edge image. scalacv wraps the line variants only: `houghLines` returns infinite lines as `PolarLine`s, `houghLinesP` returns finite `Segment`s with real endpoints. OpenCV's circle variant, `HoughCircles`, is **not** wrapped — to find round shapes, take `contours()` and measure circularity (`4 * math.Pi * c.area / (c.perimeter * c.perimeter)`, which is `1.0` for a perfect circle and falls away as the outline gets less round), or call `Imgproc.HoughCircles` yourself through the [raw-Mat escape hatch](/low-level). See [Hough](/hough).
 
 ## Detection & deep learning
 
 - **Feature / keypoint** — a distinctive, repeatably-findable spot in an image (a corner, a blob). **Descriptors** encode the look around a keypoint so it can be matched across images. See [Object detection](/object-detection).
 - **Cascade (Haar/LBP)** — a fast, classic object detector defined by an XML file (bundled, nothing to download). Good for faces. See [Object detection](/object-detection).
 - **DNN** — Deep Neural Network. scalacv runs pre-trained networks via OpenCV's `dnn` module. See [DNN inference](/dnn).
-- **Blob (DNN)** — the pre-processed 4-D tensor (batch × channels × height × width) fed into a network.
+- **Blob (image)** — a connected region of foreground pixels in a binary image: the white patch left behind after a threshold or a colour mask, and the thing `contours()` outlines. **This is the sense the tutorials use** when they talk about counting blobs. See [Contours](/contours).
+- **Blob (DNN)** — an unrelated use of the same word, from a different corner of OpenCV: the pre-processed 4-D tensor (batch × channels × height × width) fed into a network. It only turns up around `Dnn.blobFromImage` and the [DNN](/dnn) page.
 - **ONNX** — an open model format; the usual way to bring a trained network into scalacv.
 - **Optical flow** — how pixels/features move between consecutive frames; the basis of motion and odometry.
 - **ArUco marker** — a printed square barcode used as a known reference for [augmented reality](/marker-ar) and pose.

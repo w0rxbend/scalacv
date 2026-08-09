@@ -96,7 +96,22 @@ have them in a table:
 | an `Image`/`Mat` after a transform (`gray`, `blur`, `canny`, `resize`, …) | the **receiver was consumed**; you own the **result** | the result is yours; the receiver is already spent |
 | a `Mat` from `Video.frames` | **borrowed** — one reused buffer | the loop; do not retain it |
 | a `mask` you pass to `applyMask`/`inpaint`/`blend`/`seamlessCloneInto` | **borrowed** by the call | you — close it yourself; the receiver *is* consumed |
-| a `Managed[Mat]` from `Video.framesCopied` / `Camera.take` | an **owned** copy | you |
+| a `Managed[Mat]` from `Video.framesCopied` | an **owned** copy per frame | you — `.release()` each, or take them into a `Using.Manager` |
+| a `Seq[Image]` from `Camera.take(n)` | **n owned images** in a plain collection | you — `.close()` every one; prefer `Camera.taking(n)(use)` |
+
+`Camera.take(count)` is the one call that hands you several live handles at once, in a type —
+`Seq[Image]` — that cannot warn you about it. `Camera.taking(count)(use)` grabs the same frames, runs
+your body over them, and closes all of them afterwards: on success, on failure, and on exception.
+Reach for `taking` unless you specifically need the frames to outlive a scope.
+
+```scala mdoc:compile-only
+import scalacv.*
+
+// `taking` closes every frame for you. `take` would hand you three live Images to close yourself.
+Camera.using(0) { cam =>
+  cam.taking(3) { frames => frames.map(_.width).sum }
+}
+```
 
 :::note[Queries borrow, transforms and terminals consume]
 A **query** (`width`, `height`, `channels`, `contours`, `isEmpty`) *borrows* the image — it stays alive
@@ -285,8 +300,8 @@ Video.open(0).map { capture =>
 
 The `Ops` extensions are safe to run *inside* the loop even on the borrowed frame: each allocates its
 own destination and never aliases the receiver, so `frame.cvtColor(...)` yields a Mat you own. The
-[`Camera`](/video) helpers (`foreach`, `take`, `snapshot`) go a step further and hand you owned `Image`
-copies directly, so there is no borrowing to reason about at all — see [`video`](/video).
+[`Camera`](/video) helpers (`foreach`, `taking`, `take`, `snapshot`) go a step further and hand you owned
+`Image` copies directly, so there is no borrowing to reason about at all — see [`video`](/video).
 
 The ZIO module mirrors this exactly: `frameStream` borrows one buffer (same contract), `framesCopied`
 gives you owned `Managed[Mat]` per frame — see [`zio`](/zio) and [`concurrency`](/concurrency).

@@ -126,10 +126,12 @@ or `org.opencv.core.Core.setNumThreads(1)` from code before you spread work. Con
 
 The [ZIO](/zio) module expresses ownership as `Scope`, so a native object is released when the scope closes — on success, failure, **and interruption**, which `try`/`finally` cannot promise once an interrupt is in play. Native and blocking work runs on the blocking pool, never the CPU-sized default executor.
 
-The two borrowing contracts carry over unchanged from the synchronous world:
+The two **borrowing** contracts carry over unchanged from the synchronous world:
 
 - `frameStream` borrows one reused buffer — reduce each frame *inside* the stream (`.mapZIO(...)`), don't buffer the borrowed `Mat` across stages.
 - `framesCopied` hands out owned `Managed[Mat]` clones — consume each in the pulling fiber (`.mapZIO(m => m.use(...))`). A clone dropped because the fiber is interrupted before a downstream `use`/scope takes it over leaks, exactly as a dropped `Managed` would in synchronous code — which is why `Scope`, not a bare clone, is how you keep frames in effectful code.
+
+The **end-of-stream** semantics do not carry over. The synchronous readers take an `attemptsPerFrame` bound — how many consecutive empty reads it takes before the traversal is declared over. `Video.frames` defaults it to `1`, which is right for a file, where the first empty read is end-of-file; the `Camera` helpers (`foreach`, `take`, `taking`, `snapshot`) default it to `3`, so a webcam that drops one frame keeps going. `frameStream` has no such parameter: the first empty read ends the `ZStream`, and it ends it *cleanly* — your app sees a normal completion, not an error. See [A dropped frame ends your stream](/zio#dropped-frame) for what to do about it.
 
 :::tip[Fibers do not change the rule]
 "One owner per handle" is about the *handle*, not the concurrency primitive. A ZIO fiber is still a thread as far as native memory is concerned — a native object still belongs to exactly one fiber at a time, and `Scope` is how you make that ownership survive interruption.

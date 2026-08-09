@@ -284,10 +284,28 @@ val detectorClass =
 
 It is deliberately **opt-in and loud**. `delete(long)` is private API with no compatibility promise, and
 the reflection it needs stops working the moment OpenCV is loaded from a named module. So if the bridge
-cannot be opened, `Releasable.handle` **throws** (a `CvError.NativesMissing`, usually asking for
-`--add-opens java.base/java.lang=ALL-UNNAMED`) rather than falling back to the garbage collector — a
-silent fallback would look like success while leaking native memory without bound. See
-[the error model](/error-model) for how that surfaces.
+cannot be opened, `Releasable.handle` **throws** a `CvError.NativesMissing` rather than falling back to
+the garbage collector — a silent fallback would look like success while leaking native memory without
+bound.
+
+The thrown message names the exact flag to add, and it is not a guess: scalacv computes it from the
+offending class's *own* module and package, by asking the class itself
+(`cls.getModule.getName` and `cls.getPackageName`). A *module* is the JDK 9+ unit that decides what
+reflection may reach; a *package* is the familiar dotted namespace. Here the two have different
+names, which is exactly why the flag is computed rather than hard-coded: the bytedeco jar declares
+the module `org.bytedeco.opencv`, while the detector classes sit in packages called `org.opencv.…`.
+So freeing a `QRCodeDetector` asks for
+`--add-opens org.bytedeco.opencv/org.opencv.objdetect=ALL-UNNAMED`, and freeing a DNN `Net` asks for
+`--add-opens org.bytedeco.opencv/org.opencv.dnn=ALL-UNNAMED`. It is never `java.base/java.lang` —
+the member being opened is OpenCV's own private `nativeObj` field (and its private `delete(long)`),
+not anything belonging to the JDK.
+
+When OpenCV is on the **classpath** rather than the module path — the normal case, and the one this
+page's examples assume — its classes are in the unnamed module, so there is no module to open and no
+flag that would help. In that situation the message says exactly that and asks for a bug report,
+instead of printing a flag with a `null` module name in it. See
+[the error model](/error-model) for how that surfaces, and
+[Troubleshooting](/troubleshooting#add-opens) for the fix.
 
 :::warning[Do not drop a Regime-2 handle unwrapped.]
 Constructing a `QRCodeDetector` (or any Regime-2 type) and letting it go out of scope leaks native

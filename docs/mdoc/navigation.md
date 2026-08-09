@@ -99,15 +99,25 @@ detection:
 
 ```scala mdoc
 {
-  val one = Features.detect(scene(0, 0))
-  val two = Features.detect(scene(8, 0))
-  val matched = Features.matches(one, two).size
-  one.close(); two.close()
-  s"${one.size} vs ${two.size} features, $matched matches"
+  val imgA = scene(0, 0)
+  val imgB = scene(8, 0)
+  val one = Features.detect(imgA)
+  val two = Features.detect(imgB)
+  try
+    val matched = Features.matches(one, two).size
+    s"${one.size} vs ${two.size} features, $matched matches"
+  finally
+    one.close(); two.close()
+    imgA.close(); imgB.close()
 }
 ```
 
-`Descriptors` owns native memory — close it (or take it into a `Using` block).
+`Descriptors` owns native memory — close it (or take it into a `Using` block). So do the images: there
+are **four** native handles in that snippet, not two. `Features.detect` **borrows** the image (it makes
+its own greyscale copy internally and never consumes or closes what you pass it) and **returns** an owned
+`Descriptors`. That is the same borrow/own split this page spells out for `OpticalFlow` — whoever created
+the `Image` still has to close it, and the result you were handed is yours as well. Holding the images in
+named `val`s rather than passing `scene(...)` inline is what makes them closeable at all.
 
 Two knobs shape the recognition:
 

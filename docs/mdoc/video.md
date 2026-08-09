@@ -286,23 +286,31 @@ Camera.usingFile("clip.mp4") { cam =>
 ### recordTo — read, transform, write, in one line
 
 `recordTo(path)(transform)` reads every frame, applies `transform`, and writes the results to a
-video, returning the number of frames written. The recorder is **sized from the source**, so
-`transform` must preserve the frame size — colour-convert, filter, annotate: yes; resize: size a
-[`Recorder`](#recorder) yourself instead.
+video, returning the number of frames written. The recorder is **sized from the first transformed
+frame** — not from the source's advertised `CAP_PROP_FRAME_WIDTH`/`HEIGHT`, which a camera commonly
+answers as `0`×`0`. So a resizing `transform` is fine, as long as it resizes *every* frame the same
+way: the first frame fixes the geometry, and a later frame of a different size is reported as a
+`Left`, not thrown.
+
+Reading an `.mp4` is fine; the container restriction is the *writer's*. The default codec is MJPG,
+which opens only inside an `.avi` — see [Codecs and portability](#codecs-and-portability).
 
 ```scala mdoc:compile-only
 import scalacv.*
 
 val written: Either[CvError, Long] =
   Camera.usingFile("clip.mp4") { cam =>
-    cam.recordTo("edges.mp4")(_.gray.canny(80, 160).convert(ColorConversion.GrayToBgr))
+    cam.recordTo("edges.avi")(_.gray.canny(80, 160).convert(ColorConversion.GrayToBgr))
   }.flatten
 ```
 
-The `transform` is any `Image => Image`. It must return a **3-channel** frame the size of the input,
-because the recorder was opened `color = true` at the source size — that is why the Canny example
-ends `.convert(ColorConversion.GrayToBgr)`: `canny` produces a single-channel edge map, and it has
-to become BGR again before it can be written.
+The `transform` is any `Image => Image`. It must return a **3-channel, 8-bit** frame, because the
+recorder is opened `color = true` — that is why the Canny example ends
+`.convert(ColorConversion.GrayToBgr)`: `canny` produces a single-channel edge map, and it has to
+become BGR again before it can be written.
+
+A source that yields no frames at all returns `Right(0)` and creates no file — there was never a
+frame to size a writer from, so there is nothing to write.
 
 ```scala mdoc:compile-only
 import scalacv.*
@@ -314,23 +322,24 @@ Camera.usingFile("clip.mp4") { cam =>
 ```
 
 `fps` defaults to the source's rate (falling back to 30 for a camera that reports none); `codec`
-defaults to `Codec.Mp4v`. A frame that fails to encode, or a recorder that cannot open, is a `Left`.
+defaults to `Codec.Mjpg`. A frame that fails to encode, or a recorder that cannot open, is a `Left`.
 The parameters:
 
 | Parameter | Default | Notes |
 |---|---|---|
-| `path` | — | output file; extension should match the codec's container |
+| `path` | — | output file; extension must match the codec's container — `.avi` for the default |
 | `fps` | `0` | `0` derives from the source, falling back to `30` |
-| `codec` | `Codec.Mp4v` | see [Codecs and portability](#codecs-and-portability) |
+| `codec` | `Codec.Mjpg` | see [Codecs and portability](#codecs-and-portability) |
 | `attemptsPerFrame` | `3` | end-of-stream tolerance; `1` for a finite file |
 
 ### Recorder
 
 For output that is not a straight source-to-file pass — writing frames you built yourself, a
 different size from any source, mixing several inputs — open a `Recorder` directly. It is fixed at
-open time to one frame size, fps and codec; **every frame written must match that size**, or `write`
-throws `IllegalArgumentException`. Like `Camera`, it is caller-owned and `AutoCloseable`, with a
-scoped `using` form:
+open time to one frame size, fps and codec (defaulting to `Codec.Mjpg`, hence the `.avi` below);
+**every frame written must match that size and be 8-bit**, or `write` throws
+`IllegalArgumentException`. Like `Camera`, it is caller-owned and `AutoCloseable`, with a scoped
+`using` form:
 
 ```scala mdoc:compile-only
 import scalacv.*
@@ -369,11 +378,16 @@ Video.open("clip.mp4").flatMap { capture =>
 `writer` borrows the raw `VideoWriter` as the escape hatch, and `size` is the fixed frame size.
 `Recorder.open` also takes `color = false` for a single-channel (greyscale) output stream.
 
-:::warning[Frame size is fixed, and enforced]
+:::warning[Frame size and depth are fixed, and enforced]
 A `Recorder` is opened at one size and never changes it. Writing a frame of any other dimensions
 throws `IllegalArgumentException` immediately — this is a programming error (a mismatched pipeline),
 not a data-dependent failure, so it throws rather than returning a `Left`. If your transform changes
 size, size the recorder to the *output* and resize each frame to match before writing.
+
+The same check covers **depth**: the encoder takes `CV_8U` and nothing else. A float frame — the
+output of `sobel`, a distance transform, a disparity map — used to be accepted and encoded as
+garbage; it now throws, naming the offending type. Bring it down with
+`normalize(0, 255)`, which produces 8-bit by default.
 :::
 
 ### Codecs and portability
@@ -384,21 +398,29 @@ platform's videoio build links (FFmpeg, the OS frameworks):
 
 | Codec | `fourcc` | Container | Notes |
 |---|---|---|---|
-| `Mp4v` | `mp4v` | `.mp4` | MPEG-4 Part 2 — the widely-available default |
+| `Mjpg` | `MJPG` | `.avi` | **The default.** Motion-JPEG — large files, but served by videoio's **built-in** writer, so it needs no FFmpeg, no GStreamer and no system codec |
+| `Mp4v` | `mp4v` | `.mp4` | MPEG-4 Part 2 — smaller files, but needs a videoio linked against FFmpeg or a platform MPEG-4 encoder |
 | `Avc1` | `avc1` | `.mp4` | H.264, best compression, only if the build ships an H.264 encoder |
-| `Mjpg` | `MJPG` | `.avi` | Motion-JPEG — large files, but encodes with the **built-in** codecs |
 | `Xvid` | `XVID` | `.avi` | Xvid MPEG-4 |
 
 The portability point: an unavailable codec is a **`Left`**, not a silent black file. OpenCV reports
 it by leaving `isOpened` false, and `Recorder.open` turns that into a
-[`CvError`](/error-model) whose message points you at the fallback. **`Codec.Mjpg` with an `.avi`
-extension encodes with only the built-in codecs**, so it is the portable choice when `Mp4v` is
-unavailable.
+[`CvError`](/error-model) whose message points you at the fallback.
+
+`Mjpg` is the default precisely because it is the one combination that opens on every build. The
+`org.bytedeco` `linux-x86_64` and `windows-x86_64` payloads this project builds against ship **no
+FFmpeg plugin at all**, so `Mp4v` and `Avc1` do not open there — a zero-config `recordTo` defaulting
+to `Mp4v` would have returned a `Left` on the natives the library itself pins. Reach for `Mp4v` when
+you know your build has FFmpeg and you want the smaller file.
+
+The container is part of the bargain in both directions: MJPG opens only in an `.avi`, and `Mp4v`
+only in an `.mp4`, so the codec and the extension always have to move together.
 
 ```scala mdoc:compile-only
 import scalacv.*
 
-// A portable fallback pattern: try the compact codec, fall back to the always-available one.
+// Prefer the compact codec where the build supports it, fall back to the always-available default.
+// Note the extension moves with the codec — MJPG cannot open inside an `.mp4`.
 def openRecorder(base: String, size: Size, fps: Double): Either[CvError, Recorder] =
   Recorder.open(s"$base.mp4", size, fps, Codec.Mp4v)
     .orElse(Recorder.open(s"$base.avi", size, fps, Codec.Mjpg))
@@ -451,6 +473,28 @@ opened with the parameters attached reports `isOpened == false`), so `Video` ret
 rather than turning a supported source into a failure. Set them for RTSP/HTTP; leave them alone for
 local files.
 
+### Camera warm-up
+
+A webcam is not ready the instant `open` returns. Auto-exposure, auto-white-balance and auto-gain
+are closed loops running on the device, and they need a handful of real frames to converge — which
+is why `open`-then-`snapshot` so often produces a black or badly-under-exposed image *and reports it
+as a success*. There is no property to poll for "converged", so the only fix is to pull some frames
+and throw them away.
+
+`warmupFrames` is how many to discard, and it defaults to `None`, meaning "let the source decide":
+**a camera index discards 5, a file or URL discards 0**. That split is the point — a file has no
+exposure loop, its first frame is exactly as correct as its hundredth, and discarding frames there
+would silently skip real content. Set it explicitly to override either default; `Some(0)` turns
+warm-up off on a camera, and a larger number helps a device that is slow to settle.
+
+```scala mdoc:compile-only
+import scalacv.*
+
+// A camera in a dim room may need longer than the default five frames to expose correctly.
+val patient = CaptureOptions(warmupFrames = Some(20))
+val cam: Either[CvError, Camera] = Camera.open(0, patient)
+```
+
 The full `CaptureOptions` shape:
 
 | Field | Default | Meaning |
@@ -458,6 +502,7 @@ The full `CaptureOptions` shape:
 | `backend` | `CaptureBackend.Any` | which videoio backend to ask for |
 | `openTimeout` | `None` | best-effort cap on how long opening may block |
 | `readTimeout` | `None` | best-effort cap on how long one frame read may block |
+| `warmupFrames` | `None` | frames to grab and discard at open; `None` means 5 for a camera, 0 for a file |
 
 ## The ownership split
 

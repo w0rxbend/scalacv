@@ -226,9 +226,18 @@ FaceRecognizer.load("sface.onnx").foreach { rec =>
 ```
 
 :::danger[Threading]
-`FaceDetectorYN` (the detector) is **stateful and not thread-safe** — `detect` resets its input
-size on every call. Give each thread its own detector. A `FaceRecognizer` and a `Gallery`, by
-contrast, are safe to share: the gallery is immutable, and embeddings are plain data.
+- **`FaceDetectorYN`** (the detector behind `Image.faces`) — stateful, **one per thread**: `detect`
+  re-sets its input size on every call.
+- **`FaceRecognizer`** — **also one per thread**. `alignCrop` and `feature` both run against a
+  single native object, and OpenCV's `FaceRecognizerSF.feature()` writes into an internal buffer
+  that `embed` copies its numbers out of. If a second thread calls `embed` in between, it
+  overwrites that buffer and the first thread copies out the *other* face's vector. Build one
+  recognizer per worker, or guard the shared one with a lock or a `ThreadLocal`. It is
+  `AutoCloseable`, so close each one when its thread retires.
+- **`Gallery` and `FaceEmbedding`** — genuinely safe to share: they are immutable values, and
+  `enroll` returns a *new* gallery rather than mutating the one you had.
+
+See [What is safe to share](/concurrency#what-is-safe-to-share).
 :::
 
 ## Accuracy checklist
@@ -241,6 +250,7 @@ If recognition is flaky, the cause is almost always upstream of the metric:
 | Known people read as strangers | too few enrolments, or bad reference crops | enrol several poses per person |
 | Random misidentification | detection missed/mis-aligned the face | check `Image.faces` finds the face first |
 | `embed` throws | frame is not BGR, or landmarks are stale | pass the exact BGR frame the `Face` came from |
+| Embeddings differ run to run, or an occasional garbage vector | one `FaceRecognizer` shared across threads | one recognizer per worker — see [What is safe to share](/concurrency#what-is-safe-to-share) |
 
 ## Next
 

@@ -1,6 +1,14 @@
 # Tutorial: detect faces in a photo
 
-Finding faces is the "hello world" of object detection, and scalacv can do it with **zero downloads** — the classic Haar cascade ships inside the OpenCV jars. This tutorial walks the whole arc: load a detector, find the faces, draw a box around each, and save the result. Then we point at how to upgrade to a modern neural detector when you need more accuracy.
+**Needs: `scalacv` + `scalacv-vision`.** Everything on this page — `Cascades`, `CascadeName`, `image.detectHaar`, `image.faces` — is defined in the **vision** module, not the core one, so the core dependency alone will not compile it. Both dependency lines are on [Getting started](/getting-started).
+
+Finding faces is the "hello world" of object detection, and on Linux and macOS scalacv can do it with **zero downloads** — the classic Haar cascade ships inside the OpenCV jars. This tutorial walks the whole arc: load a detector, find the faces, draw a box around each, and save the result. Then we point at how to upgrade to a modern neural detector when you need more accuracy.
+
+:::warning[Windows is the one exception]
+The `windows-x86_64` bytedeco jar ships an empty `share/` directory and no cascade XML at all, unlike every other platform. `Cascades.load` can therefore only return a `Left(CvError.LoadFailed(...))` there, and the message says so in those words rather than leaving you guessing.
+
+If you target Windows, download `haarcascade_frontalface_alt.xml` from the OpenCV repository, ship it alongside your application, and swap `Cascades.load(CascadeName.FrontalFaceAlt)` for `Cascades.loadFrom("cascades/haarcascade_frontalface_alt.xml")` wherever it appears below. `loadFrom` hands back the same `Either[CvError, Managed[CascadeClassifier]]`, so every other line on this page is unchanged. Every non-Windows platform needs nothing. See [Object detection](/object-detection).
+:::
 
 These snippets need a real photo, so they're `compile-only` (they type-check in the docs build; run them in a project with a `people.jpg`).
 

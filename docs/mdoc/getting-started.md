@@ -19,26 +19,41 @@ below.
 
 ## Add the dependency
 
-scalacv depends on the OpenCV **Java API**, which has no native code in it. The natives ship in
-per-platform classifier jars, and **no build tool can put a classifier into a published POM** — so
-you add the one for your platform yourself:
+scalacv is published under the group id `com.worxbend` as **four separate artifacts**: `scalacv`
+(the core), `scalacv-vision`, `scalacv-graphs` and `scalacv-zio`. Only the core is required. The
+other three are opt-in, so a program that reads and filters images never pulls a SLAM loop-closure
+detector into its jar — but that also means a symbol that lives in one of them will not compile
+until you add its line. Three of the five tutorials on this site need `scalacv-vision` — faces, DNN,
+and the motion-alarm step of the video tutorial — so add that one too if you plan to follow along.
+
+On top of scalacv itself you need OpenCV. scalacv depends on the OpenCV **Java API**, which has no
+native code in it. The natives ship in per-platform classifier jars, and **no build tool can put a
+classifier into a published POM** — so you add the one for your platform yourself.
+
+All of it in Mill — delete the scalacv lines you do not need, and keep both bytedeco ones:
 
 ```scala
 def mvnDeps = Seq(
-  mvn"com.worxbend::scalacv:0.1.0",
+  mvn"com.worxbend::scalacv:0.1.0",         // core: images, video, contours, drawing, filters
+  mvn"com.worxbend::scalacv-vision:0.1.0",  // detectors, DNN, pose, tracking, motion, OCR, calibration, SLAM
+  mvn"com.worxbend::scalacv-graphs:0.1.0",  // the Picture scene graph, charts, animated GIFs
+  mvn"com.worxbend::scalacv-zio:0.1.0",     // only if you use ZIO
   mvn"org.bytedeco:opencv:4.13.0-1.5.13;classifier=linux-x86_64",
   mvn"org.bytedeco:openblas:0.3.31-1.5.13;classifier=linux-x86_64"
 )
 ```
 
-The same three lines for sbt (note `%%` for the Scala artifact, `%` for the Java-world bytedeco
-jars, and `classifier`):
+The same for sbt (note `%%` for the Scala artifacts, `%` for the Java-world bytedeco jars, and
+`classifier`):
 
 ```scala
 libraryDependencies ++= Seq(
-  "com.worxbend" %% "scalacv" % "0.1.0",
-  "org.bytedeco" %  "opencv"  % "4.13.0-1.5.13" classifier "linux-x86_64",
-  "org.bytedeco" %  "openblas" % "0.3.31-1.5.13" classifier "linux-x86_64"
+  "com.worxbend" %% "scalacv"        % "0.1.0",
+  "com.worxbend" %% "scalacv-vision" % "0.1.0",
+  "com.worxbend" %% "scalacv-graphs" % "0.1.0",
+  "com.worxbend" %% "scalacv-zio"    % "0.1.0",
+  "org.bytedeco" %  "opencv"         % "4.13.0-1.5.13" classifier "linux-x86_64",
+  "org.bytedeco" %  "openblas"       % "0.3.31-1.5.13" classifier "linux-x86_64"
 )
 ```
 
@@ -64,15 +79,23 @@ single-platform container.
 
 Which modules do you actually need?
 
-| You want to… | Add |
+| You want to… | Add this coordinate |
 |---|---|
-| read/transform/write images, contours, video capture | `scalacv` (core, always) |
-| face/QR/marker detection, DNN, pose, tracking, OCR, SLAM | `scalacv-vision` |
-| draw scene graphs, charts, animated GIFs | `scalacv-graphs` |
-| an effect-typed API | `scalacv-zio` |
+| read/transform/write images, contours, video capture | `com.worxbend::scalacv` (core, always) |
+| face/QR/marker detection, DNN, pose, tracking, motion, OCR, SLAM | `com.worxbend::scalacv-vision` |
+| draw scene graphs, charts, animated GIFs | `com.worxbend::scalacv-graphs` |
+| an effect-typed API | `com.worxbend::scalacv-zio` |
 
 `vision` and `graphs` depend only on `core`, so you pull exactly what you use — see
 [Architecture](/architecture#three-modules-split-along-real-lines).
+
+:::note[A missing module looks like a missing method]
+Every module puts its verbs in the same `scalacv` package, so one `import scalacv.*` covers all four
+— but only for the jars that are actually on your classpath. If the compiler says
+`value faces is not a member of Image`, or `Not found: Cascades`, the symbol is not misspelled: it
+lives in `scalacv-vision` (or `scalacv-graphs`) and that dependency line is missing. See
+[Troubleshooting](/troubleshooting).
+:::
 
 :::note[If you forget the native lines]
 `scalacv` alone compiles without them, but it will not run: the OpenCV symbols are absent until you

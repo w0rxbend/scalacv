@@ -60,19 +60,35 @@ forget:
 Images.read("/does/not/exist.png").isLeft
 ```
 
-The `Left` is a [`CvError.DecodeFailed`](/error-model), and all three unreadable cases — absent,
-directory, undecodable — report identically, because that is all the information `imread` gives us:
+The `Left` is a [`CvError.DecodeFailed`](/error-model), and it says **which** of the unreadable cases
+happened — absent, a directory, empty, or genuinely undecodable. That is more than `imread` can tell you:
+`imread` answers all four with the same empty Mat. `Images.read` gets the distinction by doing the file
+I/O on the JVM side (`Files.readAllBytes`) and handing the bytes to the same in-memory decoder
+`Images.decode` uses, so the filesystem questions are answered by the filesystem:
 
 ```scala mdoc
 Images.read("/does/not/exist.png").left.map(_.getMessage)
 ```
 
 :::note
-There are exactly three failure shapes coming out of OpenCV's codecs, and every function here folds them
-into `CvError`: a decode returns an empty Mat (→ [`DecodeFailed`](/error-model)); a write returns `false`
-(→ [`EncodeFailed`](/error-model)); an unknown extension *throws* — which scalacv heads off with a
-`haveImageWriter` check so it too becomes an `EncodeFailed`, never an escaped exception. See the
-[error model](/error-model) for the full ADT.
+Every failure here folds into `CvError`. From OpenCV's codecs: a decode that produces an empty Mat
+(→ [`DecodeFailed`](/error-model)), an encode that returns `false` (→ [`EncodeFailed`](/error-model)),
+and an unknown extension, which *throws* — headed off with a `haveImageWriter` check so it too becomes an
+`EncodeFailed` rather than an escaped exception. From the JVM's file I/O, which `read` and `write` use for
+the filesystem half of the job: a missing file, a directory, an unwritable destination or a path the
+filesystem cannot represent, each with its own message. See the [error model](/error-model) for the full
+ADT.
+:::
+
+:::info[Why the file I/O is not `imread`'s]
+Routing through `Files.readAllBytes`/`Files.write` also fixes a Windows-only bug. `imread` takes a
+`const char*`, and the JNI hands it the path in modified UTF-8, which the Windows CRT's `fopen` then
+interprets in the active ANSI code page — so any path with a non-ASCII character (`фото.png`,
+`日本.png`, a user folder with an accent in it) fails to open and is misreported as "missing file". Java's
+own file APIs use the wide-character calls and have no such problem. The cost is that `read` buffers the
+whole encoded file in the JVM heap, which matters only above ~2 GB. Note that the *other* String-path
+native calls — `VideoCapture`, `VideoWriter`, `CascadeClassifier.load`, `Dnn.readNet` — still carry the
+same hazard; they have no in-memory equivalent to reroute through.
 :::
 
 ## The `Images` object
@@ -147,7 +163,7 @@ val source = Mat(64, 64, CvType.CV_8UC3)
 ```
 
 ```scala mdoc
-Images.write("/no/such/directory/out.png", source).isLeft   // returns false -> EncodeFailed
+Images.write("/no/such/directory/out.png", source).isLeft   // parent directory missing -> EncodeFailed
 ```
 
 :::warning

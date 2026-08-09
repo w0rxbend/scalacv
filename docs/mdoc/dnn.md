@@ -366,10 +366,9 @@ only `blobFromImage` → `forward` → read. Loading per frame would dwarf the i
 
 ## Backend and target selection
 
-By default OpenCV runs the graph on its own CPU backend. If you built OpenCV against CUDA, OpenCL or
-another accelerator, the raw `Net` exposes `setPreferableBackend` / `setPreferableTarget` — call them
-**once, right after loading, before the first `forward`**. These take raw `int` constants from
-`org.opencv.dnn.Dnn`:
+By default OpenCV runs the graph on its own CPU backend. To ask for something else, the raw `Net` exposes
+`setPreferableBackend` / `setPreferableTarget` — call them **once, right after loading, before the first
+`forward`**. These take raw `int` constants from `org.opencv.dnn.Dnn`:
 
 ```scala mdoc:compile-only
 import org.opencv.dnn.Dnn as CvDnn
@@ -379,20 +378,24 @@ net.setPreferableBackend(CvDnn.DNN_BACKEND_OPENCV)
 net.setPreferableTarget(CvDnn.DNN_TARGET_CPU)
 ```
 
-Common pairings:
+Common pairings, and whether the natives this project depends on can actually run them:
 
-| Goal | Backend | Target |
-| --- | --- | --- |
-| Default CPU (always available) | `DNN_BACKEND_OPENCV` | `DNN_TARGET_CPU` |
-| CPU with FP16 math | `DNN_BACKEND_OPENCV` | `DNN_TARGET_CPU_FP16` |
-| NVIDIA GPU (CUDA build only) | `DNN_BACKEND_CUDA` | `DNN_TARGET_CUDA` |
-| NVIDIA GPU, half precision | `DNN_BACKEND_CUDA` | `DNN_TARGET_CUDA_FP16` |
-| Any OpenCL device | `DNN_BACKEND_OPENCV` | `DNN_TARGET_OPENCL` |
+| Goal | Backend | Target | Reachable with the bundled natives? |
+| --- | --- | --- | --- |
+| Default CPU | `DNN_BACKEND_OPENCV` | `DNN_TARGET_CPU` | yes — this is the default |
+| CPU with FP16 math | `DNN_BACKEND_OPENCV` | `DNN_TARGET_CPU_FP16` | ARM v8 only; elsewhere it falls back to `DNN_TARGET_CPU` |
+| A GPU with an OpenCL driver | `DNN_BACKEND_OPENCV` | `DNN_TARGET_OPENCL` (or `…_FP16`) | yes, if the host has an OpenCL driver installed |
+| NVIDIA GPU via CUDA | `DNN_BACKEND_CUDA` | `DNN_TARGET_CUDA` (or `…_FP16`) | **no** — see below |
 
-:::warning
-A backend/target the build was not compiled with silently falls back to CPU rather than erroring — so a
-`DNN_TARGET_CUDA` that "does nothing" usually means natives without CUDA support, not a code bug. The
-bundled bytedeco natives are CPU-only; a GPU target needs a custom OpenCV build.
+:::warning[An accelerator you did not get is silent, not loud]
+A backend or target the build was not compiled with — or whose driver is missing — falls back to the CPU
+and returns a perfectly good answer. No exception, no `Left`, no log line. So a `DNN_TARGET_CUDA` that
+"does nothing" is almost never a code bug.
+
+`DNN_TARGET_OPENCL` is reachable through the ordinary bytedeco classifier; **CUDA is not reachable
+through scalacv today**, for reasons that have nothing to do with your code. The evidence, the two ways
+the `-gpu` classifier fails, and a timing recipe for checking whether an accelerator really engaged are
+all in one place: [GPU acceleration: what is and is not reachable](/native-cache#gpu).
 :::
 
 ## Troubleshooting
@@ -405,7 +408,7 @@ bundled bytedeco natives are CPU-only; a GPU target needs a custom OpenCV build.
 | Runs but everything is one class | `Size` given as `(height, width)` instead of `(width, height)` |
 | `IllegalArgumentException` from `forward` | empty blob or an empty `Net` reached the call |
 | JVM crash during `forward` | the blob was released while the pass was in flight — keep it in a `Managed` |
-| GPU target seems ignored | natives built without that accelerator; falls back to CPU |
+| GPU target seems ignored | the accelerator is not in this build, or its driver is absent — it falls back to CPU silently. See [GPU acceleration](/native-cache#gpu) |
 
 ## Next
 

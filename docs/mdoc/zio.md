@@ -47,6 +47,7 @@ import org.opencv.videoio.VideoCapture
 | `fromCv(result)` | `IO[CvError, A]` | Lifts an `Either[CvError, A]` into ZIO's **typed** error channel. |
 | `readImage(path, flags)` | `IO[CvError, Image]` | Decodes an image (blocking pool), caller-owned, typed failure. |
 | `imageScoped(path, flags)` | `ZIO[Scope, CvError, Image]` | Reads an image and closes it when the scope ends. |
+| `captureScoped(source, options)` | `ZIO[Scope, CvError, VideoCapture]` | Opens a video source and releases it when the scope ends; a source that will not open is a **typed failure**, not an empty stream. |
 | `frameStream(capture)` | `ZStream[Any, Throwable, Mat]` | Frames as **borrowed** Mats — one reused buffer. |
 | `framesCopied(capture)` | `ZStream[Any, Throwable, Managed[Mat]]` | Frames as **owned** clones — the safe, costlier form. |
 
@@ -173,17 +174,23 @@ def brightnessOverTime(source: String): _root_.zio.ZIO[Any, Throwable, _root_.zi
   ZIO.scoped {
     for
       _   <- loadNatives
-      cap <- acquireRelease(VideoCapture(source))
+      cap <- captureScoped(source)
       out <- frameStream(cap).map(f => f.get(0, 0)(0)).runCollect
     yield out
   }
 ```
 
-The capture is acquired through `acquireRelease` so the scope owns and releases it; `frameStream`
-deliberately does **not** close it. The stream stops at the first frame that fails to decode — for a
-file, end-of-stream; for a camera, a dropped connection — the two being indistinguishable through
-OpenCV's API. For the duration of the stream the capture's exception mode is forced off and restored
-afterwards, so a finished file *completes* the stream instead of failing it.
+The capture is acquired through `captureScoped` so the scope owns and releases it; `frameStream`
+deliberately does **not** close it. Prefer `captureScoped` over `acquireRelease(VideoCapture(source))`:
+the bare `VideoCapture` constructor cannot fail — OpenCV reports "I could not open that" by leaving
+`isOpened` false rather than by throwing — so a typo'd path hands you a live object whose every read
+returns false. `captureScoped` checks that for you and fails with a typed `CvError` instead, and
+`frameStream` fails the stream on the first pull if it is handed a capture that never opened.
+
+Past that, the stream stops at the first frame that fails to decode — for a file, end-of-stream; for a
+camera, a dropped connection — the two being indistinguishable through OpenCV's API. For the duration of
+the stream the capture's exception mode is forced off and restored afterwards, so a finished file
+*completes* the stream instead of failing it.
 
 :::danger[These combinators break on `frameStream`]
 Anything that retains elements sees N references to one reused buffer holding the *newest* content —
@@ -199,6 +206,93 @@ not N distinct frames. On `frameStream`, avoid:
 Map to an owned value first (`.map(f => f.get(0,0)(0))`, encode it, copy the pixels), *then* combine.
 :::
 
+## A dropped frame ends your stream {#dropped-frame}
+
+The *borrowing* contract carries over from `Video.frames` unchanged. The **end-of-stream** rule does
+not, and the difference is easy to miss because nothing fails when it bites.
+
+The synchronous reader takes an `attemptsPerFrame` bound: how many consecutive `read()` calls have to
+come back empty before it decides the source is finished. `Video.frames` defaults it to `1` — right for
+a file, where the first empty read is end-of-file — and the [`Camera`](/video) helpers (`foreach`,
+`take`, `taking`, `snapshot`) default it to `3`, so a webcam that hiccups for a frame or two does not
+end the loop. `frameStream` has no such parameter.
+
+| | `Video.frames(cap, attemptsPerFrame = 3)` | `frameStream(cap)` |
+| --- | --- | --- |
+| consecutive empty reads that declare the end | 3 — your choice, the default is 1 | 1, and not configurable |
+| a transient dropped frame | read again, the traversal continues | the stream ends |
+| how the end is signalled | `hasNext` returns `false` | `ZIO.fail(None)`, which `ZStream` reads as "no more elements" |
+| what your program sees | the block returns normally | the stream **completes successfully** — no error, no defect, no log line |
+
+That last row is the trap. A camera that drops one frame and a file that reached its last frame produce
+the identical outcome: a `ZStream` that finishes cleanly. Your `runCount` returns 7 instead of 7000 and
+nothing anywhere says why.
+
+### Ride out a dropped frame
+
+There is no `attemptsPerFrame` to pass, and re-entering the source with `frameStream(cap) ++
+frameStream(cap)` does not give you one: a `VideoCapture` is stateful, so the second stream resumes
+where the first stopped rather than restarting anything. At a genuine end-of-file it ends immediately
+(harmless but pointless), and against a dead camera it blocks in `read` again with no bound — the exact
+hazard `attemptsPerFrame` exists to cap. Repeating that forever would spin on a blocking read.
+
+The shape that does work is to keep the bounded retry where it already exists — in the synchronous
+iterator — and run the whole traversal as one blocking effect, reducing each frame to an owned value
+inside it:
+
+```scala mdoc:compile-only
+// `attemptsPerFrame = 3` rides out two dropped frames in a row; the third empty read ends the
+// traversal. `captureScoped` releases the capture when the scope closes.
+def brightnessRidingOutDrops(source: String): _root_.zio.ZIO[Any, Throwable, Vector[Double]] =
+  ZIO.scoped {
+    for
+      _   <- loadNatives
+      cap <- captureScoped(source)
+      out <- ZIO.attemptBlockingInterrupt(
+               Video.frames(cap, attemptsPerFrame = 3)(_.map(_.get(0, 0)(0)).toVector)
+             )
+    yield out
+  }
+```
+
+You give up per-frame `ZStream` composition for the duration of the traversal — the loop is opaque to
+ZIO until it returns — and you get the retry bound back. If you need both, run that loop in its own
+fiber and push each reduced frame into a `Queue` that the rest of your pipeline consumes as a
+`ZStream`; the bound stays in the synchronous loop, and everything downstream is ordinary ZIO.
+
+### Telling end-of-file from a dead camera
+
+You cannot, not from OpenCV: a finished file and a broken connection are reported through the same
+failed `read`, which is why the synchronous API documents the two as indistinguishable. The only honest
+signal is time — how long since the last frame arrived — and the place to bound it is the source, not
+the stream:
+
+```scala mdoc:compile-only
+import scala.concurrent.duration.FiniteDuration
+import java.util.concurrent.TimeUnit
+
+// FFMPEG and GStreamer honour CAP_PROP_READ_TIMEOUT_MSEC for network sources. V4L2, AVFoundation and
+// the built-in MJPEG reader ignore it, and nothing in the API reports which backend you got.
+def countRtspFrames(url: String): _root_.zio.ZIO[Any, Throwable, Long] =
+  ZIO.scoped {
+    for
+      _   <- loadNatives
+      cap <- captureScoped(url, CaptureOptions.withTimeout(FiniteDuration(5L, TimeUnit.SECONDS)))
+      n   <- frameStream(cap).runCount
+    yield n
+  }
+```
+
+:::warning[Interruption does not cut a blocked read short]
+`frameStream` wraps its read in `attemptBlockingInterrupt`, which delivers a JVM `Thread.interrupt()` —
+and a thread parked inside OpenCV's native code never observes one. So interrupting the stream, or
+closing the scope around it, takes effect only once the in-flight `capture.read` returns on its own;
+until then the buffer `Mat`, the exception-mode restore and any enclosing `Scope` all stay pending.
+Running on the blocking pool means a wedged source pins a blocking thread instead of a compute one — it
+does not mean the read can be cancelled. Bound it at the source with `CaptureOptions.withTimeout`, on a
+backend that honours it.
+:::
+
 ## When you genuinely need to keep frames
 
 `framesCopied` is the safe-but-costlier counterpart: each element is its own clone as a
@@ -210,7 +304,7 @@ def frameSizes(source: String): _root_.zio.ZIO[Any, Throwable, Long] =
   ZIO.scoped {
     for
       _     <- loadNatives
-      cap   <- acquireRelease(VideoCapture(source))
+      cap   <- captureScoped(source)
       count <- framesCopied(cap).mapZIO(m => ZIO.succeed(m.use(_.rows))).runCount
     yield count
   }
@@ -235,9 +329,10 @@ inside `frameStream` — never the CPU-sized default executor. That is the contr
 
 - A stalled source — an RTSP stream that stops delivering frames, a dead camera — pins a thread on
   the **blocking** pool, not a compute thread, so it cannot starve the fibers doing your actual work.
-- `frameStream` is **interruptible**: because its read runs under `attemptBlockingInterrupt`, an
-  interrupted or scoped-closed stream unwinds instead of wedging on a source that will never return
-  a frame.
+- What it does **not** buy you is cancellation of a read already in flight. `attemptBlockingInterrupt`
+  delivers a `Thread.interrupt()`, and a thread sitting inside OpenCV's native `read` never sees it, so
+  an interrupted stream unwinds only after that read returns by itself, as *A dropped frame ends your
+  stream* above spells out. Cap the wait at the source with `CaptureOptions.withTimeout`.
 
 Parking these on the compute executor — which a plain `ZIO.attempt` would do — would let one hung
 capture exhaust it; that is why the module never does. (There is even a test that greps the module

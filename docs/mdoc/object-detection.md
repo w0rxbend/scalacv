@@ -349,6 +349,7 @@ annotation example below:
 | Accessor | Landmark index | Where it appears |
 |---|---|---|
 | `box` | — | bounding box (may extend past the frame) |
+| `clippedBox(w, h)` | — | `box` trimmed to a `w`×`h` frame, `None` if it falls outside |
 | `rightEye` | 0 | subject's right eye — image **left** |
 | `leftEye` | 1 | subject's left eye — image **right** |
 | `noseTip` | 2 | centre |
@@ -360,7 +361,9 @@ Two subtleties encoded in the type:
 
 - The `box` is **not clipped** to the image. YuNet regresses boxes from anchors, so a face at the
   edge of the frame legitimately yields a negative `x`/`y` or a box running past the image bounds.
-  Intersect it with the image `Rect` before using it as a submat.
+  `crop` rejects such a rectangle rather than trimming it, so clip first with
+  `face.clippedBox(image.width, image.height)` (or `face.clippedBox(image)`), which returns
+  `Option[Rect]` — `None` when the box lies entirely outside the frame.
 - "Right" in `rightEye`/`rightMouthCorner` is the *subject's* right, which appears on the **left**
   of the image. The landmark order is fixed: right eye, left eye, nose tip, right mouth corner,
   left mouth corner.

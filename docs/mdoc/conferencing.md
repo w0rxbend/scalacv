@@ -225,7 +225,7 @@ it needs a camera and a real per-frame mask:
 ```scala mdoc:compile-only
 def maskFor(frame: Image): Image = ??? // your segmentation or green-screen key, white over the person
 
-Camera.open(0).foreach { cam =>
+Camera.using(0) { cam =>
   cam.foreach() { f =>
     val mask = maskFor(f)
     f.blurBackground(mask).write("frame.png")
@@ -233,6 +233,13 @@ Camera.open(0).foreach { cam =>
   }
 }
 ```
+
+`Camera.using` (and `Camera.usingFile`, for a file or an RTSP URL) scopes the capture device to the block
+and closes it on every path out of your block — normal return and thrown exception alike. If the device
+cannot be opened at all there is nothing to close, and you get a `Left(CvError)` back. `Camera.open` /
+`Camera.openFile` hand you an `AutoCloseable` `Camera` that **you** must close yourself; reach for those
+only when the camera has to outlive a single block. Note that `Either.foreach` is not a scoping combinator:
+`Camera.open(0).foreach { cam => ... }` runs the body and then leaves the device open.
 
 For a segmentation-driven loop, hoist the `Net` **outside** the frame callback — loading it per frame is
 wasteful, and a `Net` is stateful (one per thread). Load it once, then call `f.segment(net, size)` inside:
