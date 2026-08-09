@@ -505,6 +505,11 @@ final class scalacv.Intrinsics
   def productElementName(int): java.lang.String
   def productPrefix(): java.lang.String
   def toString(): java.lang.String
+final class scalacv.Managed.Scope
+  extends java.lang.Object
+  def <init>(scala.util.Using$Manager): void
+  def adopt<A>(scalacv.Managed<A>): A
+  def apply<A>(A, scalacv.Releasable<A>): A
 final class scalacv.Managed<A>
   extends java.lang.Object
   implements java.lang.AutoCloseable
@@ -1267,6 +1272,7 @@ object scalacv.Managed
   extends java.lang.Object
   implements java.io.Serializable
   def apply<A>(A, scalacv.Releasable<A>): scalacv.Managed<A>
+  def scope<B>(scala.Function1<scalacv.Managed$Scope, B>): B
   def use<A, B>(scala.Function0<A>, scala.Function1<A, B>, scalacv.Releasable<A>): B
   static val scalacv$Managed$$$TrackOwnership: boolean
 object scalacv.Mats
