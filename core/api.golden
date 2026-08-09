@@ -836,6 +836,15 @@ object scalacv.BorderType
 object scalacv.Build
   extends java.lang.Object
   implements java.io.Serializable
+  def openBlasArtifactVersion(): java.lang.String
+  def openCvArtifactVersion(): java.lang.String
+  def openCvVersion(): java.lang.String
+  def scalaVersion(): java.lang.String
+object scalacv.BuildValues
+  extends java.lang.Object
+  implements java.io.Serializable
+  def openBlasArtifactVersion(): java.lang.String
+  def openCvArtifactVersion(): java.lang.String
   def openCvVersion(): java.lang.String
   def scalaVersion(): java.lang.String
 object scalacv.Camera

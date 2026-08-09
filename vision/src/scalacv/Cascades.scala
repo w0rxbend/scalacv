@@ -133,7 +133,7 @@ object Cascades:
          |per-platform classifier artifact, so this usually means only the classifier-less
          |org.bytedeco:opencv jar is on the classpath. Add:
          |
-         |  "org.bytedeco" % "opencv" % "4.13.0-1.5.13" classifier "$platform"""".stripMargin
+         |  "org.bytedeco" % "opencv" % "${Build.openCvArtifactVersion}" classifier "$platform"""".stripMargin
 
 /** Object detection on a Mat.
   *

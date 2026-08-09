@@ -267,15 +267,19 @@ object OpenCv:
   private def nativesNotOnClasspathHelp(cause: String | Null): String =
     val plat =
       try Loader.getPlatform
-      catch case _: Throwable => "<your-platform>"
+      catch
+        case _: Throwable => "<your-platform>"
+    // The versions come from Build, which is generated from the build's own Deps block: a hard-coded
+    // number here would keep telling users to add whatever release was current when this text was
+    // written, which for a "your classpath is wrong" message is the one thing it must not do.
     s"""OpenCV natives are not on the classpath ($cause).
        |
        |scalacv depends on the classifier-less OpenCV Java API only, because a build tool cannot
        |express a per-platform classifier in a published POM. Add the natives for your platform:
        |
-       |  "org.bytedeco" % "opencv"   % "4.13.0-1.5.13" classifier "$plat"
-       |  "org.bytedeco" % "openblas" % "0.3.31-1.5.13" classifier "$plat"
+       |  "org.bytedeco" % "opencv"   % "${Build.openCvArtifactVersion}" classifier "$plat"
+       |  "org.bytedeco" % "openblas" % "${Build.openBlasArtifactVersion}" classifier "$plat"
        |
        |Both lines are needed: libopencv_core links libopenblas. If you would rather not pick a
-       |platform, "org.bytedeco" % "opencv-platform" % "4.13.0-1.5.13" bundles every one, at a
-       |cost of about 408 MB.""".stripMargin
+       |platform, "org.bytedeco" % "opencv-platform" % "${Build.openCvArtifactVersion}" bundles every
+       |one, at a cost of about 408 MB.""".stripMargin
