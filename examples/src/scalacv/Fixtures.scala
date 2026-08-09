@@ -1,8 +1,8 @@
 package scalacv
 
-import org.opencv.core.{CvType, Mat, Point as CvPoint, Scalar as CvScalar, Size as CvSize}
+import org.opencv.core.{CvType, Mat, Point as CvPoint, Scalar as CvScalar}
 import org.opencv.imgproc.Imgproc
-import org.opencv.objdetect.{Objdetect, QRCodeEncoder}
+import org.opencv.objdetect.QRCodeEncoder
 
 /** Synthetic scenes for the examples, drawn programmatically.
   *
@@ -20,45 +20,31 @@ object Fixtures:
     Imgproc.line(m, CvPoint(10, 220), CvPoint(230, 210), CvScalar(255, 255, 255), 3)
     Managed(m)
 
-  /** A QR code carrying `payload`, scaled up past the detector's resolution floor. */
+  /** A QR code carrying `payload`, scaled up past the detector's resolution floor.
+    *
+    * `QRCodeEncoder` is one of the OpenCV types with no public `release()`, so it needs the `delete(long)`
+    * bridge — the same one-liner every detector in the library uses.
+    */
   def qrCode(payload: String, scale: Int = 12): Managed[Mat] =
-    val small = Mat()
-    try
-      QRCodeEncoder.create().encode(payload, small)
-      val big = Mat()
-      Imgproc.resize(small, big, CvSize(small.cols * scale, small.rows * scale), 0, 0, Imgproc.INTER_NEAREST)
-      val bgr = Mat()
-      try
-        Imgproc.cvtColor(big, bgr, Imgproc.COLOR_GRAY2BGR)
-        Managed(bgr.clone())
-      finally
-        big.release()
-        bgr.release()
-    finally small.release()
+    given Releasable[QRCodeEncoder] = Releasable.handle(_.getNativeObjAddr)
+    Managed.scope: own =>
+      val small = own(Mat())
+      own(QRCodeEncoder.create()).encode(payload, small)
+      val target = Size((small.cols * scale).toDouble, (small.rows * scale).toDouble)
+      val big = own.adopt(small.resize(target, Interpolation.Nearest))
+      // The BGR image is what the caller receives, so it is the one Mat the scope must not own — and,
+      // because the scope releases the grayscale rather than this, it no longer has to be a defensive copy.
+      big.cvtColor(ColorConversion.GrayToBgr)
 
-  /** A single ArUco marker from the 4x4_50 dictionary, on a white margin. */
+  /** A single ArUco marker from the 4x4_50 dictionary, on a white margin.
+    *
+    * The margin is not decoration: `Aruco.generateMarker` produces the tag with its own black border and no
+    * quiet zone, and the detector finds candidates by looking for a dark quad on a light background, so
+    * without the padding this marker is undetectable.
+    */
   def arucoMarker(id: Int, sizePx: Int = 200): Managed[Mat] =
-    val dict = Objdetect.getPredefinedDictionary(Objdetect.DICT_4X4_50)
-    val marker = Mat()
-    try
-      Objdetect.generateImageMarker(dict, id, sizePx, marker)
-      val bgr = Mat()
-      val bordered = Mat()
-      try
-        Imgproc.cvtColor(marker, bgr, Imgproc.COLOR_GRAY2BGR)
-        val pad = sizePx / 5
-        org.opencv.core.Core.copyMakeBorder(
-          bgr,
-          bordered,
-          pad,
-          pad,
-          pad,
-          pad,
-          org.opencv.core.Core.BORDER_CONSTANT,
-          CvScalar(255, 255, 255)
-        )
-        Managed(bordered.clone())
-      finally
-        bgr.release()
-        bordered.release()
-    finally marker.release()
+    Managed.scope: own =>
+      val marker = own.adopt(Aruco.generateMarker(ArucoDictionary.Dict4x4_50, id, sizePx))
+      val bgr = own.adopt(marker.cvtColor(ColorConversion.GrayToBgr))
+      val pad = sizePx / 5
+      bgr.border(pad, pad, pad, pad, BorderType.Constant, Scalar.White)

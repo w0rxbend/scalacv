@@ -34,19 +34,18 @@ import org.opencv.imgproc.Imgproc
       c <- 0 until board.columns + 1
       if (r + c) % 2 == 0
     do
-      val roi = m.submat(
+      // A submat is a view onto `m`'s pixels, but it is still a native header of its own to free — and
+      // `Managed.use` frees it even if the fill throws, which a bare `release()` after the call does not.
+      val cell = m.submat(
         margin + r * square,
         margin + (r + 1) * square,
         margin + c * square,
         margin + (c + 1) * square
       )
-      roi.setTo(cv.Scalar(0, 0, 0))
-      roi.release()
+      Managed.use(cell)(roi => roi.setTo(cv.Scalar(0, 0, 0)): Unit)
     Image.wrap(Managed(m))
 
   // --- project the flat board through the known camera, tilted by (rx, ry) degrees ----------------
-  def matMul(a: Mat, b: Mat): Mat =
-    val dst = Mat(); Core.gemm(a, b, 1.0, Mat(), 0.0, dst); dst
   val k = Mat(3, 3, CvType.CV_64F, cv.Scalar(0)); k.put(0, 0, fx, 0.0, cx, 0.0, fx, cy, 0.0, 0.0, 1.0)
   val aFlat = Mat(3, 3, CvType.CV_64F, cv.Scalar(0))
   aFlat.put(
@@ -65,25 +64,42 @@ import org.opencv.imgproc.Imgproc
   val aInv = Mat(); Core.invert(aFlat, aInv)
 
   def view(flat: Image, rx: Double, ry: Double): Image =
-    val rvec = Mat(3, 1, CvType.CV_64F); rvec.put(0, 0, math.toRadians(rx), math.toRadians(ry), 0.0)
-    val rot = Mat(); Calib3d.Rodrigues(rvec, rot)
-    val t = Array(-5.0, -3.5, 18.0) // centre the board in front of the camera
-    val model = Mat(3, 3, CvType.CV_64F)
-    for i <- 0 until 3 do
-      model.put(i, 0, rot.get(i, 0)(0)); model.put(i, 1, rot.get(i, 1)(0)); model.put(i, 2, t(i))
-    val h = matMul(matMul(k, model), aInv)
-    val dst = Mat()
-    Imgproc.warpPerspective(
-      flat.mat,
-      dst,
-      h,
-      cv.Size(imgW.toDouble, imgH.toDouble),
-      Imgproc.INTER_LINEAR,
-      Core.BORDER_CONSTANT,
-      cv.Scalar(255, 255, 255)
-    )
-    Seq(rvec, rot, model, h).foreach(_.release())
-    Image.wrap(Managed(dst))
+    // One scope for every working matrix. The previous `Seq(...).foreach(_.release())` at the end of this
+    // function released four of them but ran only on the happy path, and it missed two more entirely: the
+    // empty Mat `gemm` insists on being handed, and the intermediate `matMul(k, model)` product that the
+    // outer multiplication consumed and nobody named.
+    Managed.scope: own =>
+      def matMul(a: Mat, b: Mat): Mat =
+        val dst = own(Mat())
+        // gemm computes alpha*A*B + beta*C. beta is 0, so C contributes nothing — but the signature still
+        // requires a Mat, and that Mat still has to be freed.
+        Core.gemm(a, b, 1.0, own(Mat()), 0.0, dst)
+        dst
+
+      val rvec = own(Mat(3, 1, CvType.CV_64F))
+      rvec.put(0, 0, math.toRadians(rx), math.toRadians(ry), 0.0)
+      val rot = own(Mat())
+      Calib3d.Rodrigues(rvec, rot)
+      val t = Array(-5.0, -3.5, 18.0) // centre the board in front of the camera
+      val model = own(Mat(3, 3, CvType.CV_64F))
+      for i <- 0 until 3 do
+        model.put(i, 0, rot.get(i, 0)(0))
+        model.put(i, 1, rot.get(i, 1)(0))
+        model.put(i, 2, t(i))
+      val h = matMul(matMul(k, model), aInv)
+      // Allocated last and wrapped immediately: this is the warped view the caller gets, so it is the one
+      // Mat here the scope must not own.
+      val dst = Managed(Mat())
+      Imgproc.warpPerspective(
+        flat.mat,
+        dst.get,
+        h,
+        cv.Size(imgW.toDouble, imgH.toDouble),
+        Imgproc.INTER_LINEAR,
+        Core.BORDER_CONSTANT,
+        cv.Scalar(255, 255, 255)
+      )
+      Image.wrap(dst)
 
   val flat = flatBoard()
   Calibration.findCorners(flat, board) match

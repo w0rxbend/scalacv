@@ -23,7 +23,7 @@ object ConfigProbeBench:
     println(s"useOptimized   = ${Core.useOptimized}")
     println(s"getNumThreads  = ${Core.getNumThreads}")
     println(s"getNumberOfCPUs= ${Core.getNumberOfCPUs}")
-    println(s"buildInfo (parallel/IPP lines):")
+    println("buildInfo (parallel/IPP lines):")
     Core.getBuildInformation.linesIterator
       .filter(l => l.contains("Parallel") || l.contains("IPP") || l.contains("OpenCL"))
       .foreach(l => println("  " + l.trim))
