@@ -49,7 +49,7 @@ object Features:
           val descriptors = Mat() // transferred to the returned Descriptors, so not released here
           try
             Managed.use(Mat()): noMask =>
-              orb.detectAndCompute(gray, noMask, keypoints, descriptors)
+              Cv.orThrow("ORB.detectAndCompute")(orb.detectAndCompute(gray, noMask, keypoints, descriptors))
             val points = keypoints.toArray.map(kp => Point(kp.pt.x, kp.pt.y)).toSeq
             new Descriptors(points, Managed(descriptors))
           catch
@@ -65,7 +65,7 @@ object Features:
     else
       Managed(BFMatcher.create(Core.NORM_HAMMING, true)).use: matcher =>
         Managed.use(MatOfDMatch()): dm =>
-          matcher.`match`(a.descriptors.get, b.descriptors.get, dm)
+          Cv.orThrow("BFMatcher.match")(matcher.`match`(a.descriptors.get, b.descriptors.get, dm))
           dm.toArray.toSeq
             .filter(_.distance <= maxDistance)
             .sortBy(_.distance)
