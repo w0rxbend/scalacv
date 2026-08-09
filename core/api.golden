@@ -1279,6 +1279,7 @@ object scalacv.Mats
   extends java.lang.Object
   implements java.io.Serializable
   def chain(org.opencv.core.Mat, scala.collection.immutable.Seq<scala.Function1<org.opencv.core.Mat, scalacv.Managed<org.opencv.core.Mat>>>): scalacv.Managed<org.opencv.core.Mat>
+  def column(scala.collection.immutable.Seq<java.lang.Object>): org.opencv.core.Mat
   def grayscale(org.opencv.core.Mat): scalacv.Managed<org.opencv.core.Mat>
   def produce(java.lang.String, scala.Function1<org.opencv.core.Mat, scala.runtime.BoxedUnit>): scalacv.Managed<org.opencv.core.Mat>
   def readColumn(org.opencv.core.Mat, int): scala.collection.immutable.Seq<java.lang.Object>

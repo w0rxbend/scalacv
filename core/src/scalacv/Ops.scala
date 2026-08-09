@@ -180,6 +180,9 @@ extension (self: Mat)
       maxValue: Double = 255,
       kind: Threshold = Threshold.Binary
   ): (Managed[Mat], ThresholdResult) =
+    // `Mats.produce` fills a destination and returns only that, so the `double` OpenCV computes has to be
+    // carried out of the callback by hand. It is written exactly once, before `produce` returns, so the var
+    // never outlives this expression.
     var computed = 0.0
     val out = Mats.produce("threshold"): dst =>
       computed = Imgproc.threshold(self, dst, value, maxValue, kind.cvValue)
@@ -327,12 +330,11 @@ extension (self: Mat)
     * `intrinsics.distortion` is empty. See [[Calibration]].
     */
   def undistorted(intrinsics: Intrinsics): Managed[Mat] =
-    val camera = intrinsics.cameraMatrix
-    val dist = intrinsics.distCoeffs
-    try Mats.produce("undistort")(dst => Calib3d.undistort(self, dst, camera, dist))
-    finally
-      try camera.release()
-      finally dist.release()
+    Managed.scope: own =>
+      val camera = own(intrinsics.cameraMatrix)
+      val dist = own(intrinsics.distCoeffs)
+      // The destination is deliberately NOT owned by the scope — it is what this method hands back.
+      Mats.produce("undistort")(dst => Calib3d.undistort(self, dst, camera, dist))
 
   /** Adds a border (padding) of the given pixel widths on each side. */
   def border(
@@ -525,22 +527,21 @@ extension (self: Mat)
     */
   def deskew(maxAngle: Double = 45.0): Managed[Mat] =
     require(maxAngle > 0 && maxAngle <= 90, s"maxAngle must be in (0, 90], got $maxAngle")
-    val binarised =
-      Mats
-        .grayscale(self)
-        .pipe(_.threshold(0, 255, Threshold.otsu(Threshold.Mode.BinaryInv))._1) // text becomes white
-    binarised.use: bin =>
-      val coords = Mat()
-      try
-        Cv.orThrow("deskew")(Core.findNonZero(bin, coords))
-        if coords.rows == 0 then Managed(self.clone()) // a blank page — nothing to straighten
-        else
-          Managed.use(org.opencv.core.MatOfPoint2f()): pts =>
-            Cv.orThrow("deskew")(coords.convertTo(pts, CvType.CV_32F))
-            val skew = normalizeSkew(Cv.orThrow("deskew")(Imgproc.minAreaRect(pts)).angle)
-            if math.abs(skew) < 0.1 || math.abs(skew) > maxAngle then Managed(self.clone())
-            else deskewRotate(self, skew)
-      finally coords.release()
+    // The scope owns the working Mats; the rotated result this returns is allocated outside it and escapes.
+    Managed.scope: own =>
+      // Otsu-inverted, so the text becomes white and `findNonZero` reads the ink rather than the page.
+      val bin = own.adopt(
+        Mats.grayscale(self).pipe(_.threshold(0, 255, Threshold.otsu(Threshold.Mode.BinaryInv))._1)
+      )
+      val coords = own(Mat())
+      Cv.orThrow("deskew")(Core.findNonZero(bin, coords))
+      if coords.rows == 0 then Managed(self.clone()) // a blank page — nothing to straighten
+      else
+        val pts = own(org.opencv.core.MatOfPoint2f())
+        Cv.orThrow("deskew")(coords.convertTo(pts, CvType.CV_32F))
+        val skew = normalizeSkew(Cv.orThrow("deskew")(Imgproc.minAreaRect(pts)).angle)
+        if math.abs(skew) < 0.1 || math.abs(skew) > maxAngle then Managed(self.clone())
+        else deskewRotate(self, skew)
 
   /** Folds a `minAreaRect` angle into the equivalent tilt in `(-45, 45]`. */
   private def normalizeSkew(angle: Double): Double =
@@ -670,6 +671,24 @@ object Mats:
     */
   private[scalacv] def readColumn(mat: Mat, r: Int): Seq[Double] =
     (0 until r).map(i => mat.get(i, 0)(0))
+
+  /** The inverse of [[readColumn]]: `values` as a caller-owned `n`×1 `CV_64F` Mat, for handing a small vector
+    * — a Rodrigues rotation, a translation — back to a native solver.
+    *
+    * The write is guarded because it is the one step that can fail after the allocation: between a bare
+    * `Mat(...)` and the caller taking ownership there is nobody to free it, so a throwing `put` would strand
+    * a native buffer no one ever saw.
+    */
+  private[scalacv] def column(values: Seq[Double]): Mat =
+    require(values.nonEmpty, "a column Mat needs at least one value")
+    val m = Mat(values.size, 1, CvType.CV_64F)
+    try
+      m.put(0, 0, values*): Unit
+      m
+    catch
+      case e: Throwable =>
+        m.release()
+        throw e
 
   /** Shared kernel validation. OpenCV's own check lives in native code and aborts with a `CvException`
     * quoting a C++ expression; failing here names the parameter the caller actually passed.

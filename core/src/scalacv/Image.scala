@@ -169,12 +169,9 @@ final class Image private (private val handle: Managed[Mat]) extends AutoCloseab
       s"crop $rect does not fit inside ${width}x$height"
     )
     // submat is an aliasing view of the parent's data; clone makes it independent, and the view Mat is
-    // released before the parent so no header is stranded. The allocation lives inside the try so the
-    // parent's release runs even when submat/clone throws.
-    try
-      val out = Managed.use(handle.get.submat(rect.toCv))(_.clone())
-      Image(Managed(out))
-    finally handle.release()
+    // released before the parent so no header is stranded. Going through `transform` is what releases the
+    // parent even when submat or clone throws.
+    transform(m => Managed.use(m.submat(rect.toCv))(view => Managed(view.clone())))
 
   /** Mirrors the image — see [[Flip]]. */
   def flip(how: Flip): Image = transform(_.flip(how))
