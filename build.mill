@@ -337,9 +337,10 @@ object examples extends ScalacvModule {
 
 /** Native-leak regression tests, in their own module so they run in a **dedicated forked JVM** with a
   * single suite — process RSS is the only signal that sees scalacv's `org.opencv.core.Mat` buffers
-  * (`Pointer.totalBytes()` is blind to them; proven in docs/audit/06-profiling.md), and RSS would be
-  * contaminated if 40-odd suites shared the JVM as they do in `core.test`. Kept out of `core.test` for
-  * exactly that isolation. See docs/audit/05-leak-harness.md.
+  * (`Pointer.totalBytes()` is blind to them — see the measurement table in docs/mdoc/performance.md),
+  * and RSS would be contaminated if 40-odd suites shared the JVM as they do in `core.test`. Kept out of
+  * `core.test` for exactly that isolation — the shape, and why the bound is a ceiling rather than zero, is
+  * written up under "Guard against native leaks with an RSS assertion" in docs/mdoc/testing.md.
   */
 object leaks extends ScalacvModule {
   def moduleDeps = Seq(core, vision, graphs)
