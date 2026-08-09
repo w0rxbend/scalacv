@@ -161,7 +161,7 @@ jobs:
 
   natives:
     name: Natives · macos-14
-    runs-on: macos-14
+    runs-on: macos-26
     # macOS only. The headless loader is verified on linux-x86_64 by the build job; this leg
     # verifies the @rpath-resolved macOS path. Windows is deliberately absent: the `./mill`
     # bootstrap is a Unix-only launcher (it prints "supports only Linux and macOS" and exits),
