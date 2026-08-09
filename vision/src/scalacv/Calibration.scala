@@ -97,10 +97,12 @@ object Calibration:
     * `Either[`[[CvError.CalibrationFailed]]`, _]`.
     */
   def findCorners(image: Image, pattern: ChessboardPattern): Option[Seq[Point]] =
-    gray(image).use: g =>
-      detect(g, pattern).map: corners =>
-        try corners.toArray.map(Point.from).toSeq
-        finally corners.release()
+    Mats
+      .grayscale(image.mat)
+      .use: g =>
+        detect(g, pattern).map: corners =>
+          try corners.toArray.map(Point.from).toSeq
+          finally corners.release()
 
   /** Calibrates a pinhole camera from several `views` of the same chessboard `pattern`.
     *
@@ -127,7 +129,7 @@ object Calibration:
       val imageSize = views.head.size
       val imagePoints = scala.collection.mutable.ArrayBuffer.empty[MatOfPoint2f]
       try
-        for view <- views do gray(view).use(g => detect(g, pattern).foreach(imagePoints += _))
+        for view <- views do Mats.grayscale(view.mat).use(g => detect(g, pattern).foreach(imagePoints += _))
         if imagePoints.size < minViews then
           Left(
             CvError.CalibrationFailed(
@@ -212,11 +214,6 @@ object Calibration:
         case Left(_) =>
           corners.release()
           None
-
-  /** A borrowed grayscale copy of `image` — corner detection wants a single 8-bit channel. */
-  private def gray(image: Image): Managed[Mat] =
-    if image.mat.channels >= 3 then image.mat.cvtColor(ColorConversion.BgrToGray)
-    else Managed(image.mat.clone())
 
 /** Undistort an [[Image]] straight from a [[Calibration]] — unwraps its [[Intrinsics]] and delegates to
   * `Image.undistort(intrinsics)`. An extension method (in the vision layer) rather than a member of the core

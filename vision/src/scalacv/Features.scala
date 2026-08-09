@@ -40,22 +40,21 @@ object Features:
     */
   def detect(image: Image, maxFeatures: Int = 500): Descriptors =
     require(maxFeatures > 0, s"maxFeatures must be positive, got $maxFeatures")
-    val grayscale =
-      if image.mat.channels >= 3 then image.mat.cvtColor(ColorConversion.BgrToGray)
-      else Managed(image.mat.clone())
-    grayscale.use: gray =>
-      Managed(ORB.create(maxFeatures)).use: orb =>
-        Managed.use(MatOfKeyPoint()): keypoints =>
-          val descriptors = Mat() // transferred to the returned Descriptors, so not released here
-          try
-            Managed.use(Mat()): noMask =>
-              Cv.orThrow("ORB.detectAndCompute")(orb.detectAndCompute(gray, noMask, keypoints, descriptors))
-            val points = keypoints.toArray.map(kp => Point(kp.pt.x, kp.pt.y)).toSeq
-            new Descriptors(points, Managed(descriptors))
-          catch
-            case e: Throwable =>
-              descriptors.release() // no ownership transfer happened, so free it
-              throw e
+    Mats
+      .grayscale(image.mat)
+      .use: gray =>
+        Managed(ORB.create(maxFeatures)).use: orb =>
+          Managed.use(MatOfKeyPoint()): keypoints =>
+            val descriptors = Mat() // transferred to the returned Descriptors, so not released here
+            try
+              Managed.use(Mat()): noMask =>
+                Cv.orThrow("ORB.detectAndCompute")(orb.detectAndCompute(gray, noMask, keypoints, descriptors))
+              val points = keypoints.toArray.map(kp => Point(kp.pt.x, kp.pt.y)).toSeq
+              new Descriptors(points, Managed(descriptors))
+            catch
+              case e: Throwable =>
+                descriptors.release() // no ownership transfer happened, so free it
+                throw e
 
   /** Matches two descriptor sets with a brute-force Hamming matcher and cross-check (each match is mutually
     * best), keeps those within `maxDistance`, and returns them best (smallest distance) first.

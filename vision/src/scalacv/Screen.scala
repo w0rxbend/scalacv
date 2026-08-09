@@ -100,14 +100,14 @@ object Screen:
     )
     a.absdiff(b)
       .use: d =>
-        val grayManaged =
-          if d.channels >= 3 then d.cvtColor(ColorConversion.BgrToGray) else Managed(d.clone())
-        grayManaged.use: gray =>
-          gray
-            .threshold(threshold.toDouble, 255)
-            ._1
-            .use: mask =>
-              mask
-                .dilate(radius = 2)
-                .use: merged =>
-                  merged.findContours().map(_.boundingRect).filter(_.area >= minArea).sortBy(-_.area)
+        Mats
+          .grayscale(d)
+          .use: gray =>
+            gray
+              .threshold(threshold.toDouble, 255)
+              ._1
+              .use: mask =>
+                mask
+                  .dilate(radius = 2)
+                  .use: merged =>
+                    merged.findContours().map(_.boundingRect).filter(_.area >= minArea).sortBy(-_.area)

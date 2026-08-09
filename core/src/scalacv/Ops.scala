@@ -526,9 +526,9 @@ extension (self: Mat)
   def deskew(maxAngle: Double = 45.0): Managed[Mat] =
     require(maxAngle > 0 && maxAngle <= 90, s"maxAngle must be in (0, 90], got $maxAngle")
     val binarised =
-      val gray =
-        if self.channels >= 3 then self.cvtColor(ColorConversion.BgrToGray) else Managed(self.clone())
-      gray.pipe(_.threshold(0, 255, Threshold.otsu(Threshold.Mode.BinaryInv))._1) // text becomes white
+      Mats
+        .grayscale(self)
+        .pipe(_.threshold(0, 255, Threshold.otsu(Threshold.Mode.BinaryInv))._1) // text becomes white
     binarised.use: bin =>
       val coords = Mat()
       try
@@ -637,6 +637,27 @@ object Mats:
       case e: Throwable =>
         dst.release()
         throw e
+
+  /** A single-channel greyscale version of `mat`, owned by the caller.
+    *
+    * Almost every algorithm that is not about colour — corner detection, optical flow, stereo matching, ORB,
+    * template differencing, chessboard detection, deskewing — starts by reducing to one channel, and each has
+    * to cope with being handed an image that is *already* one channel. This is that step, in one place: it
+    * used to be copied verbatim into seven files, which is seven chances for one of them to drift on the
+    * question below and no way to notice.
+    *
+    * The question is what to do when the input is already grey, and the answer is **clone**, not "hand the
+    * receiver back". Every op in this file returns a Mat the caller owns and must release; a `Managed`
+    * wrapping the borrowed receiver would look identical at the call site and would free an image belonging
+    * to someone else the moment the `use` block ended — a caller's frame, a detector's input. One extra copy
+    * on an already-grey image is the price of a uniform ownership rule, and the alternative is a
+    * use-after-free that only appears on greyscale input.
+    *
+    * `channels >= 3` rather than `== 3`: a BGRA frame converts through the same `BGR2GRAY`, which ignores the
+    * fourth channel.
+    */
+  private[scalacv] def grayscale(mat: Mat): Managed[Mat] =
+    if mat.channels >= 3 then mat.cvtColor(ColorConversion.BgrToGray) else Managed(mat.clone())
 
   /** Reads the top-left `r`×`c` block of a `CV_64F` Mat into plain Scala rows — for lifting a small solver
     * result (a rotation, a camera matrix) out of native memory into immutable data. The Mat is borrowed.
