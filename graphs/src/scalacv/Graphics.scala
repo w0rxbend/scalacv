@@ -374,14 +374,24 @@ private[scalacv] object Graphics:
     case Picture.Over(top, bottom) => union(boundsOf(top, tf, style), boundsOf(bottom, tf, style))
     case Picture.Styled(child, fn) => boundsOf(child, tf, fn(style))
     case Picture.Transformed(child, affn) => boundsOf(child, tf.compose(affn), style)
-    case Picture.Leaf(prim) => Some(primBounds(prim, tf, style))
+    case Picture.Leaf(prim) => primBounds(prim, tf, style)
 
   private def union(a: Option[Bounds], b: Option[Bounds]): Option[Bounds] = (a, b) match
     case (Some(x), Some(y)) => Some(x.union(y))
     case (some, None) => some
     case (None, some) => some
 
-  private def primBounds(prim: Picture.Prim, tf: Affine, style: Style): Bounds =
+  /** The box a primitive occupies, or `None` when it occupies nothing.
+    *
+    * Only a [[Picture.Prim.Path]] can be empty, and an empty one is not a mistake: a polyline is routinely
+    * the result of filtering detections, and filtering everything out is a legitimate outcome —
+    * `drawPolyline` says so and draws nothing. Measuring has to agree, because the layout combinators
+    * ([[Picture.beside]], [[Picture.above]], [[Picture.grid]]) all ask for bounds before placing anything,
+    * and they are already written to handle a `None`. Returning a `Bounds` unconditionally meant taking `min`
+    * of no points, which threw `UnsupportedOperationException` out of `bounds` — from a signature that
+    * already says "or nothing".
+    */
+  private def primBounds(prim: Picture.Prim, tf: Affine, style: Style): Option[Bounds] =
     import Picture.Prim.*
     val local = prim match
       case Circle(center, radius) =>
@@ -400,10 +410,12 @@ private[scalacv] object Graphics:
         Seq(Point(at.x, at.y - m.size.height), Point(at.x + m.size.width, at.y + m.baseline))
     extentOf(local.map(tf.apply))
 
-  private def extentOf(points: Seq[Point]): Bounds =
-    val xs = points.map(_.x)
-    val ys = points.map(_.y)
-    Bounds(xs.min, ys.min, xs.max, ys.max)
+  private def extentOf(points: Seq[Point]): Option[Bounds] =
+    if points.isEmpty then None
+    else
+      val xs = points.map(_.x)
+      val ys = points.map(_.y)
+      Some(Bounds(xs.min, ys.min, xs.max, ys.max))
 
   private def draw(picture: Picture, mat: Mat, style: Style, tf: Affine): Unit = picture match
     case Picture.Empty => ()
@@ -493,6 +505,15 @@ private[scalacv] object Graphics:
     * generous. An empty result (fully off-canvas) tells [[alpha]] there is nothing to blend.
     */
   private def roiOf(points: Seq[Point], strokeWidth: Int, mat: Mat): Rect =
+    // No points means nothing to blend. Without this the sentinels below survive untouched and the clamped
+    // corners come out crossed (x0 = cols, x1 = 0), i.e. a negative-extent Rect, whose `require` would throw
+    // an IllegalArgumentException from inside a draw. Today every caller filters short paths out first, so
+    // this is a guard on the type rather than on a live bug — but it is one line, and the alternative
+    // failure mode is an exception nobody would connect to an empty input.
+    if points.isEmpty then Rect(0, 0, 0, 0)
+    else roiAround(points, strokeWidth, mat)
+
+  private def roiAround(points: Seq[Point], strokeWidth: Int, mat: Mat): Rect =
     val margin = strokeWidth + 3.0
     var minX = Double.MaxValue
     var minY = Double.MaxValue
