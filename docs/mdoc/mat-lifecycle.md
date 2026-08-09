@@ -67,9 +67,57 @@ leaked.release()
 leaked.get // throws: already released
 ```
 
-`Managed` is `AutoCloseable`, so the whole of `scala.util.Using` — including `Using.Manager` when you
-juggle several at once — already accepts it. And because release is a compare-and-set, calling
-`close()` twice (say, once explicitly and once from a scope) is a harmless no-op, never a double free.
+`Managed` is `AutoCloseable`, so the whole of `scala.util.Using` already accepts it too. And because
+release is a compare-and-set, calling `close()` twice (say, once explicitly and once from a scope) is a
+harmless no-op, never a double free.
+
+### Several handles at once: `Managed.scope`
+
+`Managed.use` scopes one object. Some calls need a handful — OpenCV's `solvePnP` wants object points,
+image points, a camera matrix, distortion coefficients and two output vectors, and every one of those is
+a native object somebody has to free. Nesting six `use` blocks works but buries the actual call under
+six levels of indentation, and the obvious alternative is worse than it looks: declaring the six as
+`val`s and releasing them in a `try`/`finally` leaves every allocation *before* the `try` unguarded, so a
+constructor that throws part-way strands the objects already built.
+
+`Managed.scope` gives you a block that owns all of them. The `own` it hands you registers an object and
+returns it, so a scoped handle reads as an ordinary binding:
+
+```scala mdoc:silent
+import org.opencv.core.Core
+
+val brightest = Managed.scope { own =>
+  val src   = own(Mat(64, 64, CvType.CV_8UC1, org.opencv.core.Scalar(7)))
+  val blurb = own(Mat())
+  Core.add(src, src, blurb)
+  Core.minMaxLoc(blurb).maxVal      // plain data — safe to return
+}
+```
+
+```scala mdoc
+brightest
+```
+
+Because each object is registered the moment it is created, a throw anywhere — a later constructor, the
+native call, the decode afterwards — releases everything acquired so far, in reverse order. A failure
+raised *while* releasing is attached to the original error as a suppressed exception rather than
+replacing it.
+
+`own.adopt` is the same thing for a value that arrives already wrapped, which is what every mid-level
+`Ops` call hands back:
+
+```scala mdoc:silent
+val edgePixels = Managed.scope { own =>
+  val src  = own(Mat(64, 64, CvType.CV_8UC3, org.opencv.core.Scalar(0, 0, 0)))
+  val gray = own.adopt(src.cvtColor(ColorConversion.BgrToGray))
+  val edges = own.adopt(gray.canny(80, 160))
+  Core.countNonZero(edges)
+}
+```
+
+The rule is the one `use` already carries, applied to a group: **nothing acquired inside the block may
+escape it**. Return plain data (a number, a `Seq[Double]`, a case class), or an object owned somewhere
+else — never one of the scoped handles.
 
 ### The two release regimes
 
@@ -192,7 +240,8 @@ See [`color-masking`](/color-masking) and [`graphics`](/graphics) for where thes
 ## The ownership contract
 
 **The rule, in one sentence:** you own every `Managed` a scalacv call hands back and close it exactly
-once — a scope (`Managed.use`, `Image.reading`, `Video.framesCopied`) does that for you — with a single
+once — a scope (`Managed.use`, `Managed.scope`, `Image.reading`, `Video.framesCopied`) does that for
+you — with a single
 exception: a `Mat` yielded by `Video.frames` is *borrowed*, owned by the loop, and must not outlive its
 iteration.
 
