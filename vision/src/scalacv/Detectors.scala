@@ -49,7 +49,9 @@ object Qr:
     Managed(QRCodeDetector()).use: detector =>
       Managed(Mat()).use: points =>
         val texts = java.util.ArrayList[String]()
-        if !detector.detectAndDecodeMulti(mat, texts, points) then Seq.empty
+        val decoded = Cv.orThrow("QRCodeDetector.detectAndDecodeMulti"):
+          detector.detectAndDecodeMulti(mat, texts, points)
+        if !decoded then Seq.empty
         else
           val quads = DetectorQuads.read(points)
           texts.asScala.iterator.zipWithIndex
@@ -124,7 +126,7 @@ object Aruco:
           // them ours to free.
           val corners = java.util.ArrayList[Mat]()
           try
-            detector.detectMarkers(mat, corners, ids)
+            Cv.orThrow("ArucoDetector.detectMarkers")(detector.detectMarkers(mat, corners, ids))
             val quads = corners.asScala.toSeq
             (0 until ids.rows).iterator
               .map: i =>
