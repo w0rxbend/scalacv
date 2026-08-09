@@ -104,16 +104,17 @@ object Chart:
     else
       val center = Point(width / 2.0, height / 2.0)
       val radius = math.min(width, height) / 2.0 - 2
-      var angle = -90.0 // start at 12 o'clock
-      Picture.all(positive.zipWithIndex.map { (v, i) =>
-        val sweep = v / total * 360
-        val slice =
-          Picture
-            .sector(center, radius, radius, angle, angle + sweep)
-            .fillColor(palette(i % palette.size))
-            .noStroke
-        angle += sweep
-        slice
+      // Each slice's start angle is the running total of the ones before it, so `scanLeft` states it
+      // directly. The previous version carried a `var angle` that the mapping function advanced as a side
+      // effect — correct only as long as `values` is a strict, singly-traversed, in-order collection, which
+      // the signature (`Seq`) does not promise: hand it a `LazyList` and the angles come out wrong or
+      // duplicated, silently, as a wrong-looking chart rather than an error.
+      val starts = positive.scanLeft(-90.0)((angle, v) => angle + v / total * 360) // -90 = 12 o'clock
+      Picture.all(positive.zip(starts).zipWithIndex.map { case ((v, start), i) =>
+        Picture
+          .sector(center, radius, radius, start, start + v / total * 360)
+          .fillColor(palette(i % palette.size))
+          .noStroke
       })
 
   /** A histogram: bins `data` into `bins` equal-width buckets across its range, then draws the counts as
