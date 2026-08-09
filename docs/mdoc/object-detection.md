@@ -13,7 +13,7 @@ valid long after the source image is freed, so detector output is something you 
 pattern-match, store in a `Map`, or send across threads (see [Geometry](/geometry) for why that
 copy is the right trade).
 
-:::tip New here? Read this first.
+:::tip[New here? Read this first.]
 If you just want to find faces, skip to [YuNet](#yunet-the-modern-face-detector) — it is the
 modern, accurate choice and needs only a 232 kB model download. Reach for Haar cascades when you
 need to detect something YuNet does not (eyes, smiles, bodies, plates) or you cannot ship a model
@@ -108,7 +108,7 @@ CascadeName.values.map(_.toString).toList
 The LBP cascades and the cat detectors are deliberately *not* named (a different model family and
 a novelty, respectively), but both remain reachable through `Cascades.loadFrom` with a raw path.
 
-:::note Cascades compose — run one inside another's boxes
+:::note[Cascades compose — run one inside another's boxes]
 Eyes and smiles are best found *inside* an already-detected face, not across the whole frame:
 crop each face `Rect` out, equalise it, and run `Eye`/`Smile` on that submat. It is both faster
 (less image to scan) and far more accurate (no eye-shaped clutter in the background).
@@ -134,7 +134,7 @@ resource out of a jar needs no native library:
 Cascades.resolve(CascadeName.FrontalFaceAlt).map(_.getName)
 ```
 
-:::warning Windows ships no cascades
+:::warning[Windows ships no cascades]
 The `windows-x86_64` bytedeco jar ships an *empty* `share/` directory and no cascades at all,
 unlike every other platform. `resolve` (and therefore `load`) can only return a `Left` there, and
 it says so in those words. If you target Windows, ship the cascade XML with your own application
@@ -181,7 +181,7 @@ The three knobs are the ones worth knowing:
 | `minNeighbors` | `3` | how many overlapping hits a candidate needs to survive. Higher is stricter (fewer false positives). |
 | `minSize` | `None` | ignore objects smaller than this. Setting it is the cheapest speed-up available. |
 
-:::tip Tuning cheat-sheet
+:::tip[Tuning cheat-sheet]
 - **Too many false positives?** Raise `minNeighbors` (try `5`–`6`) or set a `minSize`.
 - **Missing small/distant objects?** Lower `scaleFactor` toward `1.05` (slower).
 - **Too slow?** Set `minSize`, raise `scaleFactor`, and always detect on a **grayscale** image.
@@ -279,7 +279,7 @@ inspect:
 (FaceDetect.ModelFileName, FaceDetect.ModelSha256, FaceDetect.ModelSizeBytes)
 ```
 
-:::note Two ways to fetch a model
+:::note[Two ways to fetch a model]
 `FaceDetect.downloadModel(dir)` is the dedicated one-liner. There is also a generic registry —
 `Models.fetch(FaceDetect.modelSpec, dir)` — that takes any [`ModelSpec`](/dnn) and works the same
 way (temp file, verify, move). Use the generic form when you are fetching several models with the
@@ -349,6 +349,7 @@ annotation example below:
 | Accessor | Landmark index | Where it appears |
 |---|---|---|
 | `box` | — | bounding box (may extend past the frame) |
+| `clippedBox(w, h)` | — | `box` trimmed to a `w`×`h` frame, `None` if it falls outside |
 | `rightEye` | 0 | subject's right eye — image **left** |
 | `leftEye` | 1 | subject's left eye — image **right** |
 | `noseTip` | 2 | centre |
@@ -360,7 +361,9 @@ Two subtleties encoded in the type:
 
 - The `box` is **not clipped** to the image. YuNet regresses boxes from anchors, so a face at the
   edge of the frame legitimately yields a negative `x`/`y` or a box running past the image bounds.
-  Intersect it with the image `Rect` before using it as a submat.
+  `crop` rejects such a rectangle rather than trimming it, so clip first with
+  `face.clippedBox(image.width, image.height)` (or `face.clippedBox(image)`), which returns
+  `Option[Rect]` — `None` when the box lies entirely outside the frame.
 - "Right" in `rightEye`/`rightMouthCorner` is the *subject's* right, which appears on the **left**
   of the image. The landmark order is fixed: right eye, left eye, nose tip, right mouth corner,
   left mouth corner.
@@ -384,7 +387,7 @@ left to the caller. Knowing them explains why the API looks the way it does:
    the score. `FaceDetect` fails loudly if a future model emits a different width rather than
    decoding garbage.
 
-:::danger YuNet needs a 3-channel BGR image
+:::danger[YuNet needs a 3-channel BGR image]
 `detect` requires an 8-bit **3-channel BGR** image; a greyscale Mat fails deep inside the DNN
 module with a message about layer shapes that says nothing about the real mistake. Convert first
 with `image.convert(ColorConversion.GrayToBgr)`. An empty image is likewise a programmer error and
@@ -479,7 +482,7 @@ An **empty** Mat is a programmer error and throws; an image with no QR code is s
 Image.reading("poster.png")(_.qrCodes.map(_.text))
 ```
 
-:::tip Codes it locates but cannot decode
+:::tip[Codes it locates but cannot decode]
 A blurred or partially-occluded symbol comes back with an empty `text` but usable `corners`.
 Filter on `_.text.nonEmpty` when you only want decoded payloads; keep the empty ones when you want
 to draw an overlay or re-crop and retry at higher resolution.
@@ -550,7 +553,7 @@ candidates, and — as everywhere on this page — frees every native Mat it all
 returning plain data. An **empty** Mat is a programmer error and throws; an image with no markers
 is simply an empty `Seq`.
 
-:::warning A generated marker won't detect until you add a quiet zone
+:::warning[A generated marker won't detect until you add a quiet zone]
 `generateMarker` gives you the marker *only* — black border, no white margin. Detection fails on
 it until you pad it (`Core.copyMakeBorder` with a white border, as above). When you print markers,
 leave white space around them for the same reason.
@@ -585,7 +588,7 @@ FaceDetect.create("model.onnx", Size(320, 320)).map { detector =>
 }
 ```
 
-:::danger One detector per thread
+:::danger[One detector per thread]
 `FaceDetectorYN` is stateful — `detect` mutates its input size on every call. Do **not** share one
 across threads or fan frames out to a thread pool with a single shared detector; give each worker
 its own. The cascade classifiers, `Qr`, and `Aruco` do not have this hazard.

@@ -10,14 +10,19 @@ import org.opencv.core.{Mat, MatOfPoint2f, MatOfPoint3f}
   * but [[distance]] (the length of `tvec`) is the camera-to-marker distance and is often all you want.
   */
 final case class Pose3D(rvec: Seq[Double], tvec: Seq[Double]):
+  // Both vectors are 3-element by definition — Rodrigues is an axis-angle triple and a translation is a
+  // point — and `Pose3D` is public data the docs encourage building by hand from another solver's output.
+  // Without this check a wrong-length vector is not caught anywhere: `distance` quietly returns the norm of
+  // however many numbers it was given, and `rvecMat`/`tvecMat` either pad the missing rows with zeros or
+  // fail much later inside `put`, blaming a line that had nothing to do with the mistake.
+  require(rvec.sizeIs == 3, s"an rvec is an axis-angle triple, got ${rvec.size} values")
+  require(tvec.sizeIs == 3, s"a tvec is a 3D translation, got ${tvec.size} values")
 
   /** Straight-line distance from camera to object, in the marker's units. */
   def distance: Double = math.sqrt(tvec.map(t => t * t).sum)
 
-  private[scalacv] def rvecMat: Mat =
-    val m = Mat(3, 1, org.opencv.core.CvType.CV_64F); m.put(0, 0, rvec*); m
-  private[scalacv] def tvecMat: Mat =
-    val m = Mat(3, 1, org.opencv.core.CvType.CV_64F); m.put(0, 0, tvec*); m
+  private[scalacv] def rvecMat: Mat = Mats.column(rvec)
+  private[scalacv] def tvecMat: Mat = Mats.column(tvec)
 
 /** A detected marker together with the pose recovered for it — what `image.arMarkers` returns. */
 final case class MarkerPose(marker: ArucoMarker, pose: Pose3D):
@@ -47,41 +52,54 @@ object Ar:
     * whatever unit you want the pose expressed in — metres is conventional). `None` if `solvePnP` fails to
     * converge, which for four coplanar corners is rare but not impossible.
     *
+    * Every Mat this needs is owned for the duration of the call and freed before it returns, on the throwing
+    * path as well as the normal one — the returned [[Pose3D]] is plain `Seq[Double]`, so nothing native
+    * escapes and the caller has nothing to release.
+    *
     * @throws IllegalArgumentException
     *   if the marker does not have four corners or `markerLength` is not positive.
     */
   def estimatePose(marker: ArucoMarker, markerLength: Double, intrinsics: Intrinsics): Option[Pose3D] =
+    // The two preconditions stay above the first acquisition, so a rejected marker throws while there is
+    // still nothing native to free.
     require(marker.corners.size == 4, s"a marker pose needs four corners, got ${marker.corners.size}")
     require(markerLength > 0, s"markerLength must be positive, got $markerLength")
-    val obj = MatOfPoint3f(markerObjectPoints(markerLength).map(_.toCv)*)
-    val img = MatOfPoint2f(marker.corners.map(_.toCv)*)
-    val camera = intrinsics.cameraMatrix
-    val dist = intrinsics.distCoeffs
-    val rvec = Mat()
-    val tvec = Mat()
-    try
+    // Six native Mats for one call. `Managed.scope` owns them all, with the same guarantee six nested
+    // `Managed.use` blocks gave — a throw from a later constructor frees the earlier ones — and without the
+    // six levels of indentation that buried the two lines below that actually do the work.
+    Managed.scope: own =>
+      val obj = own(MatOfPoint3f(markerObjectPoints(markerLength).map(_.toCv)*))
+      val img = own(MatOfPoint2f(marker.corners.map(_.toCv)*))
+      val camera = own(intrinsics.cameraMatrix)
+      val dist = own(intrinsics.distCoeffs)
+      val rvec = own(Mat())
+      val tvec = own(Mat())
       val ok = Cv.orThrow("solvePnP")(
         Calib3d.solvePnP(obj, img, camera, dist, rvec, tvec, false, Calib3d.SOLVEPNP_IPPE_SQUARE)
       )
-      Option.when(ok)(Pose3D(matColumn(rvec), matColumn(tvec)))
-    finally
-      obj.release(); img.release(); camera.release(); dist.release(); rvec.release(); tvec.release()
+      // readColumn copies the rotation and translation out into Seq[Double] before rvec/tvec are released,
+      // which is why it has to run inside this block rather than after it.
+      Option.when(ok)(Pose3D(Mats.readColumn(rvec, 3), Mats.readColumn(tvec, 3)))
 
-  /** Projects model `points` (in the marker's frame) to pixel coordinates through `pose` and the camera. */
+  /** Projects model `points` (in the marker's frame) to pixel coordinates through `pose` and the camera.
+    *
+    * As with [[estimatePose]], every Mat is owned for the duration of the call and freed before it returns,
+    * including when a native call or an allocation throws; the returned [[Point]]s are copies.
+    */
   def project(points: Seq[Point3], pose: Pose3D, intrinsics: Intrinsics): Seq[Point] =
     if points.isEmpty then Seq.empty
     else
-      val obj = MatOfPoint3f(points.map(_.toCv)*)
-      val out = MatOfPoint2f()
-      val camera = intrinsics.cameraMatrix
-      val dist = intrinsics.distCoeffs
-      val rvec = pose.rvecMat
-      val tvec = pose.tvecMat
-      try
+      Managed.scope: own =>
+        val obj = own(MatOfPoint3f(points.map(_.toCv)*))
+        val out = own(MatOfPoint2f())
+        val camera = own(intrinsics.cameraMatrix)
+        val dist = own(intrinsics.distCoeffs)
+        val rvec = own(pose.rvecMat)
+        val tvec = own(pose.tvecMat)
         Cv.orThrow("projectPoints")(Calib3d.projectPoints(obj, rvec, tvec, camera, dist, out))
+        // toArray copies the projected corners onto the JVM heap, so this must read `out` before the
+        // scope releases it.
         out.toArray.map(Point.from).toSeq
-      finally
-        obj.release(); out.release(); camera.release(); dist.release(); rvec.release(); tvec.release()
 
   /** The eight corners of a `size`-sided cube resting on the marker plane (base on `z = 0`, rising toward the
     * camera), ordered base 0–3 then top 4–7 above them. Feed to [[project]] to draw a wireframe.
@@ -102,10 +120,6 @@ object Ar:
   /** The twelve edges of the cube from [[cubeCorners]], as index pairs. */
   private[scalacv] val cubeEdges: Seq[(Int, Int)] =
     Seq((0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4), (0, 4), (1, 5), (2, 6), (3, 7))
-
-  /** Reads a 3×1 `CV_64F` Mat column into a `Seq[Double]`. */
-  private def matColumn(m: Mat): Seq[Double] =
-    Seq(m.get(0, 0)(0), m.get(1, 0)(0), m.get(2, 0)(0))
 
 /** The high-level marker-AR verbs on [[Image]]. Extension methods, not members of [[Image]], so the marker
   * pipeline lives next to [[Ar]] rather than in the image class; `import scalacv.*` makes

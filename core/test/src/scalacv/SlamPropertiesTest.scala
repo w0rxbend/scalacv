@@ -213,6 +213,29 @@ class SlamPropertiesTest extends munit.FunSuite:
       finally probe.close()
     finally d.close()
 
+  test("a keyframe that survived eviction is still searchable, and an evicted one is never reported"):
+    // The eviction boundary is remembered rather than rediscovered, so the way to get this wrong is to
+    // advance it past a keyframe that is still live: the store would silently stop matching its oldest
+    // survivors, and every existing test would still pass because none of them re-shows a survivor.
+    val d = LoopDetector(minMatches = 20, recentExclusion = 1, maxKeyframes = 3)
+    try
+      for s <- 1 to 8 do
+        val img = place(s)
+        try d.addKeyframe(img): Unit
+        finally img.close()
+      // Eight appended, three kept: indices 0-4 are tombstones, 5-7 are live. recentExclusion = 1 makes
+      // 0-6 searchable, so index 5 is both live and searchable — the oldest survivor.
+      assertEquals(d.keyframeCount, 3)
+      val survivor = place(6) // the place stored at index 5
+      try
+        d.detect(survivor) match
+          case None => fail("re-showing an identical surviving place must still report a loop")
+          case Some(loop) =>
+            assert(loop.keyframe >= 5, s"a reported keyframe must be a live one (>= 5), got ${loop.keyframe}")
+            assert(loop.keyframe <= 6, s"a reported keyframe must be searchable (<= 6), got ${loop.keyframe}")
+      finally survivor.close()
+    finally d.close()
+
   test("close is idempotent and clears the store"):
     val d = LoopDetector()
     val img = place(1)

@@ -1,7 +1,7 @@
 package scalacv
 
 import org.opencv.calib3d.StereoSGBM
-import org.opencv.core.{Core, CvType, Mat}
+import org.opencv.core.{Core, Mat}
 
 /** One detected obstacle: where it is in the frame and how near it is (`0` far … `1` right in front). */
 final case class Obstacle(region: Rect, nearness: Double)
@@ -32,20 +32,18 @@ object StereoDepth:
       left.width == right.width && left.height == right.height,
       s"the stereo pair must match in size, got ${left.width}x${left.height} and ${right.width}x${right.height}"
     )
-    gray(left).use: l =>
-      gray(right).use: r =>
-        Managed(StereoSGBM.create(0, numDisparities, blockSize)).use: sgbm =>
-          Managed.use(Mat()): raw => // CV_16S disparity, fixed-point
-            sgbm.compute(l, r, raw)
-            Image.wrap(
-              Mats.produce("disparity")(out =>
-                Core.normalize(raw, out, 0, 255, Core.NORM_MINMAX, CvType.CV_8U)
-              )
-            )
-
-  private def gray(image: Image): Managed[Mat] =
-    if image.mat.channels >= 3 then image.mat.cvtColor(ColorConversion.BgrToGray)
-    else Managed(image.mat.clone())
+    Mats
+      .grayscale(left.mat)
+      .use: l =>
+        Mats
+          .grayscale(right.mat)
+          .use: r =>
+            Managed(StereoSGBM.create(0, numDisparities, blockSize)).use: sgbm =>
+              Managed.use(Mat()): raw => // CV_16S disparity, fixed-point
+                Cv.orThrow("StereoSGBM.compute")(sgbm.compute(l, r, raw))
+                // `normalize` defaults to an 8-bit result, which is exactly what a viewable disparity map
+                // needs: the raw CV_16S fixed-point values mean nothing to a display or to `colorMap`.
+                Image.wrap(raw.normalize(0, 255))
 
 /** Obstacle detection from a depth/disparity map. */
 object Obstacles:

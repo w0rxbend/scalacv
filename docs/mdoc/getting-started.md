@@ -9,7 +9,7 @@ If you have never touched OpenCV, that is fine — this page takes you from an e
 working edge-detection pipeline. If you *have*, the short version is: add one platform jar, call
 `OpenCv.load()` once, and reach for `Image`.
 
-:::tip The 30-second mental model
+:::tip[The 30-second mental model]
 scalacv has **two tiers** (the high-level [`Image`](/image-api) and mid-level `Mat` extensions),
 **three modules** (`core`, `vision`, `graphs`), **one ownership rule** (a transform consumes the
 image it was called on), and **one error policy** (expected failures are `Either`, bugs throw). The
@@ -19,26 +19,41 @@ below.
 
 ## Add the dependency
 
-scalacv depends on the OpenCV **Java API**, which has no native code in it. The natives ship in
-per-platform classifier jars, and **no build tool can put a classifier into a published POM** — so
-you add the one for your platform yourself:
+scalacv is published under the group id `com.worxbend` as **four separate artifacts**: `scalacv`
+(the core), `scalacv-vision`, `scalacv-graphs` and `scalacv-zio`. Only the core is required. The
+other three are opt-in, so a program that reads and filters images never pulls a SLAM loop-closure
+detector into its jar — but that also means a symbol that lives in one of them will not compile
+until you add its line. Three of the five tutorials on this site need `scalacv-vision` — faces, DNN,
+and the motion-alarm step of the video tutorial — so add that one too if you plan to follow along.
+
+On top of scalacv itself you need OpenCV. scalacv depends on the OpenCV **Java API**, which has no
+native code in it. The natives ship in per-platform classifier jars, and **no build tool can put a
+classifier into a published POM** — so you add the one for your platform yourself.
+
+All of it in Mill — delete the scalacv lines you do not need, and keep both bytedeco ones:
 
 ```scala
 def mvnDeps = Seq(
-  mvn"com.worxbend::scalacv:0.1.0",
+  mvn"com.worxbend::scalacv:0.1.0",         // core: images, video, contours, drawing, filters
+  mvn"com.worxbend::scalacv-vision:0.1.0",  // detectors, DNN, pose, tracking, motion, OCR, calibration, SLAM
+  mvn"com.worxbend::scalacv-graphs:0.1.0",  // the Picture scene graph, charts, animated GIFs
+  mvn"com.worxbend::scalacv-zio:0.1.0",     // only if you use ZIO
   mvn"org.bytedeco:opencv:4.13.0-1.5.13;classifier=linux-x86_64",
   mvn"org.bytedeco:openblas:0.3.31-1.5.13;classifier=linux-x86_64"
 )
 ```
 
-The same three lines for sbt (note `%%` for the Scala artifact, `%` for the Java-world bytedeco
-jars, and `classifier`):
+The same for sbt (note `%%` for the Scala artifacts, `%` for the Java-world bytedeco jars, and
+`classifier`):
 
 ```scala
 libraryDependencies ++= Seq(
-  "com.worxbend" %% "scalacv" % "0.1.0",
-  "org.bytedeco" %  "opencv"  % "4.13.0-1.5.13" classifier "linux-x86_64",
-  "org.bytedeco" %  "openblas" % "0.3.31-1.5.13" classifier "linux-x86_64"
+  "com.worxbend" %% "scalacv"        % "0.1.0",
+  "com.worxbend" %% "scalacv-vision" % "0.1.0",
+  "com.worxbend" %% "scalacv-graphs" % "0.1.0",
+  "com.worxbend" %% "scalacv-zio"    % "0.1.0",
+  "org.bytedeco" %  "opencv"         % "4.13.0-1.5.13" classifier "linux-x86_64",
+  "org.bytedeco" %  "openblas"       % "0.3.31-1.5.13" classifier "linux-x86_64"
 )
 ```
 
@@ -64,17 +79,25 @@ single-platform container.
 
 Which modules do you actually need?
 
-| You want to… | Add |
+| You want to… | Add this coordinate |
 |---|---|
-| read/transform/write images, contours, video capture | `scalacv` (core, always) |
-| face/QR/marker detection, DNN, pose, tracking, OCR, SLAM | `scalacv-vision` |
-| draw scene graphs, charts, animated GIFs | `scalacv-graphs` |
-| an effect-typed API | `scalacv-zio` |
+| read/transform/write images, contours, video capture | `com.worxbend::scalacv` (core, always) |
+| face/QR/marker detection, DNN, pose, tracking, motion, OCR, SLAM | `com.worxbend::scalacv-vision` |
+| draw scene graphs, charts, animated GIFs | `com.worxbend::scalacv-graphs` |
+| an effect-typed API | `com.worxbend::scalacv-zio` |
 
 `vision` and `graphs` depend only on `core`, so you pull exactly what you use — see
 [Architecture](/architecture#three-modules-split-along-real-lines).
 
-:::note If you forget the native lines
+:::note[A missing module looks like a missing method]
+Every module puts its verbs in the same `scalacv` package, so one `import scalacv.*` covers all four
+— but only for the jars that are actually on your classpath. If the compiler says
+`value faces is not a member of Image`, or `Not found: Cascades`, the symbol is not misspelled: it
+lives in `scalacv-vision` (or `scalacv-graphs`) and that dependency line is missing. See
+[Troubleshooting](/troubleshooting).
+:::
+
+:::note[If you forget the native lines]
 `scalacv` alone compiles without them, but it will not run: the OpenCV symbols are absent until you
 add them. `OpenCv.load()` does not fail with a cryptic link error — it prints a copy-pasteable fix
 naming the platform you are actually on. See [Troubleshooting](/troubleshooting) if you hit it.
@@ -102,7 +125,7 @@ the extension methods. You import once per file, not per feature.
 OpenCv.isLoaded
 ```
 
-:::warning Load before you build
+:::warning[Load before you build]
 `Image.blank`, `Image.read`, `Camera.open` and friends all cross into native code. Calling them
 before `OpenCv.load()` is the single most common first-run mistake. Put the call in your `main` (or
 a test fixture) so it always runs first.
@@ -227,7 +250,7 @@ shapes.close()                            // done: release it ourselves
 shapeCount
 ```
 
-:::note Who closes what
+:::note[Who closes what]
 `Image.reading` and `Managed.use` close for you. When you build an `Image` by hand and never reach a
 terminal (`write`/`bytes`/`close`), *you* must close it — as we did above — or it leaks. In a
 long-running program a leak is silent until you run out of native memory, so prefer the scoped forms.

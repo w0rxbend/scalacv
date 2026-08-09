@@ -153,6 +153,41 @@ object ScalacvZioSpec extends ZIOSpecDefault:
       ZIO.scoped(openCapture("/does/not/exist.avi")).exit.map(e => assertTrue(e.isFailure))
     ,
 
+    test("frameStream on a capture that never opened fails rather than completing with zero frames"):
+      ZIO.scoped:
+        for
+          _ <- loadNatives
+          // The VideoCapture constructor cannot report failure: OpenCV signals "could not open that" by
+          // leaving isOpened false, so this is a live object whose every read() returns false. Without the
+          // guard the stream would end on its first pull and a typo'd path would be reported as a video
+          // with no frames in it.
+          cap <- acquireRelease(VideoCapture("/does/not/exist.avi"))
+          isOpen <- ZIO.succeed(cap.isOpened)
+          exit <- frameStream(cap).runCount.exit
+          copiedExit <- framesCopied(cap).runCount.exit
+        yield assertTrue(!isOpen) &&
+          assertTrue(exit.isFailure) &&
+          // Typed, not a bare Throwable: the caller can tell "this source never opened" from a decode error.
+          assertTrue(exit.causeOption.exists(_.failures.exists(_.isInstanceOf[CvError.LoadFailed]))) &&
+          // framesCopied delegates to frameStream, so it must inherit the check rather than the defect.
+          assertTrue(copiedExit.isFailure)
+    ,
+
+    test("captureScoped streams a real source, closes it with the scope, and types a missing one"):
+      for
+        _ <- loadNatives
+        path <- writeSample()
+        count <- ZIO.scoped(captureScoped(path.toString).flatMap(c => frameStream(c).runCount))
+        // Let the capture escape its scope so the assertion can see the state the scope left it in.
+        cap <- ZIO.scoped(captureScoped(path.toString))
+        missing <- ZIO.scoped(captureScoped("/does/not/exist.avi")).exit
+      yield assertTrue(count == FrameCount.toLong) &&
+        // VideoCapture.release() closes the source, so a released capture reports itself as not open.
+        assertTrue(!cap.isOpened) &&
+        assertTrue(missing.isFailure) &&
+        assertTrue(missing.causeOption.exists(_.failures.exists(_.isInstanceOf[CvError])))
+    ,
+
     test("imageScoped reads and closes an image; a missing path fails as a typed CvError"):
       for
         _ <- loadNatives

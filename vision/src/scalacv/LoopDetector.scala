@@ -41,6 +41,18 @@ final class LoopDetector private (
   private val keyframes = ArrayBuffer.empty[Descriptors | Null]
   private var live = 0
 
+  /** The lowest index that may still hold a live keyframe — everything below it is a tombstone.
+    *
+    * Eviction always takes the oldest, so the boundary only moves forward and can be remembered instead of
+    * rediscovered. Without it `evictIfNeeded` rescanned from index 0 on every `addKeyframe`, past every
+    * tombstone it had already made. Tombstones are never removed (the whole point is that an index handed out
+    * in a `LoopClosure` stays valid), so that prefix grows with the total number of frames ever added, not
+    * with the number kept: a detector capped at 100 keyframes and fed 100k frames did ~5·10⁹ null checks
+    * purely to find the front of the buffer. The cap exists for long runs, so its cost should not grow with
+    * how long the run is.
+    */
+  private var firstLive = 0
+
   /** Stores `image` as a keyframe and returns its (stable) index. Evicts the oldest keyframes if this pushes
     * the live count past `maxKeyframes`.
     */
@@ -52,15 +64,14 @@ final class LoopDetector private (
 
   /** Frees the oldest live keyframes until the live count is within `maxKeyframes`. */
   private def evictIfNeeded(): Unit =
-    var i = 0
-    while live > maxKeyframes && i < keyframes.length do
-      keyframes(i) match
+    while live > maxKeyframes && firstLive < keyframes.length do
+      keyframes(firstLive) match
         case d: Descriptors =>
           d.close() // release the evicted keyframe's native descriptor Mat
-          keyframes(i) = null
+          keyframes(firstLive) = null
           live -= 1
         case null => ()
-      i += 1
+      firstLive += 1
 
   /** Looks for a loop: matches `image` against every keyframe except the most recent `recentExclusion` (which
     * are trivially similar to the current position), and returns the best match if it clears `minMatches`.
@@ -74,7 +85,11 @@ final class LoopDetector private (
       else
         var bestIndex = -1
         var bestMatches = 0
-        var i = 0
+        // From `firstLive`, not 0: everything below it is a tombstone, so starting at 0 would walk a
+        // prefix that grows with the total number of frames ever added. The `null` case below still has
+        // to stay — a slot above `firstLive` can be a tombstone too once `close` or a future eviction
+        // policy touches one out of order.
+        var i = firstLive
         while i < searchable do
           keyframes(i) match
             case kf: Descriptors =>
@@ -108,6 +123,7 @@ final class LoopDetector private (
     }
     keyframes.clear()
     live = 0
+    firstLive = 0
 
 object LoopDetector:
 

@@ -6,7 +6,7 @@ This page is about *looks*: the tone, colour and stylisation effects you reach f
 [`Image`](/image-api) verb that consumes the image it is called on and frees every intermediate, with
 the mid-level `Mat` op underneath it when you want the raw knob.
 
-:::note What this page is *not*
+:::note[What this page is *not*]
 These are finishing effects — colour grades and stylisations. The structural, analysis-oriented
 operations (blur families, edges, thresholds, morphology, colour-space conversions) live in
 [Image processing](/image-processing) and [Filters as `Mat` ops](/low-level). A few overlap
@@ -54,7 +54,7 @@ returns the next `Image`:
 scene().temperature(0.4).saturate(1.2).gamma(0.9).close()
 ```
 
-:::warning Move semantics still apply
+:::warning[Move semantics still apply]
 A filter is a transform, so it **consumes** the image. `val warm = scene(); warm.saturate(1.2); warm.gamma(0.9)`
 throws on the second call — `warm` was spent by `saturate`. Chain the calls, or take a
 [`.copy`](/mat-lifecycle) first if you need to branch. In these runnable snippets every image is either
@@ -108,7 +108,7 @@ scene().invert.close()                            // negative
 scene().adjust(brightness = 20, contrast = 1.3).close() // punchier
 ```
 
-:::tip gamma vs adjust
+:::tip[gamma vs adjust]
 `adjust` is a *linear* level change — it multiplies and adds, so it clips at both ends once it hits
 `0` or `255`. `gamma` is a *curve*: it moves the mid-tones while leaving pure black and pure white
 where they are, so it rarely clips. Reach for `gamma` when you want to open up shadows without blowing
@@ -148,7 +148,7 @@ scene().stylize(strength = 80, detail = 0.3f).close() // more abstract
 scene().enhance(strength = 30, detail = 0.2f).close() // stronger clarity
 ```
 
-:::warning These are the slow ones
+:::warning[These are the slow ones]
 The `photo`-module effects (`stylize`, `sketch`, `enhance`, `edgePreserving`) run an edge-aware
 solver over the whole image and are far heavier than the tone grades — easily tens of milliseconds on a
 mid-size frame. They are fine for stills but think twice before putting one on a per-frame video path.
@@ -192,7 +192,7 @@ The full palette — ten maps, matching OpenCV's `COLORMAP_*` set:
 Colormap.values.length
 ```
 
-:::danger Jet lies
+:::danger[Jet lies]
 The classic `Jet` rainbow has bright bands (cyan, yellow) that read as *edges* your data doesn't have,
 and it is unreadable in greyscale or to colour-blind viewers. Prefer `Viridis`/`Turbo` for anything a
 person will draw a conclusion from; keep `Jet` for matching a legacy screenshot.
@@ -219,7 +219,7 @@ holed.inpaint(mask).close()
 mask.close()
 ```
 
-:::warning The mask is borrowed; the receiver is consumed
+:::warning[The mask is borrowed; the receiver is consumed]
 `inpaint`, `seamlessCloneInto`, `applyMask` and `blend` all follow the same ownership rule: the
 **receiver `Image` is consumed** (it becomes the result), but the mask / background you pass is
 **borrowed** — scalacv does not close it for you. Close it yourself, as the snippets above and below do.
@@ -298,7 +298,7 @@ val warmSketch = Filter.warm.andThen(Filter.sketch)
 scene().filter(warmSketch).close()
 ```
 
-:::tip `andThen` names the composite
+:::tip[`andThen` names the composite]
 `Filter.warm.andThen(Filter.sketch)` builds a new `Filter` whose `name` is `"warm+sketch"` — handy
 when you print a filter picker or log which look was applied. `Filter("x")(f)` names anything: a filter
 is nothing but a `String` and an `Image => Image`.
@@ -350,7 +350,7 @@ val out: Either[CvError, Array[Byte]] =
 graded.release()
 ```
 
-:::note Optimise only with a benchmark
+:::note[Optimise only with a benchmark]
 The house rule in [`CLAUDE.md`](/architecture) is *no optimisation without a benchmark delta and a
 bit-identical output hash*. If you drop from a high-level verb to a hand-rolled mid-level chain for
 speed, prove it with the [benchmark harness](/performance) — micro-seconds are machine-specific,

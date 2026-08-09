@@ -28,7 +28,7 @@ as that box a moment ago".
 | How many distinct objects have crossed so far? | [`ObjectTracker.count`](#objecttracker-tracking-by-detection) |
 | Where will it be next frame, if I miss a reading? | [`Kalman.predict`](#kalman-smoothing-and-prediction) |
 
-:::tip Which layer do I reach for?
+:::tip[Which layer do I reach for?]
 Skip to [Choosing between them](#choosing-between-them) if you already know the vocabulary. If not, read
 top to bottom — each layer is built from the one above it. `ObjectTracker` is a bank of `Kalman` filters
 plus a matcher, so understanding `Kalman` first makes the rest obvious.
@@ -103,12 +103,12 @@ smoothness. They are the whole personality of the filter.
 | `processNoise` | `1e-2` | the model may drift more → **more responsive**, more jitter |
 | `measurementNoise` | `1e-1` | measurements trusted less → **smoother**, laggier |
 
-:::note Rule of thumb
+:::note[Rule of thumb]
 Twitchy, over-reactive box? Raise `measurementNoise` (trust the model, smooth harder). Sluggish, always
 behind a fast object? Raise `processNoise` (let the model chase the readings). Change one at a time.
 :::
 
-:::warning It owns native state
+:::warning[It owns native state]
 `Kalman` holds a native `KalmanFilter`. Always `close()` it — the `try/finally` above, or wrap it in
 `Using.resource`. See [Mat lifecycle](/mat-lifecycle) for the ownership model that governs every native
 handle in scalacv.
@@ -149,11 +149,11 @@ The lifecycle is exactly two verbs: `init(image, box)` once to seed, then `updat
 - `update` returns `Option[Rect]`. CSRT and KCF report loss by returning `None`; **MIL always returns a
   box**, so it can silently drift onto the background — pair it with your own sanity check if you use it.
 
-:::danger init before update
+:::danger[init before update]
 `update` requires a prior `init` (it `require`s `started`). Calling `update` on a fresh tracker throws.
 :::
 
-:::tip Tracker vs. re-detecting every frame
+:::tip[Tracker vs. re-detecting every frame]
 A `Tracker` is cheaper than running a full detector on every frame and it keeps following even when the
 detector would miss (odd pose, motion blur). The classic pattern is **detect occasionally, track in
 between**, re-seeding the tracker with each new detection.
@@ -291,7 +291,7 @@ counter.close()
 println(s"${counter.count} distinct objects passed")
 ```
 
-:::note Ownership recap
+:::note[Ownership recap]
 `ObjectTracker.update` takes plain `Rect`s and never touches your images — so the frame you pass to a
 detector stays yours to draw on and encode. `drawTracks` consumes the image it's called on; `.copy` first
 inside `foreach` since the loop owns and closes `frame`. Full rules in [Mat lifecycle](/mat-lifecycle).

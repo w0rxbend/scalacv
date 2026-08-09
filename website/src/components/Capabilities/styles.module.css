@@ -1,0 +1,117 @@
+.grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  /* `auto-fit` + a 17rem floor gives four columns on a desktop, two on a tablet and one on a phone
+     without a single media query, and never leaves a stranded half-width card. */
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  position: relative;
+  overflow: hidden;
+  padding: 1.35rem 1.3rem 1.1rem;
+  border: 1px solid var(--scv-line);
+  border-radius: var(--scv-radius);
+  background: var(--scv-surface);
+  transition: border-color var(--scv-med) var(--scv-ease), transform var(--scv-med) var(--scv-ease),
+    box-shadow var(--scv-med) var(--scv-ease);
+}
+
+/* The tone accent. Set once per card as a variable, then used by the icon, the rail and the glow —
+   so adding a colour means adding one class, not four. */
+.cyan {
+  --tone: var(--scv-accent);
+}
+.red {
+  --tone: var(--ifm-color-primary);
+}
+.violet {
+  --tone: var(--scv-violet);
+}
+.amber {
+  --tone: var(--scv-amber);
+}
+.lime {
+  --tone: var(--scv-lime);
+}
+
+/* A rail that wipes across the card's top edge on hover — the scan gesture again, at card scale. */
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--tone), transparent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--scv-med) var(--scv-ease);
+}
+
+.card:hover,
+.card:focus-within {
+  border-color: color-mix(in srgb, var(--tone) 55%, var(--scv-line));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px -18px rgba(5, 7, 13, 0.5);
+}
+
+.card:hover::before,
+.card:focus-within::before {
+  transform: scaleX(1);
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  margin-bottom: 0.85rem;
+  color: var(--tone);
+  border: 1px solid color-mix(in srgb, var(--tone) 35%, transparent);
+  background: color-mix(in srgb, var(--tone) 10%, transparent);
+}
+
+.title {
+  margin: 0 0 0.5rem;
+  font-size: 1.06rem;
+  font-weight: 660;
+  letter-spacing: -0.012em;
+  color: var(--scv-text);
+}
+
+.body {
+  margin: 0 0 1rem;
+  font-size: 0.905rem;
+  line-height: 1.58;
+  color: var(--scv-dim);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chip {
+  font-size: 0.775rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--scv-line-strong);
+  color: var(--scv-dim);
+  text-decoration: none;
+  transition: color var(--scv-fast) var(--scv-ease), border-color var(--scv-fast) var(--scv-ease),
+    background-color var(--scv-fast) var(--scv-ease);
+}
+
+.chip:hover {
+  color: var(--tone);
+  border-color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 9%, transparent);
+  text-decoration: none;
+}

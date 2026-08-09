@@ -27,7 +27,7 @@ val bytesFromSomewhere: Array[Byte] = Array.emptyByteArray
 lazy val detector: org.opencv.objdetect.FaceDetectorYN = ??? // built with FaceDetect.create(model, size)
 ```
 
-:::tip New to scalacv? Start here.
+:::tip[New to scalacv? Start here.]
 Every runnable example on this page begins from a helper called `scene()` — a small synthetic image of a
 rectangle and a circle. It exists only so the docs can run without shipping a photo. In your own code you
 would start from [`Image.read("photo.jpg")`](#getting-an-image) instead. Everything else is identical.
@@ -59,7 +59,14 @@ Everything on `Image` is one of three shapes, and knowing which is which is the 
 |---|---|---|---|
 | **Transform** | `gray`, `blur`, `canny`, `resize`, `crop`, every `draw*` | **consumes** it, returns a new `Image` | `Image` |
 | **Query** | `width`, `size`, `channels`, `isEmpty`, `contours`, `qrCodes` | **borrows** it, image stays alive | plain immutable data |
-| **Terminal** | `write`, `bytes`, `close`, `managed` | **consumes** it and releases the native memory | `Either`/`Array[Byte]`/`Unit` |
+| **Terminal (releasing)** | `write`, `bytes`, `close` | **consumes** it and **frees** the Mat | `Either[CvError, Unit]` / `Either[CvError, Array[Byte]]` / `Unit` |
+| **Terminal (handover)** | `managed` | **consumes** it but does **not** free — ownership moves out | `Managed[Mat]`, now yours |
+
+`managed` is the only terminal that leaves live native memory behind. It spends the `Image` — the handle
+you called it on is dead afterwards, exactly as with `write` — but it hands the Mat on instead of freeing
+it. So the `Managed[Mat]` you get back has to be `use`d, `release()`d, or passed to `Image.wrap`. Drop it
+on the floor and it leaks, precisely as a stray `Managed` would; see
+[Dropping to the low level](#dropping-to-the-low-level) for the shape that gets it right.
 
 Keep that table in your head and the ownership rules below stop being rules and become obvious.
 
@@ -81,7 +88,7 @@ val g = img.gray   // consumes img
 img.width          // img is spent: this throws IllegalStateException, it does not read freed memory
 ```
 
-:::note Why it throws instead of crashing
+:::note[Why it throws instead of crashing]
 Calling into a freed OpenCV object segfaults the JVM from native code — no stack trace, no `catch`. So
 `Image` (via [`Managed`](/mat-lifecycle)) flips that into an ordinary `IllegalStateException` on the Scala
 side. If the error fires somewhere far from the real mistake, start the JVM with
@@ -127,7 +134,35 @@ the same as after a transform.
 scene().gray.bytes(".png").map(_.length)
 ```
 
-:::warning A value that never reaches a terminal leaks
+:::warning[A failed terminal still releases]
+`write` and `bytes` release the image in a `finally`, which means they release **whether or not the encode
+succeeded**. Two things follow, and both bite the first time you write error-handling code:
+
+- you cannot retry a failed `write` on the same `Image`, and
+- you cannot fall back from a failed `write` to `bytes`.
+
+Nor are those failures exotic. `CvError.EncodeFailed` is what comes back when the parent directory does not
+exist, or when the file extension is one OpenCV has no encoder registered for — exactly the cases the
+[error model](/error-model) tells you to branch on.
+
+The fix is to decide *before* the terminal runs: check the destination up front, or spend a `.copy` and keep
+the original alive for the second attempt.
+
+```scala mdoc:compile-only
+val source = scene()
+
+// Spend a *copy* on the write, so that a failure still leaves an image to fall back on.
+val written: Either[CvError, Unit] = source.copy.write("out/edges.png")
+
+val fallbackBytes: Option[Array[Byte]] =
+  if written.isRight then
+    source.close()                     // the file is on disk; release the spare we were holding
+    None
+  else source.bytes(".png").toOption   // the write failed — `source` is untouched, so encode in memory
+```
+:::
+
+:::warning[A value that never reaches a terminal leaks]
 An `Image` you build but never `write`, `bytes`, `close`, or hand off via `managed` holds a native Mat that
 the garbage collector will not free promptly. If the body of your work does not end in a terminal, wrap it
 in [`Image.reading`](#scoping-with-reading), which closes for you.
@@ -179,7 +214,7 @@ Image.read("huge.png", ImreadFlags(ImreadColor.Color, ImreadScale.Half))   // de
 Image.read("photo.jpg", ImreadFlags(ImreadColor.Color, ignoreOrientation = true))
 ```
 
-:::tip Reduced-size decode beats read-then-resize
+:::tip[Reduced-size decode beats read-then-resize]
 A reduced-size decode (`ImreadScale.Half` and friends) is cheaper than a full read followed by
 `resize`, because the codec skips the discarded detail rather than producing every pixel and throwing most
 away. Reach for it when you only need a thumbnail. Only `Grayscale` and `Color` support it — the type
@@ -200,6 +235,22 @@ scene()
   .close()
 ```
 
+:::note[Even a no-op transform spends the image]
+A few transforms have a parameter value that means "change nothing": `blur(0)`, `scale(1.0)`, `adjust()` left
+at its defaults. They are no-ops on the *pixels* — and they **still consume the receiver**. `blur(0)`, for
+instance, moves the Mat straight into a fresh `Image` instead of copying it, so not a pixel is touched, yet
+the handle you called it on is spent exactly as if you had blurred.
+
+That makes "pass a neutral value to skip the step" a trap: it reads as if nothing happened, and it does not
+generalise — `medianBlur` requires `radius >= 1`, so it has no neutral value to pass at all. Branch *around*
+the step instead. Both paths then have the same shape, one live `Image` in and one live `Image` out:
+
+```scala mdoc:compile-only
+def maybeBlur(img: Image, radius: Int): Image =
+  if radius > 0 then img.blur(radius) else img
+```
+:::
+
 Resizing and cropping:
 
 ```scala mdoc:silent
@@ -208,7 +259,7 @@ scene().scale(0.5).close()                     // half on both axes
 scene().crop(Rect(10, 10, 60, 60)).close()     // an independent copy of a region
 ```
 
-:::note `crop` is a copy, not a view
+:::note[`crop` is a copy, not a view]
 `crop` returns an independent image, not an aliasing window into the parent's pixels. That means the crop
 outlives the parent safely, and writing to one never disturbs the other. The rectangle must lie fully
 inside the image, or the call throws `IllegalArgumentException` up front.
@@ -239,13 +290,15 @@ scene()
   .bytes(".png")
 ```
 
-An arbitrary-angle rotation expands the canvas so no corner is clipped:
+An arbitrary-angle rotation expands the canvas so no corner is clipped. The angle is measured
+**counter-clockwise**, which is OpenCV's own `warpAffine` convention — so `rotate(90.0)` and
+`rotate(Rotation.CounterClockwise)` produce the same image:
 
 ```scala mdoc:silent
-scene().rotate(degrees = 30, scale = 1.0).close()   // canvas grows to fit the tilted image
+scene().rotate(degrees = 30, scale = 1.0).close()   // 30° anti-clockwise; canvas grows to fit
 ```
 
-:::tip Name your thresholds
+:::tip[Name your thresholds]
 `canny(threshold1, threshold2)` takes two doubles in a fixed order, and swapping them silently changes the
 result. When the numbers are not obviously ordered, name them — `canny(threshold1 = 80, threshold2 = 160)`.
 The same advice applies to `adaptiveThreshold(blockSize = 15, c = 4)`.
@@ -332,22 +385,52 @@ scene()
   .close()
 ```
 
-:::note Text is anchored on its baseline
+:::note[Text is anchored on its baseline]
 `drawText`'s point is the *left end of the baseline*, not the top-left corner — a `y` of `0` draws the
 whole string above the image and shows nothing. Use `Draw.textSize(...)` to measure a string first when you
 need to place or box it. Only the built-in Hershey vector fonts exist; non-ASCII characters render as `?`.
 :::
 
-| Draw verb | Shape | Fillable? |
-|---|---|---|
-| `drawRect`, `drawRects` | rectangle(s) | yes (`Thickness.Filled`) |
-| `drawCircle` | circle | yes |
-| `drawContours` | contours from `findContours` | yes — the usual way back to a mask |
-| `drawText` | Hershey text | no (stroke only) |
+| Draw verb | Shape | Fillable? | Knobs on `Image` | Knobs only on `img.mat` |
+|---|---|---|---|---|
+| `drawRect`, `drawRects` | rectangle(s) | yes (`Thickness.Filled`) | `color`, `thickness` | `lineType` |
+| `drawCircle` | circle | yes | `color`, `thickness` | `lineType` |
+| `drawContours` | contours from `findContours` | yes — the usual way back to a mask | `color`, `thickness` | `lineType` |
+| `drawText` | Hershey text | no (stroke only) | `color`, `scale` | `font`, `thickness`, `lineType` |
+
+The last column is not a gap to apologise for: `Image` deliberately carries the knobs you chain every day and
+leaves the rest to the mid-level tier. When you do want an anti-aliased edge, a heavier stroke on text, or a
+font other than `Simplex`, borrow the Mat and draw through it — `img.mat.drawText(...)` mutates in place and
+does **not** consume the `Image`, so the chain carries on afterwards. See [Drawing](/drawing).
 
 `markFaces(faces)` is the one-call "show me what YuNet found" — a box per face and a dot per landmark.
-Domain overlays like `drawSkeleton`, `drawTracks`, and `drawMarkerAxes` live in their own modules and build
-on the same `paint` machinery.
+
+### Writing your own overlay
+
+Domain overlays like `drawSkeleton`, `drawTracks`, and `drawMarkerAxes` are extension methods in their own
+modules (`scalacv-vision`), built on an internal helper called `paint`. `paint` is `private[scalacv]`, so it
+is not available to you — the visibility exists so the library's own domain files can live outside the
+`Image` class, not as a public extension point.
+
+**To write your own overlay, borrow the Mat instead.** The mid-level draw ops mutate the Mat in place, and
+`img.mat` is a *borrow*, so the `Image` is never consumed: return it unchanged and let the caller's next verb
+consume it, exactly as a built-in draw verb would.
+
+```scala mdoc:silent
+extension (img: Image)
+  def drawCrosshair(at: Point, color: Scalar = Scalar.Red): Image =
+    img.mat.drawLine(Point(at.x - 8, at.y), Point(at.x + 8, at.y), color)
+    img.mat.drawLine(Point(at.x, at.y - 8), Point(at.x, at.y + 8), color)
+    img
+```
+
+That is the same thing `paint` does, minus the take-and-rewrap step: `paint` exists so a verb can move the
+Mat out of one handle and into a new one without copying, which matters only when the verb is written inside
+the library. From outside, borrowing gets you there with less ceremony.
+
+```scala mdoc:silent
+scene().drawCrosshair(Point(80, 60)).close()
+```
 
 ## Masking & compositing
 
@@ -361,7 +444,23 @@ val onlyBright = src.applyMask(mask).bytes(".png")  // `src` consumed, `mask` bo
 mask.close()                                        // the borrowed mask is ours to free
 ```
 
-:::warning A borrowed mask is yours to close
+`blend` mixes two images of the same size and type. It computes
+
+```text
+result = this * weight + other * (1 - weight)
+```
+
+so `weight` is **this image's** share, not `other`'s — `scene().blend(overlay, 0.7)` keeps 70% of the scene
+and 30% of the overlay. It defaults to `0.5`, an even mix, and a value outside `[0, 1]` is rejected up front
+with an `IllegalArgumentException`.
+
+```scala mdoc:silent
+val overlay   = Image.blank(160, 120, Scalar.White)                 // same size and type as scene()
+val washedOut = scene().blend(overlay, weight = 0.7).bytes(".png")  // 70% scene, 30% white
+overlay.close()                                                     // borrowed, so ours to free
+```
+
+:::warning[A borrowed mask is yours to close]
 `applyMask`, `inpaint`, `blend`, and `seamlessCloneInto` consume the **receiver** but only *borrow* the
 mask/other image you pass in. Whatever you passed is still live afterwards — `close()` it, or it leaks. The
 [Colour & masking](/color-masking) guide walks through the full segmentation workflow.
@@ -379,8 +478,20 @@ val faceCount: Either[CvError, Int] =
 
 `reading` runs the whole body inside [`Cv.attempt`](#handling-errors), so a `CvError.NativeCall` thrown by a
 transform in the chain comes back as a `Left` rather than escaping — the `Either` is honest about failure,
-not just about the read. Because `Image` is `AutoCloseable`, `scala.util.Using` works too; `reading` is
-just the tidier spelling for the read-and-scope case.
+not just about the read. Because `Image` is `AutoCloseable`, `scala.util.Using` works too; `reading` is the
+tidier spelling for the read-and-scope case.
+
+`reading` takes the same optional [`ImreadFlags`](#reading-options--imreadflags) that `read` does — the full
+signature is `reading(path, flags)(use)`. So you do not have to give up scoping to get a cheap decode: a
+scoped, greyscale, quarter-resolution read is one extra argument, not a fall back to `Image.read` plus a
+hand-written `close()`.
+
+```scala mdoc:compile-only
+val thumbFlags = ImreadFlags(ImreadColor.Grayscale, ImreadScale.Quarter) // 1 channel, quarter size
+
+val crowdFaces: Either[CvError, Int] =
+  Image.reading("crowd.jpg", thumbFlags)(_.faces(detector).size)
+```
 
 ## Branching with `copy`
 
@@ -393,7 +504,7 @@ val a = base.gray.bytes(".png")             // consumes base
 val b = branch.canny(80, 160).bytes(".png") // consumes the copy
 ```
 
-:::tip `copy` is the one deliberate pixel copy
+:::tip[`copy` is the one deliberate pixel copy]
 Every other transform threads one live Mat through the chain with no copying. `copy` is where you opt into a
 second buffer on purpose, precisely because you want two independent lifetimes. If you find yourself copying
 inside a per-frame video loop, that is a signal to restructure — see [/performance](/performance).

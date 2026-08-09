@@ -6,6 +6,10 @@ import org.opencv.core as cv
   * result crosses — `PublicApiTest` calls them out as surface — so the round-trips get a direct assertion
   * rather than only incidental exercise. No natives: `org.opencv.core.{Point, Size, Rect, Scalar}` are pure
   * Java data classes, so this suite needs no `OpenCv.load()`.
+  *
+  * `Face.clippedBox` is exercised here too. It lives on `Face` because that is where an unclipped box is
+  * produced, but what it computes is `Rect` arithmetic, and testing it needs neither a native Mat nor the
+  * downloaded YuNet model — so it belongs with the rectangles rather than in `FaceDetectTest`.
   */
 class GeometryTest extends munit.FunSuite:
 
@@ -50,3 +54,66 @@ class GeometryTest extends munit.FunSuite:
     assertEquals(Scalar.Red, Scalar(0, 0, 255))
     assertEquals(Scalar.Blue, Scalar(255, 0, 0))
     assertEquals(cv.Scalar(Scalar.Green.toCv.`val`).`val`(1), 255.0)
+
+  /** A face whose landmarks are irrelevant — `Face` insists on exactly five, and the clip reads none of them.
+    */
+  private def faceAt(box: Rect): Face = Face(box, Seq.fill(5)(Point(0, 0)), 0.9f)
+
+  // `Face.clippedBox` is the library's only rectangle clip, and what it computes is pure `Rect` geometry, so
+  // its cases sit here with the rest of the `Rect` assertions rather than in `FaceDetectTest`: they want
+  // neither the natives nor the downloaded YuNet model, and the half-open case below is exactly the
+  // off-by-one this file exists to pin.
+
+  test("Face.clippedBox trims a box that hangs off each of the four edges"):
+    assertEquals(faceAt(Rect(-7, 12, 96, 96)).clippedBox(640, 480), Some(Rect(0, 12, 89, 96)))
+    assertEquals(faceAt(Rect(12, -7, 96, 96)).clippedBox(640, 480), Some(Rect(12, 0, 96, 89)))
+    assertEquals(faceAt(Rect(600, 12, 96, 96)).clippedBox(640, 480), Some(Rect(600, 12, 40, 96)))
+    assertEquals(faceAt(Rect(12, 400, 96, 96)).clippedBox(640, 480), Some(Rect(12, 400, 96, 80)))
+
+  test("Face.clippedBox leaves a box that already fits alone, and clamps one that swallows the frame"):
+    val inside = Rect(10, 20, 40, 30)
+    assertEquals(faceAt(inside).clippedBox(640, 480), Some(inside))
+    assertEquals(faceAt(Rect(0, 0, 640, 480)).clippedBox(640, 480), Some(Rect(0, 0, 640, 480)))
+    assertEquals(faceAt(Rect(-100, -100, 1000, 1000)).clippedBox(640, 480), Some(Rect(0, 0, 640, 480)))
+
+  test("Face.clippedBox is half-open, so a box that only touches an edge does not overlap"):
+    // A 10-wide frame encloses columns 0..9, so a box starting at x = 10 shares no pixel with it. An
+    // inclusive comparison would answer Some(Rect(10, 0, 0, 10)) — which `Rect` accepts and `Mat.submat`
+    // then throws on, which is why an empty overlap has to be None rather than a zero-extent rectangle.
+    assertEquals(faceAt(Rect(10, 0, 10, 10)).clippedBox(10, 10), None)
+    assertEquals(faceAt(Rect(0, 10, 10, 10)).clippedBox(10, 10), None)
+    assertEquals(faceAt(Rect(-10, 0, 10, 10)).clippedBox(10, 10), None)
+    assertEquals(faceAt(Rect(-50, -50, 10, 10)).clippedBox(640, 480), None)
+
+  test("Face.clippedBox always answers a rectangle Image.crop accepts"):
+    val (fw, fh) = (640, 480)
+    val offFrame = Seq(
+      Rect(-7, 12, 96, 96),
+      Rect(600, 470, 96, 96),
+      Rect(-100, -100, 1000, 1000),
+      Rect(0, 0, 640, 480)
+    )
+    offFrame.foreach: box =>
+      faceAt(box)
+        .clippedBox(fw, fh)
+        .foreach: r =>
+          // Image.crop's precondition, restated here so it can be checked without allocating an image.
+          assert(
+            r.x >= 0 && r.y >= 0 && r.x + r.width <= fw && r.y + r.height <= fh,
+            s"$r is not inside ${fw}x$fh"
+          )
+          assert(r.width > 0 && r.height > 0, s"$r is empty, and submat throws on a zero-extent ROI")
+
+  test("Face.clippedBox does not wrap on a box whose right edge overflows Int"):
+    // The decode rounds the model's floats into Ints, so a degenerate detection can land Int.MaxValue in x
+    // or width. In Int arithmetic `x + width` wraps negative, and a box far off the right edge then looks
+    // like it overlaps the frame at column 0.
+    assertEquals(faceAt(Rect(Int.MaxValue - 10, 0, 96, 96)).clippedBox(640, 480), None)
+    assertEquals(
+      faceAt(Rect(100, 100, Int.MaxValue, Int.MaxValue)).clippedBox(640, 480),
+      Some(Rect(100, 100, 540, 380))
+    )
+
+  test("Face.clippedBox rejects a frame with a negative extent"):
+    val e = intercept[IllegalArgumentException](faceAt(Rect(0, 0, 10, 10)).clippedBox(-1, 10))
+    assert(e.getMessage.contains("negative"), e.getMessage)

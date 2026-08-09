@@ -2,6 +2,11 @@
 out/
 .mill-daemon/
 
+# zio-test writes its JUnit-style XML report here, relative to the process working directory,
+# with no Mill task owning the path — so it lands at the repo root on every `./mill zio.test`
+# and shows up as an untracked directory.
+target/
+
 # Build servers / IDE tooling
 .claude/
 .bsp/

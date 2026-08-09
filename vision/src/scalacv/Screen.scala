@@ -66,12 +66,19 @@ object Screen:
           val y0 = math.max(0, loc.y.toInt - th / 2)
           val x1 = math.min(result.cols, loc.x.toInt + tw / 2 + 1)
           val y1 = math.min(result.rows, loc.y.toInt + th / 2 + 1)
-          Imgproc.rectangle(
-            result,
-            org.opencv.core.Point(x0, y0),
-            org.opencv.core.Point(x1, y1),
-            org.opencv.core.Scalar(-1.0),
-            -1
+          // Painted straight onto the score map with the raw OpenCV call rather than through `drawRect`:
+          // `result` is the CV_32F correlation surface, not an image, and the fill value is -1.0 — below
+          // TM_CCOEFF_NORMED's floor, so the suppressed footprint can never win a later `minMaxLoc`. The
+          // scalacv `Rect`/`Scalar` types would be a poor fit for both. `Thickness.Filled` is named because
+          // OpenCV's `-1` sentinel here means "solid", not "one pixel wide going the other way".
+          Cv.orThrow("rectangle")(
+            Imgproc.rectangle(
+              result,
+              org.opencv.core.Point(x0, y0),
+              org.opencv.core.Point(x1, y1),
+              org.opencv.core.Scalar(-1.0),
+              Thickness.Filled.cvValue
+            )
           )
         else searching = false
       hits.result()
@@ -93,14 +100,14 @@ object Screen:
     )
     a.absdiff(b)
       .use: d =>
-        val grayManaged =
-          if d.channels >= 3 then d.cvtColor(ColorConversion.BgrToGray) else Managed(d.clone())
-        grayManaged.use: gray =>
-          gray
-            .threshold(threshold.toDouble, 255)
-            ._1
-            .use: mask =>
-              mask
-                .dilate(radius = 2)
-                .use: merged =>
-                  merged.findContours().map(_.boundingRect).filter(_.area >= minArea).sortBy(-_.area)
+        Mats
+          .grayscale(d)
+          .use: gray =>
+            gray
+              .threshold(threshold.toDouble, 255)
+              ._1
+              .use: mask =>
+                mask
+                  .dilate(radius = 2)
+                  .use: merged =>
+                    merged.findContours().map(_.boundingRect).filter(_.area >= minArea).sortBy(-_.area)

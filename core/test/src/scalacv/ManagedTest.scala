@@ -87,6 +87,43 @@ class ManagedTest extends munit.FunSuite:
       List(a, b)
     assert(mats.get.forall(_.isReleased))
 
+  test("scope releases every handle, in reverse acquisition order, and only at the end"):
+    val freed = List.newBuilder[String]
+    given Releasable[String] = s => { freed += s; () }
+    val joined = Managed.scope: own =>
+      val a = own("first")
+      val b = own("second")
+      val c = own("third")
+      assertEquals(freed.result(), Nil, "nothing may be released while the body is still running")
+      s"$a-$b-$c"
+    assertEquals(joined, "first-second-third")
+    assertEquals(freed.result(), List("third", "second", "first"))
+
+  test("scope releases what it acquired when the body throws, and rethrows the original error"):
+    val freed = List.newBuilder[String]
+    given Releasable[String] = s => { freed += s; () }
+    val e = intercept[RuntimeException]:
+      Managed.scope: own =>
+        own("first")
+        own("second")
+        throw RuntimeException("boom")
+    assertEquals(e.getMessage, "boom")
+    assertEquals(freed.result(), List("second", "first"))
+
+  test("scope frees the Mats already acquired when a later allocation throws"):
+    // The hole in the `val`s-then-try/finally form this replaces: everything allocated before the `try`
+    // is unguarded, so a constructor that throws part-way strands it. Here the failure is the second
+    // allocation, and the first Mat must still lose its buffer.
+    def failingAllocation: Mat = throw RuntimeException("allocation failed")
+    var acquired: Mat | Null = null
+    intercept[RuntimeException]:
+      Managed.scope: own =>
+        acquired = own(Mat(64, 64, CvType.CV_8UC3))
+        own(failingAllocation)
+    acquired match
+      case m: Mat => assertEquals(m.dataAddr(), 0L, "the Mat acquired before the failure must be freed")
+      case null => fail("the first allocation should have succeeded")
+
   test("the delete(long) bridge frees a handle class that has no release()"):
     // CascadeClassifier is one of the 185 types with no public release(). If this regime ever
     // stops working the failure must be loud, because the alternative is a silent 634x leak.

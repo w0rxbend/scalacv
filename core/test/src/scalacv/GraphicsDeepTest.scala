@@ -38,6 +38,28 @@ class GraphicsDeepTest extends munit.FunSuite:
     assertEquals((b.minX, b.minY, b.maxX, b.maxY), (10.0, 20.0, 40.0, 60.0))
     assertEquals((b.width, b.height), (30.0, 40.0))
 
+  /* A path with no points is what a filter that matched nothing produces, and `Draw.drawPolyline` already
+   * treats it as a legitimate outcome rather than a programming error ("filtering everything out is a
+   * legitimate outcome"). The Picture layer has to agree: it draws such a path as nothing, so measuring it
+   * must answer "nothing" too, not throw. `bounds` returning None is what the layout combinators below are
+   * already written to handle. */
+  test("a path with no points has no bounds rather than throwing"):
+    assertEquals(Picture.polyline(Seq.empty).bounds, None)
+    assertEquals(Picture.polygon(Seq.empty).bounds, None)
+
+  test("laying out an empty path beside a real shape keeps the real shape"):
+    val square = Picture.rectangle(Rect(0, 0, 20, 20))
+    assertEquals(Picture.polyline(Seq.empty).beside(square).bounds, square.bounds)
+    assertEquals(square.above(Picture.polyline(Seq.empty)).bounds, square.bounds)
+
+  test("an empty path in a grid still occupies its cell"):
+    // Not the same claim as `beside`/`above`, which drop a measureless picture entirely: `grid` places by
+    // index, so the empty cell keeps its slot and the square lands in the second column. The point of the
+    // assertion is that laying it out neither throws nor resizes the real shape.
+    val square = Picture.rectangle(Rect(0, 0, 20, 20))
+    val laid = Picture.grid(Seq(Picture.polyline(Seq.empty), square), columns = 2).bounds
+    assertEquals(laid.map(b => (b.width, b.height)), Some((20.0, 20.0)))
+
   test("beside places the second shape to the right of the first"):
     val a = Picture.rectangle(Rect(0, 0, 20, 20))
     val b = Picture.rectangle(Rect(0, 0, 20, 20))

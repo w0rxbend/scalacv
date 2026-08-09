@@ -1,10 +1,6 @@
 package scalacv
 
-import java.net.URI
-import java.net.http.{HttpClient, HttpRequest, HttpResponse}
-import java.nio.file.{Files, Path, StandardCopyOption}
-import java.security.MessageDigest
-import java.time.Duration
+import java.nio.file.{Files, Path}
 
 import org.opencv.core.{CvType, Mat, Size as CvSize}
 import org.opencv.objdetect.FaceDetectorYN
@@ -17,7 +13,9 @@ import org.opencv.objdetect.FaceDetectorYN
   * @param box
   *   the face's bounding box. It is **not** clipped to the image: YuNet regresses boxes from anchors, so a
   *   face at the edge of the frame legitimately yields a negative `x`/`y` or a box running past
-  *   `cols`/`rows`. Crop with `Rect`-intersection before using it as a submat.
+  *   `cols`/`rows`. `Image.crop` and `Mat.submat` both reject such a rectangle outright, so clip it with
+  *   [[clippedBox]] before cropping — that is the intersection with the frame, and it answers `None` for a
+  *   box that lies entirely outside it.
   * @param landmarks
   *   exactly five points, always in this order: right eye, left eye, nose tip, right mouth corner, left mouth
   *   corner. "Right" is the *subject's* right, so it appears on the left of the image.
@@ -35,6 +33,55 @@ final case class Face(box: Rect, landmarks: Seq[Point], score: Float):
   def noseTip: Point = landmarks(2)
   def rightMouthCorner: Point = landmarks(3)
   def leftMouthCorner: Point = landmarks(4)
+
+  /** This face's [[box]] intersected with a `width`×`height` frame, or `None` when the box falls entirely
+    * outside that frame.
+    *
+    * This is the clip [[box]]'s own documentation asks for, and it is a method rather than a note because
+    * every caller would otherwise write it by hand: `Image.crop` and `Mat.submat` both reject a region of
+    * interest that runs past an edge, YuNet produces exactly such a box for any face at the border of the
+    * frame, and a hand-rolled four-way `min`/`max` is the classic home of an off-by-one.
+    *
+    * The intersection is **half-open** on both axes — the region is `[x, x + width)` — matching what
+    * [[Rect.bottomRight]] already documents ("one past the last enclosed pixel") and what `submat` expects. A
+    * box that merely *touches* the frame along an edge therefore answers `None` rather than a zero-extent
+    * `Rect`: `Rect` permits a zero extent but `submat` throws on one, so an empty overlap must not be
+    * representable as something a caller can hand to `crop`.
+    *
+    * {{{
+    * val boxes  = frame.faces(detector).flatMap(_.clippedBox(frame.width, frame.height))
+    * val thumbs = boxes.map(r => frame.copy.crop(r))
+    * }}}
+    *
+    * @param width
+    *   the frame's width in pixels — the image this face was detected in.
+    * @param height
+    *   the frame's height in pixels.
+    * @return
+    *   a rectangle that lies wholly inside the frame and has a positive extent on both axes, so it always
+    *   satisfies `Image.crop`'s precondition; `None` when there is no overlap at all.
+    * @throws IllegalArgumentException
+    *   if `width` or `height` is negative. A frame has no such shape, and clipping to it would silently
+    *   answer `None` for every face rather than reporting the mistake.
+    */
+  def clippedBox(width: Int, height: Int): Option[Rect] =
+    require(width >= 0 && height >= 0, s"a frame cannot have a negative extent: ${width}x$height")
+    // Long, not Int, because the box is decoded with `.round` from the model's floats: a degenerate
+    // detection can land Int.MaxValue in x or width, and `x + width` in Int arithmetic would then wrap
+    // negative and turn a box far off the right edge into one that appears to overlap. Each value below is
+    // bounded by the frame, so narrowing back to Int afterwards cannot lose anything.
+    val x0 = math.max(box.x.toLong, 0L)
+    val y0 = math.max(box.y.toLong, 0L)
+    val x1 = math.min(box.x.toLong + box.width, width.toLong)
+    val y1 = math.min(box.y.toLong + box.height, height.toLong)
+    if x1 <= x0 || y1 <= y0 then None
+    else Some(Rect(x0.toInt, y0.toInt, (x1 - x0).toInt, (y1 - y0).toInt))
+
+  /** `clippedBox(image.width, image.height)` — the convenience form for the usual case, where the frame to
+    * clip to is the image the detection was run on. `image` is only queried for its size, so it stays alive
+    * and owned by the caller, exactly as [[FaceDetect.detect]] left it.
+    */
+  def clippedBox(image: Image): Option[Rect] = clippedBox(image.width, image.height)
 
 /** YuNet face detection over `org.opencv.objdetect.FaceDetectorYN`.
   *
@@ -122,10 +169,8 @@ object FaceDetect:
   /** This detector's model as a [[ModelSpec]] for the generic [[Models.fetch]] downloader — the registry form
     * of [[downloadModel]], carrying the same file name, mirrors and pinned checksum.
     */
-  val modelSpec: ModelSpec = ModelSpec(ModelFileName, ModelUrls, ModelSha256)
-
-  private val ConnectTimeout = Duration.ofSeconds(20)
-  private val RequestTimeout = Duration.ofSeconds(120)
+  val modelSpec: ModelSpec =
+    ModelSpec(ModelFileName, ModelUrls, ModelSha256, sizeBytes = Some(ModelSizeBytes))
 
   /** Builds a detector from an ONNX model on disk.
     *
@@ -200,7 +245,8 @@ object FaceDetect:
     *
     * @return
     *   one [[Face]] per detection, in OpenCV's order — descending score after NMS. Empty when there is no
-    *   face, which is not an error.
+    *   face, which is not an error. Boxes are not clipped to `image`; clip with [[Face.clippedBox]] before
+    *   cropping one out.
     * @throws IllegalArgumentException
     *   if `image` is empty or is not 8-bit 3-channel. Both are programmer errors: YuNet's blob step needs BGR
     *   `CV_8UC3` and fails inside the DNN module otherwise, with a message about layer shapes that says
@@ -267,100 +313,19 @@ object FaceDetect:
     * Idempotent: if `into/`[[ModelFileName]] is already there and already hashes correctly, it is returned
     * without touching the network. Call it freely at start-up.
     *
+    * This is the named, discoverable form of `Models.fetch(FaceDetect.modelSpec, into)` and nothing more —
+    * the two were separate implementations of the same download-verify-move dance until they were merged,
+    * which is how one of them ended up with a bug the other had already fixed. If you are fetching several
+    * models, prefer [[Models.fetch]] and a list of specs.
+    *
     * @param into
     *   a **directory**, created if absent. The file name is fixed — that is what makes the check above
     *   possible.
     * @return
     *   the path to the verified model, or a `Left` describing which stage failed: the directory, every URL
-    *   tried, or the checksum.
+    *   tried, the size, or the checksum.
     */
-  def downloadModel(into: Path): Either[CvError, Path] =
-    val target = into.resolve(ModelFileName)
-    if Files.isRegularFile(target) && verified(target).isRight then Right(target)
-    else
-      try
-        Files.createDirectories(into)
-        fetchFirst(target)
-      catch
-        case e: Exception =>
-          Left(CvError.LoadFailed(into.toString, s"could not create the download directory: $e"))
-
-  /** Tries each mirror in turn, keeping the first that downloads *and* verifies. */
-  private def fetchFirst(target: Path): Either[CvError, Path] =
-    val client = HttpClient.newBuilder
-      .connectTimeout(ConnectTimeout)
-      .followRedirects(HttpClient.Redirect.NORMAL) // LFS media URLs redirect to object storage
-      .build()
-    val failures = List.newBuilder[String]
-    val ok = ModelUrls.iterator
-      .map(url => url -> fetchOne(client, url, target))
-      .find:
-        case (url, Left(e)) => failures += s"$url: ${e.getMessage}"; false
-        case _ => true
-      .map(_._2)
-    ok.getOrElse(
-      Left(
-        CvError.LoadFailed(
-          ModelFileName,
-          s"could not be downloaded from any known mirror.\n  ${failures.result().mkString("\n  ")}"
-        )
-      )
-    )
-
-  /** Downloads one URL to a sibling temp file, verifies it, and only then moves it onto `target`. */
-  private def fetchOne(client: HttpClient, url: String, target: Path): Either[CvError, Path] =
-    val tmp = Files.createTempFile(target.getParent, ".yunet-", ".part")
-    try
-      val request = HttpRequest.newBuilder
-        .uri(URI.create(url))
-        .timeout(RequestTimeout)
-        .GET()
-        .build()
-      // ofFile writes the body whatever the status is, so a 404's HTML page lands in tmp too. Hence the
-      // explicit status check before anything else looks at those bytes.
-      val response = client.send(request, HttpResponse.BodyHandlers.ofFile(tmp))
-      if response.statusCode != 200 then Left(CvError.LoadFailed(url, s"HTTP ${response.statusCode}"))
-      else
-        verified(tmp).map: _ =>
-          Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING)
-          target
-    catch case e: Exception => Left(CvError.LoadFailed(url, s"${e.getClass.getSimpleName}: ${e.getMessage}"))
-    finally Files.deleteIfExists(tmp): Unit
-
-  /** Size then digest, so a truncated download or an error page is reported as what it is. */
-  private def verified(file: Path): Either[CvError, Path] =
-    val size = Files.size(file)
-    if size != ModelSizeBytes then
-      Left(
-        CvError.LoadFailed(
-          file.toString,
-          s"expected $ModelSizeBytes bytes for $ModelFileName but got $size — the download is truncated, " +
-            "or the server answered with something that is not the model"
-        )
-      )
-    else
-      val actual = sha256(file)
-      if actual == ModelSha256 then Right(file)
-      else
-        Left(
-          CvError.LoadFailed(
-            file.toString,
-            s"SHA-256 mismatch for $ModelFileName: expected $ModelSha256, got $actual. Refusing to load " +
-              "an unverified model."
-          )
-        )
-
-  private def sha256(file: Path): String =
-    val digest = MessageDigest.getInstance("SHA-256")
-    val in = Files.newInputStream(file)
-    try
-      val buf = Array.ofDim[Byte](64 * 1024)
-      var n = in.read(buf)
-      while n > 0 do
-        digest.update(buf, 0, n)
-        n = in.read(buf)
-    finally in.close()
-    digest.digest().map(b => f"$b%02x").mkString
+  def downloadModel(into: Path): Either[CvError, Path] = Models.fetch(modelSpec, into)
 
 /** The high-level face verbs on [[Image]] — extension methods so YuNet detection lives beside [[FaceDetect]]
   * rather than in the image class. `import scalacv.*` gives `image.faces(detector)` and `image.markFaces(…)`.

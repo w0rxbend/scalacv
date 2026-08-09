@@ -14,7 +14,7 @@ It leads with the high-level [`Image`](/image-api) verbs — each consumes the i
 and frees every intermediate — and shows the mid-level `Mat` op underneath each one for when you need
 a knob `Image` does not surface.
 
-:::note Transforms consume, masks are borrowed
+:::note[Transforms consume, masks are borrowed]
 A colour verb spends the `Image` it is called on and returns a new one. But `applyMask`, `blend` and
 friends take a second image (the mask, or the other layer) that is **borrowed** — it stays alive, so
 you close it yourself. Getting this right is the whole subject of [Mat lifecycle](/mat-lifecycle);
@@ -124,7 +124,7 @@ intensity, a depth map, a [motion](/motion-detection) field) into a colour heatm
 colourScene().gray.colorMap(Colormap.Turbo).close()
 ```
 
-:::tip Reach for a named filter first
+:::tip[Reach for a named filter first]
 Most of these looks are already bundled as composable [`Filter`](/filters) values — `Filter.vintage`,
 `Filter.noir`, `Filter.warm`, `Filter.dramatic` — applied with `image.filter(...)`. Build your own
 only when none fits.
@@ -222,7 +222,7 @@ val segmented: Either[CvError, Array[Byte]] =
 bgr.release()
 ```
 
-:::warning Red wraps around the hue wheel
+:::warning[Red wraps around the hue wheel]
 Because hue is circular and red sits at the 0/179 seam, no single `inRange` captures it — you build
 *two* masks (one at each end) and OR them together. `inRange` and `applyMask` are wrapped, but a raw
 bitwise OR is not, so you drop to `org.opencv.core.Core` for that one step:
@@ -278,7 +278,7 @@ Underneath, `blend` is `addWeighted` and `applyMask` is `masked`, both on a `Mat
 `mask` borrowed exactly like the receiver — see [Image processing](/image-processing) for the
 `addWeighted` signature in full.
 
-:::note Invisible pastes want `seamlessCloneInto`
+:::note[Invisible pastes want `seamlessCloneInto`]
 `applyMask` composites with a hard edge. To paste an object into another image so the join is
 *invisible* — Poisson blending that matches gradients across the seam — reach for
 `seamlessCloneInto`, the compositing behind a good virtual background. See [Conferencing](/conferencing).

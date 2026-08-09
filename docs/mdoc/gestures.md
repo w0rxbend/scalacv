@@ -11,7 +11,7 @@ site follows.
 Because the decision layer needs no model, **everything on this page except the model-driven pipelines runs
 for real** — you can read the exact answer each snippet produces.
 
-:::note bring your own weights
+:::note[bring your own weights]
 scalacv ships **no** hand model and **no** sign-language model. It ships the decision layer and the
 per-frame landmark plumbing. Where a snippet needs weights it is marked `compile-only` and assumes a `Net`
 you loaded yourself with [`Dnn.fromOnnx`](/dnn).
@@ -125,7 +125,7 @@ GestureRecognizer.recognize(hand(true, true, true, true, true), minScore = 0.95f
 That is the whole point of the gate: on a real hand where the network is unsure about, say, a partially
 occluded pinky, that low-confidence tip drops out of the decision instead of flipping the answer.
 
-:::danger a 21-landmark pose is required
+:::danger[a 21-landmark pose is required]
 `recognize` `require`s a `Hand21` pose. Hand it a body pose — or anything whose topology `size` is not 21 —
 and it fails loudly at the call, not with a wrong answer three layers later:
 :::
@@ -182,7 +182,7 @@ Dnn.fromOnnx("models/hand_landmark.onnx").flatMap { managedNet =>
 }
 ```
 
-:::note the format is the bring-your-own part
+:::note[the format is the bring-your-own part]
 MediaPipe Hands — the obvious hand-landmark model — ships as **TFLite**, which OpenCV's DNN module does not
 read. Convert it to ONNX first (for example via `tf2onnx`), or use any hand-landmark network already
 exported to ONNX. The format is what you supply, not the API — the same constraint every skeleton on the
@@ -209,7 +209,7 @@ Dnn.fromOnnx("models/hand_landmark.onnx").flatMap { managedNet =>
 }
 ```
 
-:::tip debounce, do not trust a single frame
+:::tip[debounce, do not trust a single frame]
 A landmark network jitters frame-to-frame, so a raw per-frame reading flickers. In practice you hold a
 gesture only when it repeats across a short window (say 3–5 frames), which also rejects the momentary
 `Unknown` you get mid-transition between two shapes. That windowing is the same shape as the dynamic-sign
@@ -267,7 +267,7 @@ Dnn.fromOnnx("models/asl_fingerspelling.onnx").flatMap { managedSignNet =>
 }
 ```
 
-:::tip normalise before you classify
+:::tip[normalise before you classify]
 Raw pixel `(x, y)` pairs drift with hand position and camera distance. Before feeding them to a classifier,
 translate them relative to the wrist and scale by the hand's span (e.g. wrist-to-middle-MCP distance). Then
 the same handshape looks the same wherever it is in the frame — the classifier learns *shape*, not

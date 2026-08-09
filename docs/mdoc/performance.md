@@ -9,7 +9,7 @@ import org.opencv.core.{CvType, Mat}
 OpenCv.load()
 ```
 
-:::tip The whole page in one sentence
+:::tip[The whole page in one sentence]
 Prefer a **move-chain** (`img.gray.blur(2).canny(...)`) over building a `Seq[Image]`, prefer a **borrowed frame** (`Video.frames`) over a copied one when you only read it, cap OpenCV's inner thread pool when you fan out your own, and never trust `Pointer.totalBytes()` to see a leak.
 :::
 
@@ -98,7 +98,7 @@ Video.open("clip.mp4").map { capture =>
 
 The trade is the borrowing contract: don't retain a borrowed frame past its turn, and don't feed it to an `Iterator` combinator that retains (`toList`, `sliding`, `buffered` all hand you N references to one Mat holding the *last* frame). See [Mat lifecycle](/mat-lifecycle).
 
-:::tip Record the zero-copy frame with no extra clone
+:::tip[Record the zero-copy frame with no extra clone]
 `Recorder.write` has a `Mat` overload, so a borrowed frame from `Video.frames` can be written straight through without the per-frame `Image` clone. Pay the copy only where you genuinely branch.
 :::
 
@@ -169,7 +169,7 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 java -jar your-app.jar
 
 or from code, `org.opencv.core.Core.setNumThreads(1)` before you spread work across your own executor.
 
-:::note Measure both ways
+:::note[Measure both ways]
 For a **single sequential** pipeline, OpenCV's internal threading is usually the faster default — it parallelises the heavy kernels (bilateral filter, DNN, resize) for you. Only cap it when *you* are the one saturating the cores. `ConfigProbeBench` is the evidence: it measures how a heavy op scales with `setNumThreads` on your hardware.
 :::
 

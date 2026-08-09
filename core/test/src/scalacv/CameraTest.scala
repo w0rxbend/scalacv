@@ -113,6 +113,83 @@ class CameraTest extends munit.FunSuite:
       case Left(_) => ()
       case Right(rec) => rec.close(); fail("an unwritable path must not open")
 
+  test("the default codec opens a writer on this build"):
+    val dir = Files.createTempDirectory("scalacv-camera-default")
+    dir.toFile.deleteOnExit()
+    val out = dir.resolve("default.avi")
+    // Deliberately no `codec` argument. Every other case here passes Codec.Mjpg explicitly, which is exactly
+    // how a default that no OpenCV build can open stayed unnoticed: nothing exercised it.
+    Recorder.open(out.toString, FrameSize) match
+      case Left(e) => fail(s"the default codec must open a writer: ${e.getMessage}")
+      case Right(rec) => rec.close()
+
+  test("writing a frame that is not 8-bit is a rejected precondition"):
+    val out = Files.createTempFile("scalacv-camera-depth-", ".avi")
+    try
+      Recorder.open(out.toString, FrameSize, codec = Codec.Mjpg) match
+        case Left(e) => fail(e.getMessage)
+        case Right(rec) =>
+          try
+            // What a Sobel asked for Float32 output, or a raw disparity map, hands you. The MJPG encoder
+            // takes it, reinterprets the float bytes as pixels and reports success, so the precondition is
+            // the only thing between the caller and a playable file of noise.
+            val float = Mat(Height, Width, CvType.CV_32FC3, cv.Scalar(0.25, 0.5, 0.75))
+            try intercept[IllegalArgumentException](rec.write(float))
+            finally float.release()
+          finally rec.close()
+    finally Files.deleteIfExists(out)
+
+  test("recordTo sizes the writer from the transformed frame, so a resizing transform records"):
+    val file = recordFixture()
+    val out = Files.createTempFile("scalacv-camera-resize-", ".avi")
+    try
+      val written: Either[CvError, Long] =
+        Camera
+          .usingFile(file.toString): cam =>
+            cam.recordTo(out.toString, codec = Codec.Mjpg)(_.resize(Width / 2, Height / 2))
+          .flatMap(identity)
+      assertEquals(written, Right(FrameCount.toLong))
+      Camera
+        .usingFile(out.toString): cam =>
+          assertEquals((cam.info.width, cam.info.height), (Width / 2, Height / 2))
+        .fold(e => fail(e.getMessage), identity)
+    finally Files.deleteIfExists(out)
+
+  test("recordTo reports a mid-stream size change as a Left, not a thrown precondition"):
+    val file = recordFixture()
+    val out = Files.createTempFile("scalacv-camera-midstream-", ".avi")
+    try
+      var seen = 0
+      val written: Either[CvError, Long] =
+        Camera
+          .usingFile(file.toString): cam =>
+            cam.recordTo(out.toString, codec = Codec.Mjpg): img =>
+              seen += 1
+              // Stands in for a source that renegotiates its resolution part-way through, which no file
+              // fixture can produce: the second frame no longer matches the geometry the writer opened with.
+              if seen == 1 then img.resize(Width, Height) else img.resize(Width / 2, Height / 2)
+          .flatMap(identity)
+      written match
+        case Left(_: CvError.EncodeFailed) => ()
+        case other => fail(s"expected an EncodeFailed Left, got $other")
+    finally Files.deleteIfExists(out)
+
+  test("recordTo on an exhausted source writes nothing and creates no file"):
+    val file = recordFixture()
+    val dir = Files.createTempDirectory("scalacv-camera-empty")
+    dir.toFile.deleteOnExit()
+    val out = dir.resolve("empty.avi")
+    val written: Either[CvError, Long] =
+      Camera
+        .usingFile(file.toString): cam =>
+          cam.foreach()(_ => ())
+          cam.recordTo(out.toString, codec = Codec.Mjpg, attemptsPerFrame = 1)(
+            _.gray.convert(ColorConversion.GrayToBgr)
+          )
+        .flatMap(identity)
+    assertEquals(written, Right(0L))
+    assert(!Files.exists(out), "with no frames there is nothing to size a writer from, so no file")
+
   test("writing a frame of the wrong size is a rejected precondition"):
     val out = Files.createTempFile("scalacv-camera-mismatch-", ".avi")
     try

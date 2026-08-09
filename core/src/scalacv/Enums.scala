@@ -70,13 +70,64 @@ enum ContourApproximation(val cvValue: Int):
   * Plain rather than an enum-with-modifiers: `BORDER_ISOLATED` is a modifier, but it only means anything for
   * ROI-based calls that scalacv does not expose yet, so it is deliberately omitted rather than offered and
   * ignored.
+  *
+  * ==One type, two domains==
+  *
+  * OpenCV packs two different sets of accepted values into this one `int`, and this enum is the union of
+  * them. `copyMakeBorder` (behind `pad` and `border`) and `warpAffine` (behind `rotated`) honour all five
+  * modes. The `imgproc` filter family — `gaussianBlur`, `boxBlur`, `sobel`, `laplacian` — does not: it
+  * rejects [[BorderType.Wrap]], see that case and [[BorderType.requireFilterSupport]].
+  *
+  * Splitting the type (a `FilterBorder` without `Wrap`, widening into a `TransformBorder` with it) is the end
+  * state that would make the mistake unrepresentable, but it is a breaking change to four public signatures.
+  * Until then [[BorderType.requireFilterSupport]] is the check every filter operation must run on its
+  * `border` parameter, so the rejection lands at the Scala boundary instead of as an assertion failure inside
+  * OpenCV. `BORDER_TRANSPARENT` stays out of the enum entirely for a related reason: `copyMakeBorder` throws
+  * on it, and `warpAffine` with it leaves the freshly-allocated destination uninitialised, so the value can
+  * only ever produce a crash or garbage pixels.
   */
 enum BorderType(val cvValue: Int):
   case Constant extends BorderType(Core.BORDER_CONSTANT)
   case Replicate extends BorderType(Core.BORDER_REPLICATE)
   case Reflect extends BorderType(Core.BORDER_REFLECT)
   case Reflect101 extends BorderType(Core.BORDER_REFLECT_101)
+
+  /** Takes the pixels from the opposite edge, as if the image tiled.
+    *
+    * **Valid only for `pad`/`border` (`copyMakeBorder`) and `rotated` (`warpAffine`).** The `imgproc` filters
+    * reject it — see [[BorderType.requireFilterSupport]] for what happens if it reaches them.
+    */
   case Wrap extends BorderType(Core.BORDER_WRAP)
+
+object BorderType:
+
+  /** Rejects the one mode OpenCV's `imgproc` filters cannot honour, naming the operation that was asked for.
+    *
+    * `gaussianBlur`, `boxBlur`, `sobel` and `laplacian` all end up in `cv::FilterEngine::init`, which asserts
+    * `columnBorderType != BORDER_WRAP` (`imgproc/src/filter.dispatch.cpp`) and aborts. Leaving that to native
+    * code would be tolerable if it were consistent, but it is not: verified against OpenCV 4.13,
+    * `GaussianBlur` with `BORDER_WRAP` *silently ignores* the mode on `CV_8U` input — the SIMD path never
+    * reaches the assertion — and aborts on `CV_32F`. So the same call succeeds against the 8-bit frame it was
+    * developed on and crashes the first time it meets a float image. Checking here makes both depths fail
+    * identically, before any native call, with the parameter the caller actually passed.
+    *
+    * Must **not** be used by `pad`/`border` or `rotated`: `copyMakeBorder` and `warpAffine` do honour
+    * [[Wrap]], and rejecting it there would remove the only place the mode is useful.
+    *
+    * @param op
+    *   the scalacv operation name, quoted in the failure message
+    * @param border
+    *   the caller-supplied mode
+    * @throws IllegalArgumentException
+    *   if `border` is [[Wrap]]
+    */
+  def requireFilterSupport(op: String, border: BorderType): Unit =
+    require(
+      border != Wrap,
+      s"$op does not support BorderType.Wrap: OpenCV's imgproc filters assert " +
+        "columnBorderType != BORDER_WRAP. Wrap is valid only for pad/border (copyMakeBorder) and " +
+        "rotated (warpAffine)."
+    )
 
 /** How to mirror an image. Named by the visible effect, not OpenCV's axis-centric flip code. */
 enum Flip(val cvValue: Int):

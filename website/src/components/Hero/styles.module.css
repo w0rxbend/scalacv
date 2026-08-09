@@ -1,0 +1,290 @@
+/* Hero layout and backdrop.
+   The backdrop is three stacked layers — a calibration grid, a slow colour aurora, and a sweeping
+   sensor bar. Each is a single element with a single gradient; there are no images to download. */
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: clamp(3rem, 7vw, 6rem) 0 clamp(3rem, 6vw, 5rem);
+  border-bottom: 1px solid var(--scv-line);
+  background: var(--scv-void);
+}
+
+/* --- Backdrop ------------------------------------------------------------- */
+
+.grid {
+  position: absolute;
+  inset: -10%;
+  z-index: -3;
+  background-image:
+    linear-gradient(var(--scv-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--scv-grid) 1px, transparent 1px);
+  background-size: 52px 52px;
+  /* Fade the grid out towards the edges so it reads as a lit patch of instrument panel rather than
+     as wallpaper that got cut off. */
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 35%, #000 30%, transparent 78%);
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 35%, #000 30%, transparent 78%);
+}
+
+.aurora {
+  position: absolute;
+  inset: -30% -10% auto -10%;
+  height: 120%;
+  z-index: -2;
+  background:
+    radial-gradient(40% 45% at 22% 28%, var(--scv-accent-glow), transparent 70%),
+    radial-gradient(38% 42% at 78% 18%, rgba(187, 42, 34, 0.20), transparent 72%),
+    radial-gradient(46% 40% at 62% 72%, rgba(109, 70, 217, 0.16), transparent 70%);
+  filter: blur(14px);
+  opacity: 0.85;
+  animation: drift 26s ease-in-out infinite alternate;
+}
+
+[data-theme='dark'] .aurora {
+  background:
+    radial-gradient(40% 45% at 22% 28%, rgba(79, 215, 232, 0.20), transparent 70%),
+    radial-gradient(38% 42% at 78% 18%, rgba(239, 123, 118, 0.16), transparent 72%),
+    radial-gradient(46% 40% at 62% 72%, rgba(179, 155, 255, 0.16), transparent 70%);
+  opacity: 1;
+}
+
+@keyframes drift {
+  0% {
+    transform: translate3d(-2%, -1%, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(3%, 2%, 0) scale(1.08);
+  }
+}
+
+/* A single bright rule that sweeps down the hero every twelve seconds — the same gesture as the
+   pipeline's scan wipe, at the scale of the whole section. */
+.sweep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 160px;
+  z-index: -1;
+  background: linear-gradient(to bottom, transparent, var(--scv-accent-glow) 92%, transparent);
+  opacity: 0.5;
+  animation: sweep 12s linear infinite;
+}
+
+@keyframes sweep {
+  0% {
+    transform: translateY(-160px);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.5;
+  }
+  70% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateY(120vh);
+    opacity: 0;
+  }
+}
+
+/* --- Layout --------------------------------------------------------------- */
+
+.inner {
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 0 clamp(1rem, 4vw, 2.5rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: clamp(2rem, 5vw, 4rem);
+  align-items: center;
+}
+
+@media (max-width: 996px) {
+  .inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* On a phone the animation leads: it explains the library faster than the paragraph does. */
+  .stage {
+    order: -1;
+  }
+}
+
+/* --- Pitch column --------------------------------------------------------- */
+
+.eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 1.4rem;
+}
+
+.chip {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 0.24rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--scv-line-strong);
+  color: var(--scv-dim);
+  background: var(--scv-surface);
+}
+
+.title {
+  font-size: clamp(2.4rem, 6.2vw, 4.1rem);
+  line-height: 1.03;
+  letter-spacing: -0.035em;
+  font-weight: 760;
+  margin: 0 0 1.2rem;
+  color: var(--scv-text);
+}
+
+.lede {
+  font-size: clamp(1.02rem, 1.6vw, 1.16rem);
+  line-height: 1.62;
+  color: var(--scv-dim);
+  max-width: 40ch;
+  margin: 0 0 1.9rem;
+}
+
+.lede code {
+  color: var(--scv-text);
+}
+
+/* --- Calls to action ------------------------------------------------------ */
+
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-bottom: 1.8rem;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.72rem 1.25rem;
+  border-radius: 8px;
+  font-weight: 620;
+  font-size: 0.98rem;
+  text-decoration: none;
+  transition: transform var(--scv-fast) var(--scv-ease), box-shadow var(--scv-med) var(--scv-ease),
+    background-color var(--scv-fast) var(--scv-ease);
+}
+
+.primary {
+  color: #fff;
+  background: var(--ifm-color-primary);
+  box-shadow: 0 6px 18px -6px rgba(187, 42, 34, 0.6);
+}
+
+[data-theme='dark'] .primary {
+  /* On the dark surface the light brand red would put white text at 2.6:1. Near-black text on the
+     light red clears AAA instead, and reads as an illuminated key rather than a painted one. */
+  color: #1a0a08;
+  box-shadow: 0 6px 22px -6px rgba(239, 123, 118, 0.5);
+}
+
+.primary:hover,
+.secondary:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.primary:hover {
+  background: var(--ifm-color-primary-dark);
+}
+
+[data-theme='dark'] .primary:hover {
+  background: var(--ifm-color-primary-light);
+}
+
+.arrow {
+  transition: transform var(--scv-med) var(--scv-ease);
+}
+
+.primary:hover .arrow {
+  transform: translateX(4px);
+}
+
+.secondary {
+  color: var(--scv-text);
+  border: 1px solid var(--scv-line-strong);
+  background: var(--scv-surface);
+}
+
+.secondary:hover {
+  border-color: var(--scv-accent);
+  box-shadow: 0 0 0 3px var(--scv-accent-glow);
+}
+
+/* --- Install line --------------------------------------------------------- */
+
+.install {
+  display: flex;
+  align-items: stretch;
+  max-width: 34rem;
+  border: 1px solid var(--scv-line-strong);
+  border-radius: 8px;
+  background: var(--scv-surface);
+  overflow: hidden;
+}
+
+.installLabel {
+  display: flex;
+  align-items: center;
+  padding: 0 0.7rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--scv-dim);
+  background: var(--scv-surface-2);
+  border-right: 1px solid var(--scv-line);
+  white-space: nowrap;
+}
+
+.installCode {
+  flex: 1;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.84rem;
+  background: transparent;
+  border: 0;
+  color: var(--scv-text);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.copy {
+  padding: 0 0.85rem;
+  border: 0;
+  border-left: 1px solid var(--scv-line);
+  background: var(--scv-surface-2);
+  color: var(--scv-dim);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color var(--scv-fast) var(--scv-ease), background-color var(--scv-fast) var(--scv-ease);
+}
+
+.copy:hover {
+  color: var(--scv-accent);
+  background: var(--scv-surface);
+}
+
+.installNote {
+  margin: 0.6rem 0 0;
+  font-size: 0.84rem;
+  color: var(--scv-dim);
+}
+
+.stage {
+  min-width: 0;
+}

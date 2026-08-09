@@ -32,7 +32,7 @@ a named precondition rather than a JNI abort.
 The probabilistic variant (`houghLinesP`) is the one most code wants: it reports where each line actually
 starts and stops, is cheaper, and its output renders directly with [`drawSegments`](/drawing).
 
-:::tip Start with `houghLinesP`
+:::tip[Start with `houghLinesP`]
 Unless you specifically need an *infinite* line's angle (a vanishing-point or dominant-orientation problem),
 reach for `houghLinesP`. Real endpoints are almost always what you want, and `Segment` gives you `length`,
 `start`, and `end` for free.
@@ -80,7 +80,7 @@ edges.houghLines(threshold = 120).map(l => math.round(math.toDegrees(l.theta.toD
 | `minTheta` | `0.0` | lower bound on the reported angle, radians |
 | `maxTheta` | `Pi` | upper bound on the reported angle, radians |
 
-:::tip Constrain the angle to speed things up
+:::tip[Constrain the angle to speed things up]
 If you only want near-horizontal lines, set `minTheta`/`maxTheta` around `Pi/2`. The accumulator ignores every
 other orientation, which is both faster and far less noisy than filtering the results afterwards.
 :::
@@ -111,7 +111,7 @@ near-universal "keep only the long ones" filter a one-liner:
 edges.houghLinesP(threshold = 50).filter(_.length > 100).map(_.length)
 ```
 
-:::note `maxLineGap` fights fragmentation
+:::note[`maxLineGap` fights fragmentation]
 A real Canny edge is rarely one unbroken run — noise and anti-aliasing chop it into pieces. Bump `maxLineGap`
 (say to 10–20) to stitch a dashed-looking edge back into one segment; leave it small when you genuinely want
 to detect the gaps (dashed lane lines, perforations).
@@ -167,7 +167,7 @@ Image.reading("floor.jpg") { img =>
 }
 ```
 
-:::danger Wrong type in, exception out
+:::danger[Wrong type in, exception out]
 All three transforms assert `CV_8UC1`. Passing a colour image (or an empty one) fails a precondition *before*
 reaching native code, so you get a message naming the offending type instead of a JNI abort:
 

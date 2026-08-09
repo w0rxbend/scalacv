@@ -22,7 +22,7 @@ import scalacv.*
 OpenCv.load()
 ```
 
-:::tip What you need before you start
+:::tip[What you need before you start]
 Recognition builds on detection, so you need **two** models: the YuNet detector (232 kB, see
 [Object detection](/object-detection#yunet-the-modern-face-detector)) to find and align faces, and
 the SFace recognizer (~37 MB, below) to embed them. The detector supplies the five landmarks SFace
@@ -62,7 +62,7 @@ caught before OpenCV ever sees it:
 (FaceRecognizer.modelSpec.fileName, FaceRecognizer.modelSpec.sha256.isDefined)
 ```
 
-:::note `load` fails as a value
+:::note[`load` fails as a value]
 A path with no file, or a file that is not an SFace network, comes back as a `Left(CvError)` — not
 a thrown `CvException`. Pattern-match or `map`/`flatMap` it; there is no happy-path assumption to
 trip over.
@@ -125,7 +125,7 @@ The same pair by L2 distance — note the direction flips (the lookalike is the 
 }
 ```
 
-:::warning Comparisons must be same-length
+:::warning[Comparisons must be same-length]
 `cosineSimilarity` and `l2Distance` `require` both embeddings to have the same dimension — real
 SFace embeddings are always 128, so this only bites when you accidentally mix in a stand-in vector
 of a different length.
@@ -225,10 +225,19 @@ FaceRecognizer.load("sface.onnx").foreach { rec =>
 }
 ```
 
-:::danger Threading
-`FaceDetectorYN` (the detector) is **stateful and not thread-safe** — `detect` resets its input
-size on every call. Give each thread its own detector. A `FaceRecognizer` and a `Gallery`, by
-contrast, are safe to share: the gallery is immutable, and embeddings are plain data.
+:::danger[Threading]
+- **`FaceDetectorYN`** (the detector behind `Image.faces`) — stateful, **one per thread**: `detect`
+  re-sets its input size on every call.
+- **`FaceRecognizer`** — **also one per thread**. `alignCrop` and `feature` both run against a
+  single native object, and OpenCV's `FaceRecognizerSF.feature()` writes into an internal buffer
+  that `embed` copies its numbers out of. If a second thread calls `embed` in between, it
+  overwrites that buffer and the first thread copies out the *other* face's vector. Build one
+  recognizer per worker, or guard the shared one with a lock or a `ThreadLocal`. It is
+  `AutoCloseable`, so close each one when its thread retires.
+- **`Gallery` and `FaceEmbedding`** — genuinely safe to share: they are immutable values, and
+  `enroll` returns a *new* gallery rather than mutating the one you had.
+
+See [What is safe to share](/concurrency#what-is-safe-to-share).
 :::
 
 ## Accuracy checklist
@@ -241,6 +250,7 @@ If recognition is flaky, the cause is almost always upstream of the metric:
 | Known people read as strangers | too few enrolments, or bad reference crops | enrol several poses per person |
 | Random misidentification | detection missed/mis-aligned the face | check `Image.faces` finds the face first |
 | `embed` throws | frame is not BGR, or landmarks are stale | pass the exact BGR frame the `Face` came from |
+| Embeddings differ run to run, or an occasional garbage vector | one `FaceRecognizer` shared across threads | one recognizer per worker — see [What is safe to share](/concurrency#what-is-safe-to-share) |
 
 ## Next
 

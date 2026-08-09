@@ -13,7 +13,7 @@ touches a pixel until you call `render` (onto a fresh canvas) or `image.draw` (o
 that moment you are only assembling and transforming plain data, so a picture can be reused, moved, coloured,
 or laid out as many times as you like without side effects.
 
-:::note Where this lives
+:::note[Where this lives]
 `Picture`, `Color`, `Chart`, and `Animation` are in the **`scalacv-graphs`** module. `import scalacv.*`
 brings all of them in, along with the `image.draw(picture)` extension. The module depends only on `core`.
 :::
@@ -47,7 +47,7 @@ same picture can be reused, transformed, or laid out freely.
 | `picture.renderOn(image)` | Draws onto an **existing** image | Consumes `image`, returns the annotated one |
 | `image.draw(picture)` | Same as `renderOn`, spelled from the image side | Consumes `image`, returns the annotated one |
 
-:::warning Move semantics
+:::warning[Move semantics]
 `image.draw(...)` (and `renderOn`) **consume** the image — the receiver is spent, exactly like any other
 [`Image`](/image-api) transform. Reusing it afterwards throws. Take `image.copy` first if you need to branch,
 and remember terminals like `write`/`bytes` release the result. See [Mat lifecycle](/mat-lifecycle).
@@ -168,7 +168,7 @@ a whole overlay at once.
 | `font(f)` / `fontScale(s)` | Text font and size |
 | `smooth(on)` | Antialiasing (default on) |
 
-:::tip Fill vs stroke
+:::tip[Fill vs stroke]
 A shape can carry **both** a fill and a stroke — the fill paints first, the outline over it. `noStroke` on a
 `fillColor` shape gives you flat-filled swatches (as in the palette below); `noFill` on an outline-only shape
 avoids a solid interior.
@@ -252,7 +252,7 @@ Image.reading("crowd.jpg") { img =>
 }
 ```
 
-:::tip Why `label`, not raw `text`
+:::tip[Why `label`, not raw `text`]
 `label` measures the string with its font metrics (including the descender room `y` and `g` need), then sizes
 a filled box around it — so the tag is always legible over a busy frame, and never clipped. Placing bare
 `text` on a light image often leaves it unreadable.
@@ -371,7 +371,7 @@ beneath it rather than replacing them:
 }
 ```
 
-:::note How alpha composites
+:::note[How alpha composites]
 Each translucent shape blends only the region it covers back toward the pixels underneath — bit-identical to
 blending the whole image, but far cheaper for a small overlay on a big frame. Note that OpenCV's own drawing
 verbs ignore alpha; the `Picture` layer honours it.
@@ -407,6 +407,32 @@ with its origin at the top-left, so you render one standalone or drop it into a 
 | `pie` | `pie(values, width, height, palette = Color.categorical)` | Categorical |
 | `histogram` | `histogram(data, bins, width, height, color = Purple)` | Purple |
 
+:::warning[bars, line and area are magnitude charts]
+Each value is plotted as its **absolute value** `|v|`, measured up from a zero baseline at the bottom of the
+box and scaled to `max(|v|)` across the series. A series that crosses zero — an audio waveform, a
+day-on-day delta, a profit-and-loss line — is therefore silently **folded** upwards rather than clipped or
+drawn below a mid-line, and the chart still looks entirely plausible while being wrong.
+
+If your data is signed, either shift it into the positive range yourself (subtract the minimum, `v - min`)
+and draw your own zero line, or use `scatter`, which maps the true `(x, y)` range into the box and handles
+negatives correctly. `pie` rectifies too — a negative value contributes a positive share of the total.
+`histogram` is unaffected: it bins the raw values over `[min, max]`, so negative *data* lands in the right
+bucket, and the counts it then charts are never negative.
+:::
+
+Here is the fold, made visible: a zero-crossing series and its own absolute value render to byte-identical
+pixels.
+
+```scala mdoc
+{
+  val signed = Seq(-4.0, -1.5, 1.0, 3.0, -2.5) // a series that crosses zero
+  val folded = signed.map(math.abs)           // what `bars` actually draws
+  val fromSigned = Chart.bars(signed, 120, 60).render(120, 60, Color.Black).bytes(".png")
+  val fromFolded = Chart.bars(folded, 120, 60).render(120, 60, Color.Black).bytes(".png")
+  s"identical pixels: ${fromSigned.map(_.toSeq) == fromFolded.map(_.toSeq)}"
+}
+```
+
 ```scala mdoc
 {
   val pie = Chart.pie(Seq(5, 3, 2, 4), 100, 100, Color.wheel(4))
@@ -421,8 +447,9 @@ with its origin at the top-left, so you render one standalone or drop it into a 
 }
 ```
 
-Bars, line and area all take a sequence of values across the width; scatter takes `(x, y)` pairs and maps
-their range into the box:
+Bars, line and area all take a sequence of values across the width, plotting each as a magnitude against
+the bottom of the box (see the warning above); scatter takes `(x, y)` pairs and maps their range into the
+box:
 
 ```scala mdoc
 {
@@ -450,7 +477,7 @@ Image.reading("frame.jpg") { frame =>
 }
 ```
 
-:::warning Positive chart box
+:::warning[Positive chart box]
 Every chart requires a positive `width`×`height` — a non-positive box throws rather than drawing a degenerate
 shape. `histogram` likewise requires `bins >= 1`.
 :::
@@ -458,14 +485,15 @@ shape. `histogram` likewise requires `bins >= 1`.
 ## Animation
 
 An animation is a `Picture` valued by frame number. `Animation.record` renders each frame and writes a video
-through a [`Recorder`](/video); `Animation.gif` writes a shareable animated GIF; `Animation.frames` yields
-owned `Image`s instead.
+through a [`Recorder`](/video); `Animation.gif` writes a shareable animated GIF; `Animation.foreach` and
+`Animation.frames` hand you rendered `Image`s instead of a file.
 
 | Entry point | Writes | Returns |
 | --- | --- | --- |
-| `Animation.record(path, frames, w, h, fps = 30, background, codec = Mp4v)(frame)` | A video | `Either[CvError, Long]` (frames written) |
+| `Animation.record(path, frames, w, h, fps = 30, background, codec = Mjpg)(frame)` | A video | `Either[CvError, Long]` (frames written) |
 | `Animation.gif(path, frames, w, h, fps = 15, background, loop = true)(frame)` | An animated GIF | `Either[CvError, Long]` |
-| `Animation.frames(count, w, h, background)(frame)` | Nothing | `LazyList[Image]` — **each is yours to close** |
+| `Animation.foreach(count, w, h, background)(frame)(f)` | Nothing | `Unit` — one canvas live at a time, **closed for you** |
+| `Animation.frames(count, w, h, background)(frame)` | Nothing | `Seq[Image]` — all `count` live at once, **each is yours to close** |
 
 ```scala mdoc:compile-only
 // A shareable loop as an animated GIF:
@@ -474,34 +502,54 @@ Animation.gif("spin.gif", frames = 60, width = 320, height = 240, fps = 20) { i 
     .strokeColor(Color.hsl(i * 6, 0.8, 0.6)).strokeWidth(3)
 }
 
-// Or a full-colour video, for longer or richer clips:
-Animation.record("spin.mp4", frames = 300, width = 320, height = 240) { i =>
+// Or a full-colour video, for longer or richer clips. `.avi`, not `.mp4`: the default codec is
+// MJPG, which is the one videoio can always write, and it opens only in an AVI container.
+Animation.record("spin.avi", frames = 300, width = 320, height = 240) { i =>
   Picture.regularPolygon(Point(160, 120), sides = 6, radius = 80, rotation = i * 2).strokeColor(Color.Cyan)
 }
 ```
 
-`Animation.frames` is the in-memory variant — no file, just a lazy stream of rendered `Image`s to feed
-elsewhere. Because each frame owns a Mat, **close every image you consume**:
+`Animation.foreach` is the in-memory variant — no file, just each rendered frame handed to your function and
+closed again before the next one is drawn. One canvas is alive at a time, so a 900-frame 1080p render costs
+about 6 MB of native memory rather than 5.6 GB:
 
 ```scala mdoc:silent
-// Render three frames and measure the first — closing each so nothing leaks:
-val frames = Animation.frames(count = 3, width = 64, height = 64) { i =>
+// Render three frames and measure the first — every canvas is closed for you:
+var firstWidth = 0
+Animation.foreach(count = 3, width = 64, height = 64) { i =>
   Picture.circle(Point(32, 32), 10 + i * 6).fillColor(Color.Red).noStroke
+} { img =>
+  if firstWidth == 0 then firstWidth = img.width
 }
-val firstWidth = frames.headOption.map { img =>
-  try img.width finally img.close()
-}.getOrElse(0)
 ```
 
 ```scala mdoc
 firstWidth
 ```
 
-:::note GIF vs video
+`Animation.frames` is the variant for when the frames have to outlive the loop — it returns a strict
+`Seq[Image]` holding all `count` canvases at once, and **each one is yours to close**:
+
+```scala mdoc:compile-only
+val frames = Animation.frames(count = 3, width = 64, height = 64) { i =>
+  Picture.circle(Point(32, 32), 10 + i * 6).fillColor(Color.Red).noStroke
+}
+try frames.foreach(img => println(img.width))
+finally frames.foreach(_.close())
+```
+
+It is deliberately not a `LazyList`. A lazy sequence memoises: every canvas it has ever produced stays
+reachable behind a few bytes of JVM heap, which gives the garbage collector no signal at all about the
+multi-megabyte native buffer behind it — and if you close the images as instructed, a second traversal hands
+back the same, now-spent handles and throws. That is the same argument [Video](/video) makes for having no
+frame `LazyList`.
+
+:::note[GIF vs video]
 GIF is 256 colours per frame and OpenCV dithers to fit — great for a short, shareable loop. For full-colour
-or long clips, encode a video with `record` and one of the [`Codec`](/video) options (`Mp4v`, `Avc1`,
-`Xvid`). Both delete a half-written output on a failed encode, so a `Left` never leaves a misleading partial
-file behind.
+or long clips, encode a video with `record`. Its default [`Codec`](/video) is `Mjpg` in an `.avi`, the one
+combination that opens on every build; `Mp4v`, `Avc1` and `Xvid` are smaller but depend on what the
+platform's videoio links, and the extension must move with the codec. Both `gif` and `record` delete a
+half-written output on a failed encode, so a `Left` never leaves a misleading partial file behind.
 :::
 
 ## On the Doodle inspiration

@@ -11,7 +11,7 @@ import org.opencv.core.Core
 OpenCv.load()
 ```
 
-:::tip New here?
+:::tip[New here?]
 The techniques below assume you know how `Image` ownership works — a transform *consumes* its receiver, a query borrows it, a terminal releases it. If any of that is surprising, read [Mat lifecycle](/mat-lifecycle) first; it explains the move semantics these tests deliberately exercise.
 :::
 
@@ -72,7 +72,7 @@ run1.close(); run2.close()
 identical // deterministic fixtures are bit-for-bit reproducible
 ```
 
-:::note Why draw instead of load
+:::note[Why draw instead of load]
 A drawn fixture answers three questions a committed PNG cannot: *what* is in it (the code says so), *why* the test cares (the assertion targets a known shape), and *whether it changed* (a code diff, not a binary blob). It also keeps the repo small — no asset directory, no Git LFS.
 :::
 
@@ -122,7 +122,7 @@ src.close(); jpeg.close()
 db > 30.0 // assert this, not equality
 ```
 
-:::warning Exactness is fragile here
+:::warning[Exactness is fragile here]
 Keep bit-exact hashes only as *same-platform* regression keys — they answer "did anything change at all" fast, but they will flap the moment CI runs a different OpenCV build or CPU. For anything a multi-OS/arch matrix touches, compare with a tolerance. [Performance](/performance) explains why exactness cannot be promised across builds.
 :::
 
@@ -146,7 +146,7 @@ test("a consumed image is dead") {
 }
 ```
 
-:::danger Run ownership tests in a forked JVM
+:::danger[Run ownership tests in a forked JVM]
 If a regression ever *does* segfault — the exact failure the guard prevents — a forked JVM reports it as a nonzero exit code instead of silently killing the whole test process (and every other suite sharing it). In Mill, test modules fork by default. Keep crash-prone ownership tests in their own suite so a failure names the offender instead of taking innocents down with it.
 :::
 
@@ -215,7 +215,7 @@ Point it at the paths you actually worry about:
 
 The clean high-level `Image` chain is flat under this bound — it holds exactly one live Mat at a time. A per-iteration leak, by contrast, clears any sane ceiling within a few hundred iterations. Assert `<= 48 MB`, not `== 0`: arenas and the JIT wobble RSS a little, and a zero bound would flap.
 
-:::warning Isolate the leak suite
+:::warning[Isolate the leak suite]
 Run it in its own JVM. If it shares a process with suites running in parallel, their allocations contaminate the RSS reading and the bound becomes meaningless.
 :::
 

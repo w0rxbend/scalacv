@@ -44,13 +44,23 @@ scalacv wraps the **official `org.opencv.*` Java API**, and it's one method away
 ```scala mdoc:silent
 import org.opencv.imgproc.Imgproc
 
-val img = Image.blank(64, 64, Scalar.White)
-val corners = new org.opencv.core.Mat()
-// Call a raw Imgproc function scalacv doesn't surface, on the borrowed Mat:
-Imgproc.cornerHarris(img.gray.mat, corners, 2, 3, 0.04)
-corners.release()
-img.close()
+val img  = Image.blank(64, 64, Scalar.White)
+val grey = img.gray // a transform: it consumes `img`, so `grey` is now the live handle
+
+val corners = new org.opencv.core.Mat() // a raw Mat we allocated, so ours to release
+try
+  // Call a raw Imgproc function scalacv doesn't surface, on the borrowed Mat:
+  Imgproc.cornerHarris(grey.mat, corners, 2, 3, 0.04) // `grey.mat` is BORROWED — never release it
+finally
+  corners.release()
+  grey.close() // frees the greyscale image; `img` was already spent by `.gray`
 ```
+
+Note which value gets closed. `image.mat` borrows, but `.gray` is a *transform*, so it consumes the
+`Image` you called it on and hands back a new one. Writing `img.gray.mat` on one line would spend
+`img` and then throw the greyscale `Image` away without a name — leaving nothing to close and leaking
+its Mat, while the later `img.close()` silently did nothing (releasing a spent handle is a no-op).
+Give the result a name and close **that**.
 
 **Adopt a raw `Mat`** produced by some OpenCV call back into the managed world with `Image.wrap(Managed(mat))` — from then on it's owned and scoped like anything else:
 
@@ -65,7 +75,7 @@ The mid-level [extension methods on `Mat`](/low-level) (`mat.cvtColor(...)`, `ma
 
 ## Gotchas that bite migrants
 
-:::warning You can't reuse a value after a transform
+:::warning[You can't reuse a value after a transform]
 `Image` has [move semantics](/mat-lifecycle): `image.gray` *consumes* `image`. In Python `g = cv2.cvtColor(img, ...)` leaves `img` usable; here `image` is spent. To use one image two ways, take `image.copy` first. This is what makes a chain leak-free.
 :::
 

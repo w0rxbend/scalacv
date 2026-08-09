@@ -1,0 +1,61 @@
+/* The wrapper is an inline-block sized by an invisible copy of the longest word, with the animated
+   copy laid over it. That is what keeps the headline from reflowing on every morph. */
+
+.wrap {
+  position: relative;
+  display: inline-block;
+  vertical-align: baseline;
+  /* Tabular figures and a fixed advance width would be ideal, but the words are prose. A monospace
+     stack is deliberately NOT used here — the headline must stay in the display face. */
+  color: var(--scv-accent);
+  text-shadow: 0 0 22px var(--scv-accent-glow);
+}
+
+.ghost {
+  visibility: hidden;
+  white-space: nowrap;
+}
+
+/* `left`/`top` only — no `right`, so the box shrinks to the text it holds and the caret can trail
+   the current word instead of the reserved width. */
+.live {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+}
+
+/* A thin caret after the word, blinking like a terminal cursor. Decorative only. */
+.caret {
+  display: inline-block;
+  width: 0.07em;
+  height: 0.78em;
+  margin-left: 0.1em;
+  vertical-align: baseline;
+  background: var(--scv-accent);
+  opacity: 0.85;
+  animation: caret 1.1s steps(1, end) infinite;
+}
+
+@keyframes caret {
+  0%,
+  50% {
+    opacity: 0.85;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

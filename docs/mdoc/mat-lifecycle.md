@@ -7,7 +7,7 @@ does not work. scalacv's answer is a single ownership type, `Managed`, and one s
 what. Read the [problem](#the-problem) once, learn the [cheat sheet](#the-cheat-sheet), and the rest of
 the library follows from it.
 
-:::tip New here?
+:::tip[New here?]
 The one thing to internalise: a scalacv **`Image` has move semantics** — a transform like `gray` or `blur`
 *consumes* the image and hands you a new one. Take `.copy` first if you need the original again. Everything
 else on this page elaborates that idea.
@@ -67,9 +67,57 @@ leaked.release()
 leaked.get // throws: already released
 ```
 
-`Managed` is `AutoCloseable`, so the whole of `scala.util.Using` — including `Using.Manager` when you
-juggle several at once — already accepts it. And because release is a compare-and-set, calling
-`close()` twice (say, once explicitly and once from a scope) is a harmless no-op, never a double free.
+`Managed` is `AutoCloseable`, so the whole of `scala.util.Using` already accepts it too. And because
+release is a compare-and-set, calling `close()` twice (say, once explicitly and once from a scope) is a
+harmless no-op, never a double free.
+
+### Several handles at once: `Managed.scope`
+
+`Managed.use` scopes one object. Some calls need a handful — OpenCV's `solvePnP` wants object points,
+image points, a camera matrix, distortion coefficients and two output vectors, and every one of those is
+a native object somebody has to free. Nesting six `use` blocks works but buries the actual call under
+six levels of indentation, and the obvious alternative is worse than it looks: declaring the six as
+`val`s and releasing them in a `try`/`finally` leaves every allocation *before* the `try` unguarded, so a
+constructor that throws part-way strands the objects already built.
+
+`Managed.scope` gives you a block that owns all of them. The `own` it hands you registers an object and
+returns it, so a scoped handle reads as an ordinary binding:
+
+```scala mdoc:silent
+import org.opencv.core.Core
+
+val brightest = Managed.scope { own =>
+  val src   = own(Mat(64, 64, CvType.CV_8UC1, org.opencv.core.Scalar(7)))
+  val blurb = own(Mat())
+  Core.add(src, src, blurb)
+  Core.minMaxLoc(blurb).maxVal      // plain data — safe to return
+}
+```
+
+```scala mdoc
+brightest
+```
+
+Because each object is registered the moment it is created, a throw anywhere — a later constructor, the
+native call, the decode afterwards — releases everything acquired so far, in reverse order. A failure
+raised *while* releasing is attached to the original error as a suppressed exception rather than
+replacing it.
+
+`own.adopt` is the same thing for a value that arrives already wrapped, which is what every mid-level
+`Ops` call hands back:
+
+```scala mdoc:silent
+val edgePixels = Managed.scope { own =>
+  val src  = own(Mat(64, 64, CvType.CV_8UC3, org.opencv.core.Scalar(0, 0, 0)))
+  val gray = own.adopt(src.cvtColor(ColorConversion.BgrToGray))
+  val edges = own.adopt(gray.canny(80, 160))
+  Core.countNonZero(edges)
+}
+```
+
+The rule is the one `use` already carries, applied to a group: **nothing acquired inside the block may
+escape it**. Return plain data (a number, a `Seq[Double]`, a case class), or an object owned somewhere
+else — never one of the scoped handles.
 
 ### The two release regimes
 
@@ -96,9 +144,24 @@ have them in a table:
 | an `Image`/`Mat` after a transform (`gray`, `blur`, `canny`, `resize`, …) | the **receiver was consumed**; you own the **result** | the result is yours; the receiver is already spent |
 | a `Mat` from `Video.frames` | **borrowed** — one reused buffer | the loop; do not retain it |
 | a `mask` you pass to `applyMask`/`inpaint`/`blend`/`seamlessCloneInto` | **borrowed** by the call | you — close it yourself; the receiver *is* consumed |
-| a `Managed[Mat]` from `Video.framesCopied` / `Camera.take` | an **owned** copy | you |
+| a `Managed[Mat]` from `Video.framesCopied` | an **owned** copy per frame | you — `.release()` each, or take them into a `Using.Manager` |
+| a `Seq[Image]` from `Camera.take(n)` | **n owned images** in a plain collection | you — `.close()` every one; prefer `Camera.taking(n)(use)` |
 
-:::note Queries borrow, transforms and terminals consume
+`Camera.take(count)` is the one call that hands you several live handles at once, in a type —
+`Seq[Image]` — that cannot warn you about it. `Camera.taking(count)(use)` grabs the same frames, runs
+your body over them, and closes all of them afterwards: on success, on failure, and on exception.
+Reach for `taking` unless you specifically need the frames to outlive a scope.
+
+```scala mdoc:compile-only
+import scalacv.*
+
+// `taking` closes every frame for you. `take` would hand you three live Images to close yourself.
+Camera.using(0) { cam =>
+  cam.taking(3) { frames => frames.map(_.width).sum }
+}
+```
+
+:::note[Queries borrow, transforms and terminals consume]
 A **query** (`width`, `height`, `channels`, `contours`, `isEmpty`) *borrows* the image — it stays alive
 afterwards. A **transform** (`gray`, `blur`, `canny`, `crop`, `draw*`, …) *consumes* it and returns a new
 one. A **terminal** (`write`, `bytes`, `close`) consumes it and produces no new image.
@@ -138,7 +201,7 @@ gray.close()
 consumed.width            // throws IllegalStateException — `consumed` was spent by .gray
 ```
 
-:::tip Diagnosing use-after-move
+:::tip[Diagnosing use-after-move]
 The `IllegalStateException` fires at the *reuse* line, which is rarely the interesting one. Start the JVM
 with `-Dscalacv.trackOwnership=true` and the exception carries, as its cause, the stack of the transform
 that actually spent the handle. It is off by default because it allocates a `Throwable` on every consume;
@@ -177,7 +240,8 @@ See [`color-masking`](/color-masking) and [`graphics`](/graphics) for where thes
 ## The ownership contract
 
 **The rule, in one sentence:** you own every `Managed` a scalacv call hands back and close it exactly
-once — a scope (`Managed.use`, `Image.reading`, `Video.framesCopied`) does that for you — with a single
+once — a scope (`Managed.use`, `Managed.scope`, `Image.reading`, `Video.framesCopied`) does that for
+you — with a single
 exception: a `Mat` yielded by `Video.frames` is *borrowed*, owned by the loop, and must not outlive its
 iteration.
 
@@ -213,7 +277,7 @@ val chained: Either[CvError, Array[Byte]] =
   }
 ```
 
-:::note Why not just `use`?
+:::note[Why not just `use`?]
 `src.gaussianBlur(...).use(_.canny(...))` frees the blur output — but `use` *returns* the canny Mat,
 which then outlives its own `Managed` and leaks. `pipe` exists precisely for the "feed the intermediate
 forward and free it" shape; reach for `use` only at the **terminal** stage that produces a non-Mat
@@ -246,7 +310,7 @@ frame (and is freed when the loop ends).
 There is no `row`/`col`/`submat` view API to trip over here — `Image.crop` returns an independent
 copy, not a view. This borrowed frame is the only alias you have to reason about.
 
-:::danger Use-after-free
+:::danger[Use-after-free]
 `frames` yields a **borrowed** Mat — one buffer, refilled each step. Collecting the iterator keeps N
 references to that single buffer (all showing the last frame), freed when the block returns.
 
@@ -262,7 +326,7 @@ Video.open(0).map { capture =>
 ```
 :::
 
-:::tip Right
+:::tip[Right]
 ```scala mdoc:compile-only
 import scalacv.*
 
@@ -285,8 +349,8 @@ Video.open(0).map { capture =>
 
 The `Ops` extensions are safe to run *inside* the loop even on the borrowed frame: each allocates its
 own destination and never aliases the receiver, so `frame.cvtColor(...)` yields a Mat you own. The
-[`Camera`](/video) helpers (`foreach`, `take`, `snapshot`) go a step further and hand you owned `Image`
-copies directly, so there is no borrowing to reason about at all — see [`video`](/video).
+[`Camera`](/video) helpers (`foreach`, `taking`, `take`, `snapshot`) go a step further and hand you owned
+`Image` copies directly, so there is no borrowing to reason about at all — see [`video`](/video).
 
 The ZIO module mirrors this exactly: `frameStream` borrows one buffer (same contract), `framesCopied`
 gives you owned `Managed[Mat]` per frame — see [`zio`](/zio) and [`concurrency`](/concurrency).

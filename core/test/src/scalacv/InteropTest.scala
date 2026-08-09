@@ -97,6 +97,52 @@ class InteropTest extends munit.FunSuite:
       Files.deleteIfExists(src)
       Files.walk(into).sorted(java.util.Comparator.reverseOrder()).forEach(Files.deleteIfExists(_))
 
+  test("Models.fetch reports a pinned-size mismatch as a size, not as a checksum failure"):
+    // This is the LFS-pointer / HTML-error-page case: the server answers 200 with something that is not the
+    // model. Both checks reject it, but only one of them tells the reader what happened, and the size check
+    // gets there without hashing a file that was never the model.
+    val bytes = "a pretend model".getBytes
+    val src = Files.createTempFile("scalacv-model-size", ".bin")
+    Files.write(src, bytes)
+    val sha = MessageDigest.getInstance("SHA-256").digest(bytes).map(b => f"$b%02x").mkString
+    val into = Files.createTempDirectory("scalacv-models-size")
+    try
+      val wrongSize =
+        ModelSpec("m.bin", Seq(src.toUri.toString), sha, sizeBytes = Some(bytes.length.toLong + 1))
+      Models.fetch(wrongSize, into) match
+        case Right(p) => fail(s"a size mismatch must fail, got $p")
+        case Left(e) =>
+          assert(e.getMessage.contains("bytes"), s"the error should name the size, got: ${e.getMessage}")
+          assert(
+            !e.getMessage.contains("SHA-256 mismatch"),
+            s"a wrong size must not be reported as tampering, got: ${e.getMessage}"
+          )
+      // The right size and the right hash still pass, so the check is not simply always-fail.
+      val exact = ModelSpec("m.bin", Seq(src.toUri.toString), sha, sizeBytes = Some(bytes.length.toLong))
+      assert(Models.fetch(exact, into).isRight, "an exact size and hash must be accepted")
+    finally
+      Files.deleteIfExists(src)
+      Files.walk(into).sorted(java.util.Comparator.reverseOrder()).forEach(Files.deleteIfExists(_))
+
+  test("Models.fetch treats a cached file that no longer verifies as a miss and re-downloads"):
+    // The cache check must never throw past the Either, and a stale or corrupted cache entry must not be
+    // handed back as if it were the model.
+    val bytes = "a pretend model".getBytes
+    val src = Files.createTempFile("scalacv-model-stale", ".bin")
+    Files.write(src, bytes)
+    val sha = MessageDigest.getInstance("SHA-256").digest(bytes).map(b => f"$b%02x").mkString
+    val into = Files.createTempDirectory("scalacv-models-stale")
+    try
+      val spec = ModelSpec("model.bin", Seq(src.toUri.toString), sha)
+      assert(Models.fetch(spec, into).isRight)
+      // Corrupt the cached copy: the next fetch must notice and replace it, not return it.
+      Files.write(into.resolve("model.bin"), "not the model any more".getBytes)
+      assert(Models.fetch(spec, into).isRight, "a corrupted cache entry must be re-downloaded")
+      assertEquals(Files.readAllBytes(into.resolve("model.bin")).toSeq, bytes.toSeq)
+    finally
+      Files.deleteIfExists(src)
+      Files.walk(into).sorted(java.util.Comparator.reverseOrder()).forEach(Files.deleteIfExists(_))
+
   test("Models.fetch rejects a checksum mismatch and an unreachable source"):
     val src = Files.createTempFile("scalacv-model-src", ".bin")
     Files.write(src, "content".getBytes)

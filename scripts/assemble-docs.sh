@@ -13,6 +13,29 @@ cd "$(dirname "$0")/.."
 DOCS=website/docs
 API=website/static/api
 
+# ---------------------------------------------------------------------------------------------
+# Guard: admonition syntax.
+#
+# Docusaurus 3 builds `:::note` blocks out of remark-directive, whose container syntax is
+# `:::name[label]`. The Docusaurus 2 form `:::note Some title` puts bare text where the parser
+# expects `[`, so the block is not recognised as a directive at all — and instead of failing, the
+# whole thing lands in the page as literal ":::note Some title … :::" text. That is exactly how 180
+# admonitions across 45 guides silently stopped rendering: nothing errored, the pages were just
+# wrong, and only reading a built page revealed it.
+#
+# This check is here rather than in CI alone because it is the one step every path — local loop,
+# CI, release — already runs.
+# ---------------------------------------------------------------------------------------------
+echo "==> check admonition syntax in docs/mdoc"
+# `grep -P` would be neater, but macOS ships BSD grep; -E is the portable subset.
+if bad="$(grep -rnE '^:::(note|tip|info|warning|danger|caution)[[:space:]]+[^[]' docs/mdoc/*.md || true)"; [ -n "$bad" ]; then
+  echo "   Docusaurus 2 admonition titles found. Use ':::note[Title]', not ':::note Title'," >&2
+  echo "   or these blocks render as literal ':::' text in the page body:" >&2
+  echo "$bad" | sed 's/^/     /' >&2
+  exit 1
+fi
+echo "   all admonition titles use the bracket form."
+
 echo "==> mdoc: type-check and splice every Scala snippet"
 ./mill show docs.mdoc >/dev/null
 MDOC_OUT="$(find out/docs -type d -name site | head -1)"
@@ -27,12 +50,17 @@ rewrite_api() { sed 's#](/api/#](pathname:///api/#g' "$1"; }
 echo "==> copy generated guide pages into $DOCS"
 mkdir -p "$DOCS"
 # Wipe previously generated pages (but keep nothing hand-written here — the dir is fully generated).
-find "$DOCS" -maxdepth 1 -name '*.md' -delete
+# Both extensions: guides are .md, the landing page is .mdx (see below).
+find "$DOCS" -maxdepth 1 \( -name '*.md' -o -name '*.mdx' \) -delete
 for f in "$MDOC_OUT"/*.md; do
   base="$(basename "$f")"
   case "$base" in
     index.md)   continue ;;                 # VitePress hero — not used by Docusaurus
-    landing.md) rewrite_api "$f" > "$DOCS/index.md" ;; # Docusaurus landing (slug: /)
+    # The landing page lands as .mdx, not .md. docusaurus.config.ts sets `markdown.format: 'detect'`,
+    # which parses .md as CommonMark (no JSX) and .mdx as MDX — and the landing page imports React
+    # components from src/components/, so it needs the MDX parser. The guides stay .md deliberately:
+    # CommonMark renders `<:`, `=>` and `?=>` literally, so Scala 3 prose cannot trip the JSX lexer.
+    landing.md) rewrite_api "$f" > "$DOCS/index.mdx" ;; # Docusaurus landing (slug: /)
     *)          rewrite_api "$f" > "$DOCS/$base" ;;
   esac
 done

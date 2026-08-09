@@ -83,7 +83,7 @@ object Cascades:
       // which is exactly the Windows case and also what a missing classifier jar looks like.
       Option(Loader.cacheResource(classOf[org.bytedeco.opencv.opencv_java], resource)) match
         case Some(f) if f.isFile && f.canRead => Right(f)
-        case Some(f) => Left(CvError.LoadFailed(f.getPath, s"extracted, but not a readable file"))
+        case Some(f) => Left(CvError.LoadFailed(f.getPath, "extracted, but not a readable file"))
         case None => Left(CvError.LoadFailed(resource, unavailable(platform)))
     catch
       case e: IOException => Left(CvError.LoadFailed(resource, s"could not be extracted: ${e.getMessage}"))
@@ -133,7 +133,7 @@ object Cascades:
          |per-platform classifier artifact, so this usually means only the classifier-less
          |org.bytedeco:opencv jar is on the classpath. Add:
          |
-         |  "org.bytedeco" % "opencv" % "4.13.0-1.5.13" classifier "$platform"""".stripMargin
+         |  "org.bytedeco" % "opencv" % "${Build.openCvArtifactVersion}" classifier "$platform"""".stripMargin
 
 /** Object detection on a Mat.
   *

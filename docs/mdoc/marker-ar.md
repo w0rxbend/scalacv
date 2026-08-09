@@ -5,7 +5,7 @@ you where that tag sits in space — its 3D pose — and let you draw on top of 
 glued to the tag. That is the whole of marker-based augmented reality: **detect → pose → project**,
 and each step is one call.
 
-:::tip New to AR? The mental model.
+:::tip[New to AR? The mental model.]
 An ArUco marker is a printed square whose black-and-white pattern encodes a number (its *id*). Because
 the square's real size is known and its shape is fixed, one photo of it is enough to work out how far
 away and at what angle it sits — its **pose**. Once you have the pose you can project any 3D shape back
@@ -40,7 +40,7 @@ A narrower field of view is a longer lens, so `fx`/`fy` grow as the angle shrink
 sits at the image centre. If you have calibrated, construct it directly with your own
 `fx, fy, cx, cy` and distortion coefficients.
 
-:::warning A guess tracks, it does not measure
+:::warning[A guess tracks, it does not measure]
 `Intrinsics.approx` is good enough to make an overlay *sit* on a tag, but the reported `distance` will be
 off — sometimes by tens of percent. For a real measurement, feed a [`Calibration`](/calibration)'s
 intrinsics instead. Nothing else about the code changes.
@@ -176,7 +176,7 @@ knobs:
 | `drawMarkerCube` | `size` | the marker side | cube edge length |
 | both | `dictionary` | `Dict4x4_50` | which dictionary to detect |
 
-:::note These verbs consume the image
+:::note[These verbs consume the image]
 `drawMarkerAxes` and `drawMarkerCube` follow [move semantics](/mat-lifecycle): each consumes the
 receiver and returns the annotated image. In a live loop the frame flows straight through — detect, draw,
 display — with no copy.

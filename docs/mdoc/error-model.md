@@ -22,7 +22,7 @@ OpenCV's Java API reports failure three incompatible ways — a `false` return, 
 | Missing model, cascade, video source | `Left(CvError.LoadFailed)` | branch on it | a 404 on a model download |
 | Unwritable destination / bad encoder | `Left(CvError.EncodeFailed)` | branch on it | writing to a missing directory |
 | Ill-posed calibration | `Left(CvError.CalibrationFailed)` | recapture data | too few chessboard views |
-| Natives absent | thrown `CvError.NativesMissing` | fix the build | forgot the classifier jar |
+| Natives absent, **or** the release bridge cannot be opened | thrown `CvError.NativesMissing` | fix the build, or add the `--add-opens` flag the message names | forgot the classifier jar; OpenCV on the module path |
 | Unforeseen native rejection | `CvError.NativeCall` (returned via `Cv.attempt`, else thrown) | usually a bug; sometimes handle | wrong channel count |
 | Bad argument | thrown `IllegalArgumentException` | fix the call | `blur(-1)` |
 | Reusing a spent `Image` | thrown `IllegalStateException` | fix the code | use-after-move |
@@ -37,19 +37,23 @@ OpenCV's Java API reports failure three incompatible ways — a `false` return, 
 
 ### `NativesMissing`
 
-The native OpenCV libraries are not on the classpath, so nothing can run. It carries the exact dependency line to add for your OS — the message is meant to be copy-pasted into your build:
+Something the JVM needs in order to talk to native OpenCV cannot be reached. Whatever the cause, `details` is written to be the *remedy*, meant to be copy-pasted:
 
 ```scala mdoc:compile-only
 def report(e: CvError): String = e match
-  case CvError.NativesMissing(details, _) => details // the dependency line to add
+  case CvError.NativesMissing(details, _) => details // the remedy, ready to copy
   case other                              => other.getMessage
 ```
 
-You normally hit this once, at `OpenCv.load()`, before any real work — not deep inside a pipeline. It is *thrown* rather than returned, because there is no sensible way to continue without natives. See [Troubleshooting](/troubleshooting#natives-missing) for the classifier table.
+It is *thrown* rather than returned, because there is no sensible way to carry on. There are **two** causes, and — despite the name — only one of them happens at start-up.
+
+**At load.** `OpenCv.load()` throws when the per-platform *classifier* jars are absent. Those are the jars carrying the actual `.so` / `.dylib` / `.dll` for the machine you are running on, as opposed to the Java classes that call into them. Here `details` is a dependency line naming the platform it detected, ready to paste into your build. This is the common case, and you hit it once, before any real work. See [Troubleshooting](/troubleshooting#natives-missing) for the classifier table.
+
+**At release.** `Releasable.handle` — the bridge that frees the 185 OpenCV types that expose no public `release()` method of their own — throws `NativesMissing` too, and it throws it **when a handle is freed**. That is typically at the end of a `Managed.use` block, in the middle of a pipeline that has been working for a while, which is why the name can be misleading. It fires when reflection cannot reach a binding's private `delete(long)`, or cannot zero its `nativeObj` field to disarm the finalizer that would otherwise free the same pointer a second time. Here `details` carries an `--add-opens` flag rather than a dependency line; the usual trigger is OpenCV loaded from the *module path* instead of the classpath. It throws rather than degrading, because the fallback — leaving the memory to the garbage collector — is an unbounded native leak that looks like success, and freeing without disarming the finalizer is a double free. See [Working with the raw OpenCV API](/low-level) and [Troubleshooting](/troubleshooting#add-opens).
 
 ### `DecodeFailed`
 
-An image could not be **read or decoded**. This is the subtle one: `imread` and `imdecode` do *not* throw for a missing file, a directory, or non-image bytes — they return a `Mat` with `empty() == true`. scalacv makes the check for you and turns it into a `Left`, so the failure surfaces here instead of as a `CvException` from some later op that had nothing to do with the mistake:
+An image could not be **read or decoded**. This is the subtle one: `imdecode` does *not* throw for non-image bytes — it returns a `Mat` with `empty() == true`. scalacv makes the check for you and turns it into a `Left`, so the failure surfaces here instead of as a `CvException` from some later op that had nothing to do with the mistake. Reading from a file adds the filesystem cases — missing, a directory, empty, a path the filesystem cannot represent — and because that half is done with the JVM's own file I/O rather than with `imread`, the `details` say which one happened instead of collapsing them all into one message:
 
 ```scala mdoc
 Images.read("/does/not/exist.png").left.map(_.getMessage)
@@ -79,7 +83,7 @@ This is the failure you handle when loading detectors and networks — see [Obje
 
 ### `EncodeFailed`
 
-An image could not be **written or encoded** — an unwritable destination (`imwrite` returns `false`), or an extension with no registered encoder (which `imwrite` would otherwise signal by throwing, but scalacv checks `haveImageWriter` first and returns this instead):
+An image could not be **written or encoded** — an extension with no registered encoder (which the codecs would otherwise signal by throwing, but scalacv checks `haveImageWriter` first and returns this instead), or a destination the JVM cannot write to: a missing parent directory, a permission denial, a path the filesystem cannot represent. `Images.write` encodes fully into memory and only then writes the bytes, so a failed *encode* can no longer leave a truncated file behind:
 
 ```scala mdoc:compile-only
 import org.opencv.core.{CvType, Mat}
@@ -133,13 +137,19 @@ im.gray   // consumes im
 im.width  // IllegalStateException — use after move
 ```
 
-:::warning Do not pattern-match a programmer error
+:::warning[Do not pattern-match a programmer error]
 `IllegalArgumentException` and `IllegalStateException` are deliberately *not* part of `CvError`. If you find yourself catching them to recover, that is a signal the bug should be fixed at the call site instead. [Troubleshooting](/troubleshooting#move-semantics) explains the tracking flag that points at the consuming call.
 :::
 
 ## The escape hatch: `Cv.attempt` {#the-escape-hatch-cv-attempt}
 
-Every built-in like `Images.read` already returns an `Either`. When you go *off the beaten path* — a raw `org.opencv.*` call scalacv does not wrap — `Cv.attempt` is the single tool that lifts it into the same policy. Its whole contract is: run the block; if OpenCV throws a `CvException`, return `Left(CvError.NativeCall(operation, e))` with the operation you named; if the block itself already produced a `CvError`, pass it through. That is the entire body — there is no hidden magic:
+Every built-in like `Images.read` already returns an `Either`. When you go *off the beaten path* — a raw `org.opencv.*` call scalacv does not wrap — `Cv.attempt` is the single tool that lifts it into the same policy. It runs your block, and its whole contract is **three** `catch` clauses:
+
+1. an `org.opencv.core.CvException` becomes `Left(CvError.NativeCall(operation, e))`, with the operation you named;
+2. a `CvError` the block already produced is passed through unchanged, so wrapping an already-lifted call does not re-wrap it;
+3. a **bare** `java.lang.Exception` — matched by *exact class*, `e.getClass == classOf[Exception]` — also becomes `Left(CvError.NativeCall(operation, e))`. That clause exists because OpenCV's own `throwJavaException` degrades to a plain `Exception` for failures that are not a `cv::Exception`: `std::bad_alloc` (out of native memory), `std::out_of_range`, and anything it does not recognise.
+
+That is the entire body — there is no hidden magic. The exact-class guard in (3) is load-bearing: because it demands the class be `Exception` itself, **every `Exception` subclass still propagates**. An `IllegalArgumentException` from a `require` and an `IllegalStateException` from a spent handle travel straight through `attempt` and are never turned into a `Left`. That is the mechanism that keeps programmer errors outside the `Either` — the split described above is not a convention anyone has to remember, it is enforced in those five lines:
 
 ```scala mdoc:compile-only
 import org.opencv.core.{Core, Mat}

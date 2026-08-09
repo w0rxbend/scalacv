@@ -126,7 +126,7 @@ Scalar(200) // mid-grey for a single-channel Mat
 Scalar(0, 0, 255, 128) // semi-transparent red in a BGRA image
 ```
 
-:::warning BGR, not RGB
+:::warning[BGR, not RGB]
 This is the single most common colour bug. If your reds come out blue, you almost certainly passed
 `Scalar(255, 0, 0)` thinking in RGB. Use the named `Scalar.Red`/`Scalar.Blue`/… constants where you can, and
 remember the order is **B, G, R (, A)**.
@@ -182,7 +182,7 @@ ContourRetrieval.values.map(c => c.toString -> c.cvValue).toList
 Interpolation.values.map(_.toString).toList
 ```
 
-:::tip Some enums are named for the *effect*, not OpenCV's code
+:::tip[Some enums are named for the *effect*, not OpenCV's code]
 `Flip` is `Horizontal` / `Vertical` / `Both` — the visible result — rather than OpenCV's axis-centric flip code
 `1` / `0` / `-1`, which nobody remembers. `Rotation` is `Clockwise` / `CounterClockwise` / `Half`. The typed
 name is chosen so the call site reads as what it does; `.cvValue` still gives you the raw code.

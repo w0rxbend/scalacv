@@ -17,21 +17,41 @@ final case class FaceEmbedding(values: Vector[Float]):
   /** Cosine similarity in `[-1, 1]` — SFace's own metric. ~0.36 and above is typically the same person. */
   def cosineSimilarity(other: FaceEmbedding): Double =
     require(values.size == other.values.size, "embeddings must have the same length to compare")
-    var dot, na, nb = 0.0
+    // Every product is widened to Double *before* it is multiplied, not after. `a * b` on two Floats is
+    // Float multiplication, and the result is only then widened by `+=`, so each term was being rounded to
+    // 24 bits of mantissa while the two norms below — which do carry a `.toDouble` — were not. The
+    // comparison is against a fixed threshold (0.363), so it is the one place a systematic rounding bias
+    // could nudge a borderline face across the line; and the mismatch made the three accumulators here
+    // disagree about their own arithmetic, which is how a reader loses trust in the whole expression.
+    val n = values.size
+    var dot, normA, normB = 0.0
     var i = 0
-    while i < values.size do
-      dot += values(i) * other.values(i)
-      na += values(i) * values(i).toDouble
-      nb += other.values(i) * other.values(i).toDouble
+    while i < n do
+      val a = values(i).toDouble
+      val b = other.values(i).toDouble
+      dot += a * b
+      normA += a * a
+      normB += b * b
       i += 1
-    if na == 0 || nb == 0 then 0.0 else dot / (math.sqrt(na) * math.sqrt(nb))
+    if normA == 0 || normB == 0 then 0.0 else dot / (math.sqrt(normA) * math.sqrt(normB))
 
   /** Euclidean (L2) distance between the embeddings — SFace's alternative metric, ~1.13 and below is the same
     * person.
     */
   def l2Distance(other: FaceEmbedding): Double =
     require(values.size == other.values.size, "embeddings must have the same length to compare")
-    math.sqrt(values.lazyZip(other.values).map((a, b) => (a - b).toDouble * (a - b)).sum)
+    // Widened before subtracting, for the same reason as [[cosineSimilarity]]: the difference of two Floats
+    // is not always representable as a Float, but is always exact as a Double. No intermediate collection
+    // either — `identify` runs this (or its sibling) once per enrolled face, so a 128-element Vector
+    // allocated per comparison is a per-lookup cost with nothing to show for it.
+    val n = values.size
+    var sum = 0.0
+    var i = 0
+    while i < n do
+      val d = values(i).toDouble - other.values(i).toDouble
+      sum += d * d
+      i += 1
+    math.sqrt(sum)
 
 /** A named best match from a [[Gallery]]: who it is and how strong the cosine similarity was. */
 final case class FaceMatch(name: String, similarity: Double)
@@ -95,20 +115,16 @@ final class FaceRecognizer private (private val handle: Managed[FaceRecognizerSF
     * image must be the BGR frame the face was detected in.
     */
   def embed(image: Image, face: Face): FaceEmbedding =
-    val row = FaceRecognizer.faceRow(face)
-    val aligned = Mat()
-    val feature = Mat()
-    try
+    Managed.scope: own =>
+      val row = own(FaceRecognizer.faceRow(face))
+      val aligned = own(Mat())
+      val feature = own(Mat())
       Cv.orThrow("FaceRecognizerSF.alignCrop")(handle.get.alignCrop(image.mat, row, aligned))
       Cv.orThrow("FaceRecognizerSF.feature")(handle.get.feature(aligned, feature))
       // feature() reuses an internal buffer across calls, so copy the row out before it is overwritten.
       val out = Array.ofDim[Float](feature.cols)
       feature.get(0, 0, out)
       FaceEmbedding(out.toVector)
-    finally
-      row.release()
-      aligned.release()
-      feature.release()
 
   def close(): Unit = handle.release()
 

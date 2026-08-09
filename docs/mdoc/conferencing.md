@@ -10,7 +10,7 @@ needs **no model at all**. The only thing you supply is a **mask**: a single-cha
 is **white over the person and black over the background**. Give the effects that mask and they do the
 rest, softening the join so it reads as a matte, not a paper cut-out.
 
-:::tip New here? The 30-second version
+:::tip[New here? The 30-second version]
 `image.blurBackground(mask)` blurs the background; `image.replaceBackground(mask, backdrop)` swaps it.
 `mask` is white-on-person, black-on-background. The person's silhouette is the *only* hard problem — and
 you can get it from a green screen with zero machine learning (jump to [A green screen](#2-a-green-screen)).
@@ -40,7 +40,7 @@ def personMask(): Image =
     .drawCircle(Point(160, 120), 70, Scalar.White, Thickness.Filled)
 ```
 
-:::warning Ownership: transforms consume, masks are borrowed
+:::warning[Ownership: transforms consume, masks are borrowed]
 `blurBackground`/`replaceBackground` are [`Image` transforms](/mat-lifecycle), so they **consume** the
 frame they are called on — that is why each block below builds a *fresh* `frame()`. The `mask` and
 `background` you pass in are only **borrowed**: the effect reads them and leaves them alive, so **you**
@@ -93,7 +93,7 @@ fg.close(); office.close()
 replaced.map(_.length)
 ```
 
-:::note The backdrop is auto-resized
+:::note[The backdrop is auto-resized]
 `replaceBackground` resizes `background` to the frame's dimensions internally, so a 4K wallpaper and a
 320×240 webcam frame compose fine. It does **not** preserve aspect ratio — a backdrop with a wildly
 different shape will stretch. Crop or letterbox it to roughly the frame's aspect first if that matters.
@@ -113,7 +113,7 @@ different shape will stretch. Crop or letterbox it to roughly the frame's aspect
   frame. Under the hood the feather is a Gaussian of side `2 * feather + 1` applied to the mask before it
   becomes the alpha channel.
 
-:::tip Match the feather to the mask's quality
+:::tip[Match the feather to the mask's quality]
 A crisp mask from a green screen tolerates a small feather (`3`–`5`). A soft, slightly-wrong mask from a
 segmentation network usually looks better with a larger feather (`9`–`13`) that hides its rough edge.
 :::
@@ -176,7 +176,7 @@ Dnn.fromOnnx("models/selfie_segmentation.onnx").flatMap { managedNet =>
 }
 ```
 
-:::warning MediaPipe ships TFLite, not ONNX
+:::warning[MediaPipe ships TFLite, not ONNX]
 MediaPipe's selfie-segmentation model ships as TFLite, which OpenCV's DNN module does not read. Convert it
 to ONNX first (for example via `tf2onnx`), or use any segmentation network already exported to ONNX — the
 same bring-your-own-weights constraint as the skeleton models in [pose estimation](/pose-estimation).
@@ -210,7 +210,7 @@ you drew, one from a prior detection, a filled contour. There is nothing selfie-
 compositing. If a detector handed you a person bounding box, a white-filled rectangle on a black canvas is
 a (very coarse) mask; a filled contour from [contour detection](/contours) is a much better one.
 
-:::danger The mask must match the frame's size
+:::danger[The mask must match the frame's size]
 `alphaBlend` requires the mask's rows and cols to equal the frame's. A mismatched mask throws
 `IllegalArgumentException` — and because the effect consumes the frame either way, the frame is still
 released on that throw path. Resize the mask to the frame before compositing if they differ.
@@ -225,7 +225,7 @@ it needs a camera and a real per-frame mask:
 ```scala mdoc:compile-only
 def maskFor(frame: Image): Image = ??? // your segmentation or green-screen key, white over the person
 
-Camera.open(0).foreach { cam =>
+Camera.using(0) { cam =>
   cam.foreach() { f =>
     val mask = maskFor(f)
     f.blurBackground(mask).write("frame.png")
@@ -233,6 +233,13 @@ Camera.open(0).foreach { cam =>
   }
 }
 ```
+
+`Camera.using` (and `Camera.usingFile`, for a file or an RTSP URL) scopes the capture device to the block
+and closes it on every path out of your block — normal return and thrown exception alike. If the device
+cannot be opened at all there is nothing to close, and you get a `Left(CvError)` back. `Camera.open` /
+`Camera.openFile` hand you an `AutoCloseable` `Camera` that **you** must close yourself; reach for those
+only when the camera has to outlive a single block. Note that `Either.foreach` is not a scoping combinator:
+`Camera.open(0).foreach { cam => ... }` runs the body and then leaves the device open.
 
 For a segmentation-driven loop, hoist the `Net` **outside** the frame callback — loading it per frame is
 wasteful, and a `Net` is stateful (one per thread). Load it once, then call `f.segment(net, size)` inside:
@@ -251,7 +258,7 @@ Dnn.fromOnnx("models/selfie_segmentation.onnx").flatMap { managedNet =>
 }
 ```
 
-:::tip Segmentation is the frame budget
+:::tip[Segmentation is the frame budget]
 A selfie net at 256×256 is the expensive part of the loop, not the compositing. If you cannot hit your
 frame rate, shrink the network input, run it every *other* frame and reuse the last mask, or fall back to a
 green screen. See [performance](/performance) for measuring where the time goes.

@@ -52,7 +52,7 @@ hello.close()
 The baseline reports `false` (nothing to compare to yet); the second frame reports `true`. That is the
 whole contract — the rest of this page is about tuning it and choosing the right strategy.
 
-:::warning Borrow, don't consume
+:::warning[Borrow, don't consume]
 `detect(image)` **borrows** the frame — it reads it and does not release it. So *you* close each frame you
 build (the `try/finally` above). This is the opposite of a transform like `gray` or `blur`, which consumes
 its receiver. See [Mat lifecycle](/mat-lifecycle) for the full ownership model.
@@ -74,7 +74,7 @@ about the scene, not the API.
 A detector is **stateful** (it retains the previous frame, or the background model) and **not
 thread-safe** — feed frames in order, and give each thread its own.
 
-:::note Both build the same shape
+:::note[Both build the same shape]
 Whichever factory you pick, you get a `MotionDetector` with the same three methods — `detect`, `reset`,
 `close`. You can swap strategies without touching the rest of your loop.
 :::
@@ -125,7 +125,7 @@ The four knobs, all with sensible defaults:
 | `blurRadius` | `2` | pre-blur to suppress sensor noise before differencing; `0` disables it. |
 | `motionRatio` | `0.002` | fraction of the frame that must change for `moving` to be `true`. |
 
-:::tip It marks both endpoints
+:::tip[It marks both endpoints]
 Frame differencing lights up wherever pixels *changed* between the two frames — so a moving object shows up
 **twice**: a hole where it was, and a blob where it is now. That is fine for "did anything move?", but if
 you plan to feed the boxes to a [tracker](/tracking), prefer background subtraction, which marks only the
@@ -164,14 +164,14 @@ strict.close()
 
 The lenient detector keeps the small blobs; the strict one gates them all out (`0` regions).
 
-:::note `moving` vs. `regions` gate differently
+:::note[`moving` vs. `regions` gate differently]
 `moving` is decided purely by `motionRatio` — the *fraction* of the frame that changed — while `regions`
 is filtered by `minArea` (blob *size*). So a frame can report `moving = true` with **zero** regions: a lot
 of the frame changed, but no single blob was big enough to survive the gate. Read `moving` for "should I
 care?" and `regions` for "where, exactly?".
 :::
 
-:::warning Sensitivity is a trade
+:::warning[Sensitivity is a trade]
 There is no "correct" setting — every scene is a balance between missing real motion (gates too high) and
 crying wolf at sensor noise (too low). Tune against a recording of the actual camera. `threshold` sets how
 different a *pixel* must be; `blurRadius` smooths away single-pixel sensor noise before the comparison, so
@@ -215,7 +215,7 @@ Its knobs (`minArea` and `motionRatio` mean the same as above):
 | `detectShadows` | `true` | detect cast shadows and drop them (they are marked, then removed). Costs a little. |
 | `learningRate` | `-1` | how fast the model adapts; `-1` lets OpenCV choose. |
 
-:::note Warm-up is not optional
+:::note[Warm-up is not optional]
 MOG2 has no baseline until it has seen a handful of frames. Detecting on frame one gives noisy, over-eager
 results. Let it watch the empty scene for a second or two (the loop above uses 40 frames) before you trust
 its output. `reset()` is a no-op here — the model already re-learns the background on its own.

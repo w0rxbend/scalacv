@@ -1,5 +1,6 @@
 package scalacv
 
+import org.opencv.core.Core
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 
@@ -13,6 +14,25 @@ class EnumsTest extends munit.FunSuite:
     assertEquals(Interpolation.Cubic.cvValue, Imgproc.INTER_CUBIC)
     assertEquals(LineType.AntiAliased.cvValue, Imgproc.LINE_AA)
     assertEquals(ContourRetrieval.External.cvValue, Imgproc.RETR_EXTERNAL)
+    assertEquals(BorderType.Wrap.cvValue, Core.BORDER_WRAP)
+
+  test("BorderType.requireFilterSupport rejects the mode imgproc filters abort on"):
+    // Wrap reaches cv::FilterEngine::init, which asserts columnBorderType != BORDER_WRAP. Native code is
+    // not consistent about it -- GaussianBlur on CV_8U takes a SIMD path that never reaches the assertion
+    // and quietly ignores the mode, while CV_32F aborts -- so the guard has to be depth-independent and
+    // has to fire before the native call.
+    val rejected = intercept[IllegalArgumentException]:
+      BorderType.requireFilterSupport("gaussianBlur", BorderType.Wrap)
+    assert(rejected.getMessage.contains("gaussianBlur"), rejected.getMessage)
+    assert(rejected.getMessage.contains("BORDER_WRAP"), rejected.getMessage)
+
+  test("BorderType.requireFilterSupport accepts everything copyMakeBorder and the filters agree on"):
+    // Falsifiable the other way round: a guard that rejected too much would break the four filter ops for
+    // their own default, Reflect101.
+    BorderType.values
+      .filterNot(_ == BorderType.Wrap)
+      .foreach: border =>
+        BorderType.requireFilterSupport("boxBlur", border)
 
   test("Threshold composes a mode with an automatic modifier"):
     // The combination an `enum ThresholdType` could not express.

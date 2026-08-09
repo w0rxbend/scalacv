@@ -15,12 +15,15 @@ Scan the left column for what you saw, then jump to the section:
 | Symptom | Likely cause | Section |
 | --- | --- | --- |
 | `UnsatisfiedLinkError` at load, natives "missing" | no platform-classifier jar on the classpath | [natives missing](#natives-missing) |
+| `Not found: Cascades` / `value faces is not a member of Image` | the symbol lives in a module you have not added | [missing module](#missing-module) |
 | Fails only on a headless server / CI, mentions GTK | loaded via `Loader.load` instead of `OpenCv.load()` | [headless / no GTK](#headless) |
 | `IllegalStateException: already been released or consumed` | reused an `Image` a transform already spent | [move semantics](#move-semantics) |
 | `Image.read` returns `Left(DecodeFailed)` on a real file | wrong working directory, or no decoder for the format | [decode failed](#decode-failed) |
+| `Cascades.load` returns `Left(LoadFailed)`, "share/ directory is empty" | you are on Windows, whose jar ships no cascades | [cascades on Windows](#cascades-windows) |
 | `add-opens` / `cannot open …/delete(long)` | OpenCV loaded from a named module | [add-opens](#add-opens) |
 | `Recorder.open` returns `Left`, "codec unavailable" | the build has no encoder for that codec | [codec](#codec) |
 | RSS climbs, heap stays small, no test fails | a leaked native `Mat` | [native leak](#native-leak) |
+| You call `.close()` on every image and it *still* leaks | you closed a handle a transform had already spent | [closing the wrong handle](#closed-the-wrong-handle) |
 | `drawText` drew nothing / text misplaced / `????` | baseline anchoring, or a non-ASCII glyph | [drawText](#drawtext) |
 | `CvError.NativeCall` thrown mid-chain | OpenCV rejected the pixels for that op | [native call mid-chain](#native-call) |
 | GraalVM native-image build fails | unsupported — reflection + runtime extraction | [GraalVM](#graalvm) |
@@ -34,7 +37,7 @@ mvn"org.bytedeco:opencv:4.13.0-1.5.13;classifier=linux-x86_64",
 mvn"org.bytedeco:openblas:0.3.31-1.5.13;classifier=linux-x86_64"
 ```
 
-:::warning Both lines are required
+:::warning[Both lines are required]
 `libopencv_core` links `libopenblas` — omit the second and the first will not resolve. And pick the classifier for where the code *runs*, not where you build it: a `linux-x86_64` jar does nothing on an Apple-silicon Mac.
 :::
 
@@ -50,11 +53,53 @@ The classifiers, one per target:
 
 If you would rather not pick, `org.bytedeco:opencv-platform:4.13.0-1.5.13` bundles every one — at a cost of about 408 MB. See [Getting Started](/getting-started) for the full build snippet.
 
+## `Not found: Cascades` / `value faces is not a member of Image` {#missing-module}
+
+These two are **compile** errors, not runtime ones, and they have the same single cause: the symbol you named lives in a scalacv module that is not on your classpath. scalacv is published as four separate artifacts under the group id `com.worxbend`, and only the first is required:
+
+| Artifact | What lives in it |
+| --- | --- |
+| `scalacv` | the core: `Image`, `Managed`, `Camera`, `Video`, `Recorder`, `contours`, `threshold`, the filters and the draw verbs |
+| `scalacv-vision` | `Cascades`, `faces` / `FaceDetectorYN`, `FaceRecognizer`, `Dnn`, `Ocr`, `Ar`, `qrCodes`, `arucoMarkers`, `MotionDetector`, `Features`, `OpticalFlow`, pose, tracking, calibration, SLAM |
+| `scalacv-graphs` | the `Picture` scene graph, `Color`, `Chart`, animated GIFs |
+| `scalacv-zio` | the ZIO integration (`frameStream` and friends) |
+
+An **object** that is not on the classpath produces the first message — `Not found: Cascades` — which is at least recognisable. An **extension method** produces the second — `value faces is not a member of scalacv.Image` — which is the confusing one, because `import scalacv.*` is already at the top of your file and `Image` is clearly there. That import is doing its job: `faces` is defined in the vision jar as an extension method on `Image`, and an import can only bring into scope what the classpath actually contains. Add the module and the same import starts producing the same method.
+
+Add the line for the module you need (delete the ones you do not). In Mill:
+
+```scala
+def mvnDeps = Seq(
+  mvn"com.worxbend::scalacv:0.1.0",         // core
+  mvn"com.worxbend::scalacv-vision:0.1.0",  // detectors, DNN, tracking, OCR, calibration, SLAM
+  mvn"com.worxbend::scalacv-graphs:0.1.0",  // the Picture scene graph, charts, GIFs
+  mvn"com.worxbend::scalacv-zio:0.1.0"      // only if you use ZIO
+)
+```
+
+In sbt:
+
+```scala
+libraryDependencies ++= Seq(
+  "com.worxbend" %% "scalacv"        % "0.1.0",
+  "com.worxbend" %% "scalacv-vision" % "0.1.0",
+  "com.worxbend" %% "scalacv-graphs" % "0.1.0",
+  "com.worxbend" %% "scalacv-zio"    % "0.1.0"
+)
+```
+
+Two follow-on details:
+
+- `scalacv-vision` and `scalacv-graphs` put their types in the **same** package as the core, so `import scalacv.*` is still the only import you need — nothing else changes in your file. `scalacv-zio` is the exception: it lives in `scalacv.zio`, so it needs `import scalacv.zio.*` as well.
+- If the module *is* on your classpath and the error persists, check the import is the wildcard `import scalacv.*` and not a single-symbol `import scalacv.Image`. A single-symbol import brings in the type but none of the extension methods defined alongside it.
+
+The bytedeco natives are a separate question — those give you an `UnsatisfiedLinkError` at run time, not a compile error; see [natives missing](#natives-missing) above. Full build files for both tools are in [Getting Started](/getting-started).
+
 ## It fails on a headless server / CI runner (no GTK) {#headless}
 
 Call `OpenCv.load()`, **not** `Loader.load(classOf[opencv_java])`. The latter eagerly initialises OpenCV's `highgui` module, which is GTK2-linked on Linux and drags `objdetect`/`calib3d`/`features2d`/`video` down with it on a box with no GTK — and `objdetect` is exactly what this library needs most. `OpenCv.load()` brings the natives up through a GUI-free path and needs no `apt-get install libgtk2.0-0`. This is the entire reason the loader exists; do not "simplify" it back to `Loader.load`.
 
-:::note The failure is loud, not silent
+:::note[The failure is loud, not silent]
 The bundled `libopencv_highgui.so` carries *unversioned* dependency names, so on a machine that happens to have a different OpenCV installed, a naive bulk load can bind the wrong ABI and later die inside `cv::Mat::release()` with no Java stack trace. `OpenCv.load()` resolves dependencies on demand precisely to avoid that. If you see a JVM crash with no stack near a `Mat` operation, suspect a stray load path, not scalacv.
 :::
 
@@ -106,15 +151,48 @@ If a *real* image reports `DecodeFailed`, the usual culprits are:
 
 `DecodeFailed` is specifically about image *bytes*. A model, cascade, or video source that will not load reports `LoadFailed` instead — see [the error model](/error-model) for the distinction.
 
-## `cannot open …/delete(long)` / `add-opens` in the error {#add-opens}
+## `Cascades.load` returns `Left(LoadFailed)` on Windows {#cascades-windows}
 
-OpenCV was loaded from a **named module** rather than the classpath, so reflection cannot reach the private `delete(long)` scalacv uses to free the 185 detector types. The error prints the exact flag; add it:
+Everywhere except Windows, the Haar cascade XML files ship *inside* the bytedeco classifier jar, under `share/opencv4/haarcascades/`, and `Cascades.load` extracts the one you name to a cache directory before handing it to OpenCV. The `windows-x86_64` jar is the exception: its `share/` directory is **empty** and contains no cascade XML at all, so on Windows there is nothing to extract and `Cascades.load` can only fail. This is a property of the upstream jar, not of your build — no dependency you add will fix it.
 
-```sh
---add-opens org.opencv/org.opencv.objdetect=ALL-UNNAMED
+The failure is a `Left`, never a throw, and it says so in those words (line-wrapped here to fit the page):
+
+```text
+could not load '/org/bytedeco/opencv/windows-x86_64/share/opencv4/haarcascades/haarcascade_frontalface_alt.xml':
+the bytedeco OpenCV jar for windows-x86_64 ships no Haar cascades at all — its
+share/ directory is empty, unlike every other platform's. Ship the cascade XML with your own
+application and use Cascades.loadFrom(path), or use a detector that does not need one.
 ```
 
-On the classpath — the normal case — this never happens, so the simplest fix is usually to run OpenCV on the classpath rather than as a module.
+The workaround is the one the message names. Download the cascade you need from OpenCV's own repository — the file for frontal faces is [`haarcascade_frontalface_alt.xml`](https://github.com/opencv/opencv/blob/master/data/haarcascades/haarcascade_frontalface_alt.xml) — ship it alongside your application, and load it by path with `Cascades.loadFrom` instead of by name with `Cascades.load`:
+
+```scala mdoc:compile-only
+// `loadFrom` takes a filesystem path; `load` takes a CascadeName and extracts from the jar.
+// Both return the same Either[CvError, Managed[CascadeClassifier]], so nothing downstream changes.
+val cascade = Cascades.loadFrom("cascades/haarcascade_frontalface_alt.xml")
+
+cascade match
+  case Right(classifier) => classifier.use(c => println(s"cascade is usable: ${!c.empty()}"))
+  case Left(err)         => println(s"still no cascade: $err")
+```
+
+`loadFrom` checks the loaded classifier is not empty, so a typo in that path comes back as a `Left` too rather than as a detector that silently finds nothing forever. If you would rather not ship a file at all, the detectors that need **no** model file work identically on every platform: QR codes (`image.qrCodes`) and ArUco markers (`image.arucoMarkers()`). YuNet face detection (`image.faces`) also avoids cascades, but it is a neural network and needs its own model download — see [Object detection](/object-detection).
+
+The same `LoadFailed` shape appears on non-Windows platforms for a different reason: if only the classifier-less `org.bytedeco:opencv` jar is present, the cascades are not on the classpath either. That message names your platform and prints the dependency line to add — see [natives missing](#natives-missing).
+
+## `cannot open …/delete(long)` / `add-opens` in the error {#add-opens}
+
+OpenCV was loaded from a **named module** rather than the classpath, so reflection cannot reach the private `delete(long)` scalacv uses to free the 185 detector types. Note *when* this fires: it is thrown at the moment a handle is **freed** — typically at the end of a `Managed.use` block, in the middle of a working pipeline — not at `OpenCv.load()`.
+
+The error prints the exact flag, computed from the offending class's own module and package, so add the one it names:
+
+```sh
+--add-opens org.bytedeco.opencv/org.opencv.objdetect=ALL-UNNAMED
+```
+
+That is the flag for a `CascadeClassifier` or a `QRCodeDetector`; a `Net` asks for `--add-opens org.bytedeco.opencv/org.opencv.dnn=ALL-UNNAMED` instead. The module name is `org.bytedeco.opencv`, not `org.opencv`: the OpenCV Java classes live in packages named `org.opencv.*`, but they are *shipped* by the bytedeco artifact, whose `module-info` declares `module org.bytedeco.opencv`. `--add-opens` takes the module, then the package — and here the two do not share a prefix, which is exactly the pair that is easy to get wrong. You never have to work it out yourself: the error message prints the flag it needs, computed from the offending class's own module at the moment it failed. It is never `java.base/java.lang` — the field being opened is OpenCV's own `nativeObj`, not a JDK internal.
+
+On the classpath — the normal case — there is no module to open at all, so the flag would be meaningless; if you somehow see this failure there, the message says exactly that and asks for a bug report rather than printing a flag with a `null` module name in it. So the simplest fix, when you have the choice, is to run OpenCV on the classpath rather than as a module.
 
 ## `Recorder.open` returns `Left` — "codec may be unavailable" {#codec}
 
@@ -152,6 +230,32 @@ Then bisect by wrapping suspects in `Managed.use`, and reach for the scoped entr
 | a raw `Mat` | `Managed.use(mat)(f)` | the Mat on the way out |
 
 A borrowed mask passed to `applyMask`/`inpaint`/`blend`/`blurBackground`/`seamlessCloneInto` is **not** consumed — you must `.close()` it yourself. That is a common source of a slow leak. See [Testing](/testing#guard-against-native-leaks-with-an-rss-assertion) to gate it in CI.
+
+## I called `.close()` and it still leaked {#closed-the-wrong-handle}
+
+You closed the **spent** handle instead of the live one. This is the same move-semantics rule as [above](#move-semantics), seen from the other side: there, reusing a spent `Image` threw an exception you could not miss; here, closing a spent `Image` does nothing at all and says nothing about it, so the leak is silent.
+
+The mechanism is short. A **transform** — `gray`, `blur`, `canny`, `resize`, any `draw*` — *consumes* the `Image` you called it on and returns a **new** `Image` that owns the pixels. Releasing a handle is idempotent by design (a second release is a harmless no-op rather than a double free, which would crash the JVM from native code). Put those two facts together and closing the receiver after a transform is a no-op on an already-spent handle, while the result nobody closed keeps its Mat alive:
+
+```scala mdoc:silent
+val source = Image.blank(64, 64)
+val greyed = source.gray // a transform: it spends `source` and returns a new Image
+source.close()           // no-op — `source` was already spent by `.gray`, and release is idempotent
+```
+
+Nothing throws, no test fails, and one Mat's worth of off-heap pixels is now unreachable and unfreed. The fix is to close the **survivor** of the chain — the last handle, the one still holding live pixels:
+
+```scala mdoc:silent
+greyed.close() // this is the handle that owns the memory
+```
+
+Three ways to stop hitting this at all:
+
+- **Write the chain as a chain.** `Image.blank(64, 64).gray.canny(50, 150)` threads one live handle from left to right, so there is exactly one value at the end and exactly one thing to close — no spent intermediate is left lying around with a name you could close by mistake.
+- **Remember which side of a `.mat` borrow you are on.** `image.mat` *borrows* the underlying OpenCV matrix: the `Image` still owns it and is still live, so the `Image` is what you close, and you must not call `release()` on the borrowed `Mat`. But if you wrote `img.gray.mat`, the borrow came from the anonymous greyscale `Image` the transform produced — and there is no longer a name in scope to close. Bind the transform result first (`val grey = img.gray`), then borrow from `grey`, then close `grey`. See [Working with the raw OpenCV API](/opencv-java).
+- **Let a scope do it.** `Image.reading(path)(use)`, `Camera.using(index)(use)` and `Managed.use(mat)(f)` close on every path — success, failure and exception — and close the right handle even if the body consumed it.
+
+Note that `-Dscalacv.trackOwnership=true` does not help here: it annotates the *exception* thrown when a spent handle is used, and this failure throws nothing. What it is good for is the neighbouring case — if some later line does throw "already been released or consumed", the flag names the call that spent the handle, which usually also tells you which handle you should have been closing. The full ownership story, including which verbs are queries (they borrow) and which are transforms and terminals (they consume), is in [Mat lifecycle](/mat-lifecycle#the-cheat-sheet).
 
 ## `drawText` drew nothing / text is in the wrong place {#drawtext}
 

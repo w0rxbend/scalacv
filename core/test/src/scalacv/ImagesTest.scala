@@ -69,7 +69,7 @@ class ImagesTest extends munit.FunSuite:
         assert(e.isInstanceOf[CvError.DecodeFailed], s"expected DecodeFailed, got $e")
         assert(e.getMessage.contains(missing), e.getMessage)
 
-  test("read of a directory is a Left — imread reports it exactly like a missing file"):
+  test("read of a directory is a Left"):
     val dir = tempDir().toString
     Images.read(dir) match
       case Right(m) => m.release(); fail("a directory must not produce a usable Mat")
@@ -79,6 +79,71 @@ class ImagesTest extends munit.FunSuite:
     val junk = tempDir().resolve("not-an-image.png")
     Files.write(junk, "this is text, not a PNG".getBytes("UTF-8"))
     assert(Images.read(junk.toString).isLeft)
+
+  test("read names which of the three unreadable cases happened"):
+    // While read went through imread, all three came back as one empty Mat, so the message had to hedge
+    // across all of them and every one of its three suggestions was wrong two times out of three. Reading
+    // the bytes on the JVM makes them distinguishable; this pins that they stay distinct and keep naming
+    // the file.
+    val dir = tempDir()
+    val missing = dir.resolve("definitely-not-here.png")
+    val junk = dir.resolve("not-an-image.png")
+    Files.write(junk, "this is text, not a PNG".getBytes("UTF-8"))
+    val details = Seq(missing.toString, dir.toString, junk.toString).map: p =>
+      Images.read(p) match
+        case Right(m) => m.release(); fail(s"'$p' must not produce a usable Mat")
+        case Left(e: CvError.DecodeFailed) =>
+          assert(e.getMessage.contains(p), e.getMessage)
+          e.details
+        case Left(other) => fail(s"expected DecodeFailed, got $other")
+    assertEquals(details.distinct.size, 3, s"the three causes must not share one message: $details")
+
+  test("read of an empty file says the file is empty"):
+    val empty = tempDir().resolve("empty.png")
+    Files.createFile(empty)
+    Images.read(empty.toString) match
+      case Right(m) => m.release(); fail("a zero-byte file must not produce a usable Mat")
+      case Left(e: CvError.DecodeFailed) =>
+        assert(e.details.contains("empty"), e.getMessage)
+        assert(e.getMessage.contains(empty.toString), e.getMessage)
+      case Left(other) => fail(s"expected DecodeFailed, got $other")
+
+  test("write/read round-trips through a path containing non-ASCII characters"):
+    // The JNI narrows a Java String to modified UTF-8, and OpenCV's imgcodecs passes those bytes to fopen.
+    // On Windows the C runtime reads them in the ANSI code page, so any non-ASCII character named a
+    // different, nonexistent file: imwrite returned false and imread returned an empty Mat, on a path that
+    // was perfectly valid. Doing the I/O on the JVM removes the narrowing. This assertion holds on Linux
+    // and macOS either way — POSIX open takes the bytes verbatim — so it is the pin for the Windows job.
+    val dir = tempDir()
+    // A JVM whose sun.jnu.encoding cannot represent these characters at all would fail below for a reason
+    // that has nothing to do with the code under test, so probe for that and skip rather than fail.
+    val probe = dir.resolve("проба")
+    Files.createFile(probe)
+    assume(Files.exists(probe), "this JVM's sun.jnu.encoding cannot represent a non-ASCII filename")
+
+    val file = dir.resolve("фото-Zoë-日本.png")
+    Managed.use(fixture()): src =>
+      assertEquals(Images.write(file.toString, src), Right(()))
+      assert(Files.exists(file), s"nothing was written to $file")
+      Images.read(file.toString, ImreadFlags.Unchanged) match
+        case Left(e) => fail(s"read failed: ${e.getMessage}")
+        case Right(back) => back.use(assertSamePixels(src, _))
+
+  test("a path the filesystem cannot represent is an error, not a file under a name nobody asked for"):
+    // Path.of rejects an embedded NUL byte. Handing the same string to the JNI instead re-encoded the NUL
+    // as modified UTF-8's 0xC0 0x80, which POSIX accepts, so imwrite reported success after creating a
+    // file under a mangled name. InvalidPathException is a plain RuntimeException, so it also has to be
+    // caught explicitly: Cv.attempt does not, and an Either-returning function must not throw it.
+    // The NUL is spelled as a char rather than as a string escape, so that this source file does not
+    // itself have to contain a NUL byte.
+    val bad = tempDir().resolve("nulbyte.png").toString.replace("nulbyte", s"nul${0.toChar}byte")
+    Managed.use(fixture()): src =>
+      Images.write(bad, src) match
+        case Right(_) => fail("a path containing a NUL byte must not report a successful write")
+        case Left(e) => assert(e.isInstanceOf[CvError.EncodeFailed], s"expected EncodeFailed, got $e")
+    Images.read(bad) match
+      case Right(m) => m.release(); fail("a path containing a NUL byte must not produce a usable Mat")
+      case Left(e) => assert(e.isInstanceOf[CvError.DecodeFailed], s"expected DecodeFailed, got $e")
 
   test("encode with an extension OpenCV has no encoder for is EncodeFailed, not a throw"):
     Managed.use(fixture()): src =>

@@ -26,7 +26,11 @@ For one platform (say `linux-x86_64`): the OpenCV jar is ~31 MB, OpenBLAS ~20 MB
 Scala **3** only (3.3.x LTS). Android and GraalVM native-image are **not** supported today — the native-image blockers are spelled out in [Mat lifecycle](/mat-lifecycle#graalvm-native-image-is-not-supported-today).
 
 ### Is there GPU/CUDA support?
-The bytedeco natives publish `-gpu` classifier variants (CUDA) for some platforms — swap the classifier and OpenCV's CUDA-backed paths become available. See [The native cache](/native-cache#choosing-the-classifier-and-gpu-variants).
+**CUDA: no.** The bytedeco natives do publish `-gpu` classifier variants, and they are genuine CUDA builds, but scalacv's `OpenCv.load()` cannot load them — swapping the classifier gets you a `CvError.NativesMissing` at startup, or, if you leave the ordinary jar on the classpath too, the CPU natives with no warning at all.
+
+**OpenCL: yes, for DNN inference only.** The ordinary classifier's DNN library is built with OpenCL, so `net.setPreferableTarget(DNN_TARGET_OPENCL)` can run a network on a GPU that has an OpenCL driver installed. Ordinary image operations (`blur`, `resize`, `canny`) always run on the CPU, because OpenCV's Java bindings ship no `UMat`.
+
+Both answers, with the evidence and a way to check whether an accelerator actually engaged, are on one page: [GPU acceleration: what is and is not reachable](/native-cache#gpu).
 
 ## Doing common things
 

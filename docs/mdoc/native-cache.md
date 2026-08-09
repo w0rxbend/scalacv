@@ -6,7 +6,7 @@ downloaded model files) are not on your classpath as loadable code; they are pay
 bytedeco jars, extracted or fetched **once** and cached. This page explains where those caches live, how
 to relocate them, and how to make container cold-starts instant and air-gapped runs possible.
 
-:::tip The one-line version
+:::tip[The one-line version]
 The first `OpenCv.load()` unpacks ~196 MB of libraries into `~/.javacpp` and reuses it forever after.
 For a lean, fast deployment: add exactly **one** platform classifier, and **pre-warm or relocate** that
 cache so cold starts don't pay the unpack. The [checklist](#checklist-for-a-lean-fast-deployment) at the
@@ -30,7 +30,7 @@ OpenCv.load()   // …a no-op on every call after
 OpenCv.isLoaded
 ```
 
-:::note Why not `Loader.load(classOf[opencv_java])`?
+:::note[Why not `Loader.load(classOf[opencv_java])`?]
 The obvious javacpp one-liner initialises the whole preset graph, and `opencv_highgui` is GTK2-linked on
 Linux — so on a headless box it throws and takes `objdetect`, `calib3d`, `features2d` and `video` down
 with it. `OpenCv.load()` brings javacpp up through a GUI-free preset and loads only the JNI shim plus what
@@ -81,7 +81,7 @@ ENV JAVA_TOOL_OPTIONS="-Dorg.bytedeco.javacpp.cachedir=/opt/javacpp"
 
 To keep the *application* layer thin instead, do the opposite: relocate the cache to a mounted volume so it lives outside the image and is shared across replicas.
 
-:::tip Two strategies, one trade-off
+:::tip[Two strategies, one trade-off]
 **Bake** the cache into the image → fat image, instant and self-contained cold start (best for autoscaling
 where a fresh pod must be ready immediately). **Mount** the cache on a shared volume → thin image, cold
 start waits on the volume being warm (best when image size or registry cost dominates). Pick per workload.
@@ -156,7 +156,7 @@ val sfaceSpec: ModelSpec = FaceRecognizer.modelSpec   // SFace, checksum pinned
 faceSpec.fileName
 ```
 
-:::note Opting out of the checksum
+:::note[Opting out of the checksum]
 For a model with no published hash, `ModelSpec.unverified(name, urls)` builds a spec with **no** integrity
 check. It is a deliberate, named opt-out — you lose the tamper/corruption guard — so prefer the verifying
 `ModelSpec(...)` whenever a checksum exists.
@@ -164,27 +164,162 @@ check. It is a deliberate, named opt-out — you lose the tamper/corruption guar
 
 That `file://` support is the key to **air-gapped / offline** runs: place the model where the spec expects it (or list a `file://` URL first, as above), and no network access is needed at all.
 
-## Choosing the classifier (and GPU variants)
+## Choosing the classifier
 
 The classifier jar you add decides the size and capabilities of the payload:
 
 | Want | Add |
 |---|---|
-| CPU, one platform | `opencv:…;classifier=linux-x86_64` (~31 MB) + `openblas:…;classifier=linux-x86_64` (~20 MB) |
-| CUDA acceleration | the `-gpu` variant, e.g. `classifier=linux-x86_64-gpu` (much larger) |
+| One platform (the right answer for almost everyone) | `opencv:…;classifier=linux-x86_64` (~31 MB) + `openblas:…;classifier=linux-x86_64` (~20 MB) |
 | "just make it work anywhere" | `org.bytedeco:opencv-platform:4.13.0-1.5.13` — every platform, ~408 MB |
 
-GPU variants exist for `linux-x86_64`, `linux-arm64` and `windows-x86_64`. There is **no** `windows-arm64` build. For CI and most services, a single CPU classifier is the right, lean choice — see [Getting Started](/getting-started).
+bytedeco publishes no OpenCV natives at all for `windows-arm64` (scalacv's own build fails fast and says
+so). For CI and most services, a single classifier pair is the right, lean choice — see
+[Getting Started](/getting-started). For the `-gpu` classifiers, read the next section **before** you
+reach for one.
 
-:::warning Both lines, always
+:::warning[Both lines, always]
 `libopencv_core` links `libopenblas`, so the `openblas` classifier is not optional — omit it and `load()`
 fails with an `UnsatisfiedLinkError` that scalacv turns into a `CvError.NativesMissing` telling you exactly
 what to add. `opencv-platform` bundles both for every platform, at the ~408 MB cost above.
 :::
 
+## GPU acceleration: what is and is not reachable {#gpu}
+
+This section is the single place the site answers "can scalacv use my GPU?". Everywhere else links here.
+The short version, in one line each:
+
+| Path | Reachable today? |
+|---|---|
+| **DNN inference on OpenCL** (`DNN_TARGET_OPENCL`) | **Yes**, with the stock classifier, on a host that has an OpenCL driver |
+| **DNN inference on CUDA** (`DNN_TARGET_CUDA`) | **No.** The build is real, but `OpenCv.load()` cannot load it |
+| **GPU-accelerated image ops** (`blur`, `resize`, `canny`, …) | **No**, and not because of scalacv — see below |
+| **SIMD + multi-core CPU** (AVX2/AVX-512, pthreads, OpenBLAS) | **Yes**, on by default, nothing to configure |
+
+### DNN on OpenCL — the one GPU path that works out of the box
+
+The `libopencv_dnn` inside the ordinary (non-`-gpu`) classifier jar is compiled with OpenCL support: it
+contains OpenCV's `ocl4dnn` backend — GPU implementations of convolution, pooling and local response
+normalisation. Nothing extra needs to be on your classpath to use it. On the raw `Net` (see
+[DNN inference](/dnn)):
+
+```scala mdoc:compile-only
+import org.opencv.dnn.Dnn as CvDnn
+
+// `net` is the org.opencv.dnn.Net inside a Dnn.fromOnnx(...) scope.
+def preferOpenCl(net: org.opencv.dnn.Net): Unit =
+  net.setPreferableBackend(CvDnn.DNN_BACKEND_OPENCV)
+  net.setPreferableTarget(CvDnn.DNN_TARGET_OPENCL) // or DNN_TARGET_OPENCL_FP16
+```
+
+Two conditions, both outside the jars. The host needs an **OpenCL driver** — an "ICD", the vendor library
+that OpenCV loads by name (`libOpenCL.so.1` on Linux) at the moment you first ask for the OpenCL target;
+it is not bundled, because it is a driver for hardware nobody can predict. And the model has to be one the
+`ocl4dnn` backend covers; layers it does not implement run on the CPU. If either condition fails, **the
+whole thing quietly runs on the CPU** and reports nothing. [Verify it](#verify-gpu) rather than assuming.
+
+### DNN on CUDA — not reachable through `OpenCv.load()` today
+
+Three separate facts, none of which is "your code is wrong".
+
+**Fact one: the classifier this site tells you to add is a CPU-only build.** You do not have to take that
+on trust — OpenCV carries its own build report, and you can read it at runtime. `getBuildInformation`
+returns the whole thing as one multi-line string:
+
+```scala mdoc:silent
+val buildInfo: String = org.opencv.core.Core.getBuildInformation()
+```
+
+The report has an `Unavailable:` line listing the modules that were *not* compiled. If `cudaarithm` — the
+CUDA arithmetic module — is on it, this OpenCV has no CUDA in it at all:
+
+```scala mdoc
+buildInfo.linesIterator.exists(l => l.contains("Unavailable:") && l.contains("cudaarithm"))
+```
+
+`true` is what the bundled natives report on every platform. `setPreferableTarget(DNN_TARGET_CUDA)` on
+such a build does not throw — it falls back to the CPU without a word.
+
+**Fact two: the `-gpu` classifiers are real CUDA builds, and they do exist.** `linux-x86_64-gpu`,
+`linux-arm64-gpu` and `windows-x86_64-gpu` are published for OpenCV 4.13.0-1.5.13 (there is no macOS
+`-gpu` variant, and no `windows-arm64` OpenCV at all). Their `libopencv_dnn` is five times the size of the
+CPU one and links `libcudart`, `libcudnn` and `libcublas`, so the CUDA DNN backend really is compiled in.
+
+**Fact three: swapping the classifier does not get you there.** The `-gpu` jar keeps its payload under
+`org/bytedeco/opencv/linux-x86_64-gpu/`, while `OpenCv.load()` extracts from
+`org/bytedeco/opencv/linux-x86_64/` — javacpp's `Loader.getPlatform` reports the platform *without* the
+`-gpu` suffix, and scalacv's loader uses that name literally. Two outcomes, neither of them CUDA:
+
+- the `-gpu` jar **alone** on the classpath → `load()` throws
+  `CvError.NativesMissing("no opencv_java library in the extracted linux-x86_64 payload")`;
+- the `-gpu` jar **alongside** the ordinary one → `load()` finds the ordinary payload and you run on the
+  CPU, with no error and no warning.
+
+On top of that, the CUDA runtime itself (`libcudart`, `libcudnn`, `libcublas`) ships in **neither** jar
+and is not declared as a dependency by bytedeco, so you would also have to supply a matching CUDA and
+cuDNN install yourself.
+
+So: **treat CUDA as unavailable in scalacv today.** Do not add a `-gpu` classifier expecting it to work —
+the best case is that you pay a much larger download for the same CPU speed, and the likely case is a
+`NativesMissing` at startup. If you need CUDA, the honest options are to run inference in a separate
+process (an ONNX Runtime or Triton service) and keep scalacv for the image work around it, or to open an
+issue asking for extension-aware loading.
+
+### GPU-accelerated image ops — not reachable, and not scalacv's doing
+
+OpenCV's "transparent acceleration" (the T-API) moves ordinary calls like `blur`, `resize` and `cvtColor`
+onto an OpenCL device when you hand them a `cv::UMat` instead of a `cv::Mat`. **The official OpenCV *Java*
+bindings do not ship a `UMat` class at all** — `org.opencv.core` contains `Mat` and no `UMat`, and the
+`cv::ocl` namespace is not wrapped either. Every image operation reachable from Java therefore runs on the
+CPU, in this or any other OpenCV build, with or without scalacv in the picture.
+
+scalacv follows that boundary rather than creating it: `Image` wraps a `Managed[Mat]`, every `Ops`
+extension is on `Mat`, and `Releasable` ships instances for `Mat`, `VideoCapture` and `VideoWriter` only.
+Supporting `UMat` would mean a second operator set and a second ownership regime — for a type the Java API
+does not expose in the first place.
+
+### What you do get for free: SIMD and threads
+
+The acceleration the stock build actually delivers is on the CPU, and it is already on:
+
+- **Runtime-dispatched SIMD.** SIMD ("single instruction, multiple data") means one CPU instruction
+  operating on eight or sixteen pixels at once. The build compiles SSE4.1, SSE4.2, AVX, AVX2 and AVX-512
+  variants of the hot kernels and picks the best one your processor supports, at run time — you do not
+  choose a build per machine.
+- **A native parallel framework**, which is what makes a heavy operation (a bilateral filter, a DNN
+  forward pass) use every core. Sizing it against your own executor is [Performance](/performance)'s
+  subject, not this page's.
+- **OpenBLAS** for the LAPACK-backed maths (calibration, `solvePnP`, matrix decompositions) — the second
+  classifier jar you were told to add is what supplies it.
+
+`Core.useOptimized` is the switch for the SIMD dispatch, and it is on by default:
+
+```scala mdoc
+org.opencv.core.Core.useOptimized
+```
+
+Note that Intel **IPP is not** in this build: the report's third-party list names LAPACK, Protobuf and
+Flatbuffers, and no IPP. So do not go looking for an IPP line to confirm the CPU is being used well — the
+SIMD dispatch above is the mechanism, and `useOptimized` is the switch.
+
+### Verify, do not assume {#verify-gpu}
+
+:::warning[Every accelerator in OpenCV fails silently]
+A backend or target the build was not compiled with, or whose driver is not installed, falls back to the
+CPU and returns a perfectly good answer — there is no exception, no `Left`, and no log line. **A target
+you set is not evidence that it engaged.**
+
+The only reliable signal is a **timing comparison you run yourself**: load the model once, run a warm-up
+pass, then time N `forward` calls on the same blob with `DNN_TARGET_CPU`, and time the same N with the
+target you are hoping for. A meaningful gap means it engaged; no gap means it did not, whatever the
+documentation of any layer promised. [Performance](/performance) has the harness conventions — warm up
+first, report a mean with a confidence interval, and compare deltas rather than absolute microseconds.
+:::
+
 ## Checklist for a lean, fast deployment
 
 - Add exactly the **one** classifier pair (`opencv` + `openblas`) for your target platform, not `opencv-platform`.
+- Do **not** reach for a `-gpu` classifier: [CUDA is not reachable through `OpenCv.load()` today](#gpu), and the jar is four times the size for the same CPU speed.
 - Relocate or pre-warm `~/.javacpp` so cold starts don't pay the 196 MB unpack.
 - Ship pinned models via `file://` or a pre-populated cache for offline runs.
 - Set a `-Dorg.bytedeco.javacpp.maxPhysicalBytes` ceiling in production so a leak fails fast rather than getting OOM-killed (see [Performance](/performance#measuring-memory-do-it-right)).

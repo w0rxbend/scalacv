@@ -83,6 +83,62 @@ extension (self: Mat)
   def scoped(using Releasable[Mat]): ZIO[Scope, Throwable, Mat] =
     acquireRelease(self)
 
+/** Opens a video source into the current `Scope`: opened on acquire, released when the scope ends — on
+  * success, on failure, and on interruption. The ZIO face of [[Video.open]], and the way to get a capture to
+  * hand to [[frameStream]].
+  *
+  * Prefer this over `acquireRelease(VideoCapture(source))`. The bare `VideoCapture` constructor cannot fail:
+  * OpenCV reports "I could not open that" by leaving `isOpened` false rather than by throwing, so a missing
+  * file, a busy camera, or a container this build has no backend for all hand you a live object whose every
+  * `read` returns false. [[Video.open]] checks `isOpened`, and also performs the open-without-the-timeout-
+  * parameters retry that [[CaptureOptions]] documents, so failure arrives here as a typed [[CvError]] instead
+  * of as a stream that ends before its first frame.
+  *
+  * The open runs on the blocking pool: it hits the filesystem, or the network for an `rtsp://`/`http://`
+  * source.
+  *
+  * {{{
+  * ZIO.scoped {
+  *   captureScoped("clip.mp4").flatMap(cap => frameStream(cap).map(f => f.get(0, 0)(0)).runCollect)
+  * }
+  * }}}
+  *
+  * @param source
+  *   whatever the backend understands — a filesystem path, an `rtsp://` or `http://` URL, a `frame_%04d.png`
+  *   sequence pattern, a GStreamer pipeline. See [[Video.open]].
+  * @param options
+  *   backend choice and the best-effort open/read timeouts; see [[CaptureOptions]] for why they are
+  *   backend-dependent and off by default.
+  */
+def captureScoped(
+    source: String,
+    options: CaptureOptions = CaptureOptions.Default
+): ZIO[Scope, CvError, VideoCapture] =
+  ZIO
+    .acquireRelease(ZIO.blocking(fromCv(Video.open(source, options))))(m => ZIO.succeed(m.release()))
+    .map(_.get)
+
+/** Fails a stream that would otherwise report a capture which never opened as a video with no frames in it.
+  *
+  * Checked as an effect inside the stream rather than as a `require` in [[frameStream]]'s body because
+  * [[frameStream]] is a value-returning constructor: a bare `require` would throw where the stream is *built*
+  * — outside the error channel, and in whatever fiber happened to assemble the pipeline rather than the one
+  * that runs it.
+  */
+private def requireOpen(capture: VideoCapture): ZStream[Any, CvError, Nothing] =
+  ZStream.execute(
+    ZIO.unless(capture.isOpened)(
+      ZIO.fail(
+        CvError.LoadFailed(
+          "capture",
+          "cannot read frames from a capture that is not open — that would be an empty stream that looks " +
+            "like a video with no frames in it. Obtain it with captureScoped, which reports failure as a " +
+            "typed CvError."
+        )
+      )
+    )
+  )
+
 /** Frames from a capture as a `ZStream`, **each frame valid only until the next pull.**
   *
   * This inherits the borrowing contract of the synchronous `Video.frames` rather than ZIO's usual value
@@ -92,19 +148,33 @@ extension (self: Mat)
   * the pixels, reduce it) inside the stream. There is no memoization, so the stream stays flat in memory over
   * an arbitrarily long video; that is the whole point.
   *
-  * The capture itself is not closed by the stream — acquire it through [[acquireRelease]] so the scope owns
-  * it. The stream stops at the first frame that fails to decode, which for a file is end-of-stream and for a
-  * camera is a dropped connection; the two are indistinguishable through OpenCV's API, as `Video.frames`
-  * documents.
+  * The capture itself is not closed by the stream — acquire it through [[captureScoped]] so the scope owns
+  * it. A capture that is not open fails the stream with a [[CvError.LoadFailed]] on the first pull: OpenCV
+  * signals "could not open that" by leaving `isOpened` false, and every `read` on such a capture returns
+  * false, so without the check a typo'd path would be indistinguishable from a video with no frames in it.
+  * Past that, the stream stops at the first frame that fails to decode, which for a file is end-of-stream and
+  * for a camera is a dropped connection; those two *are* indistinguishable through OpenCV's API, as
+  * `Video.frames` documents.
   *
   * For the duration of the stream the capture's exception mode is forced off and its previous value restored
   * when the stream ends, exactly as the synchronous `Video.frames` does: with exception mode on, plain
   * end-of-file surfaces as the same `CvException` a broken stream does, so a finished file would fail the
-  * stream rather than complete it. The read runs on the blocking pool and is interruptible, so an interrupted
-  * stream does not wedge on a dead camera.
+  * stream rather than complete it.
+  *
+  * ==Interruption cannot cut a read short==
+  *
+  * The read runs on the blocking pool, so a source that stops delivering pins a blocking thread rather than a
+  * compute one. It is wrapped in `attemptBlockingInterrupt`, but that only delivers a JVM
+  * `Thread.interrupt()` — which a thread parked inside OpenCV's native code never observes. So interrupting
+  * the stream, or closing the scope around it, does not take effect until the in-flight `capture.read`
+  * returns on its own; until then the buffer `Mat`, the exception-mode restore, and any enclosing `Scope` all
+  * stay pending. Bounding that is the source's job, not the stream's: open the capture with
+  * `CaptureOptions.withTimeout` on a backend that honours `CAP_PROP_READ_TIMEOUT_MSEC` (FFMPEG, GStreamer —
+  * V4L2, AVFoundation and the built-in MJPEG reader ignore it), which [[captureScoped]] takes as its
+  * `options`.
   */
 def frameStream(capture: VideoCapture): ZStream[Any, Throwable, Mat] =
-  ZStream
+  requireOpen(capture) ++ ZStream
     .acquireReleaseWith(ZIO.succeed(capture.getExceptionMode))(m => ZIO.succeed(capture.setExceptionMode(m)))
     .tap(_ => ZIO.succeed(capture.setExceptionMode(false)))
     .flatMap { _ =>
@@ -133,7 +203,12 @@ def frameStream(capture: VideoCapture): ZStream[Any, Throwable, Mat] =
   * into a releasing stage — `.mapZIO(m => m.use(process))` — rather than buffering the `Managed`s (`.buffer`,
   * `.grouped`, `runCollect` without prior release) across an interruptible boundary. When you want the stream
   * itself to own and release each frame, reduce it inside the stream on [[frameStream]] instead, whose one
-  * reused buffer is tied to the stream's scope and released on interruption.
+  * reused buffer is tied to the stream's scope and released when the stream unwinds, interruption included —
+  * though not before any in-flight native `read` has returned, for the reason [[frameStream]]'s scaladoc
+  * gives.
+  *
+  * The open-capture check of [[frameStream]] applies here too: this fails rather than yielding nothing when
+  * `capture` never opened.
   */
 def framesCopied(capture: VideoCapture)(using Releasable[Mat]): ZStream[Any, Throwable, Managed[Mat]] =
   frameStream(capture).map(frame => Managed(frame.clone()))

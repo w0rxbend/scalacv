@@ -38,7 +38,7 @@ import org.opencv.photo.Photo
  * half-built destination Mat is released before the throw propagates, so a failed op leaks nothing.
  */
 
-/** The destination depth for the derivative operators.
+/** The destination depth for the operators that can change it — the derivative operators, and [[normalize]].
   *
   * Worth a type of its own rather than a bare `int` because [[OutputDepth.SameAsSource]] is a trap on the
   * commonest input: `Sobel` on an 8-bit unsigned image with `ddepth = -1` clips every negative derivative to
@@ -65,6 +65,8 @@ extension (self: Mat)
     * `kernel` may be `Size(0, 0)`, in which case OpenCV derives the kernel from the sigmas; otherwise both
     * extents must be positive and odd. A `sigmaY` of 0 means "same as `sigmaX`", which is OpenCV's own
     * default and not a degenerate value.
+    *
+    * `border` may not be [[BorderType.Wrap]] — see [[BorderType.requireFilterSupport]].
     */
   def gaussianBlur(
       kernel: Size,
@@ -78,6 +80,7 @@ extension (self: Mat)
   ): Managed[Mat] =
     Mats.requireKernel("gaussianBlur", kernel, allowZero = true)
     require(sigmaX > 0 || kernel.width > 0, "gaussianBlur needs either a positive sigmaX or a real kernel")
+    BorderType.requireFilterSupport("gaussianBlur", border)
     Mats.produce("gaussianBlur"):
       Imgproc.GaussianBlur(self, _, kernel.toCv, sigmaX, sigmaY, border.cvValue)
 
@@ -87,6 +90,8 @@ extension (self: Mat)
     * a mid-level method sharing that name would silently switch filter families (and output hash) the moment
     * a caller drops from `image.blur(2)` to `image.mat.blur(...)`. The two are different algorithms; the
     * names say so.
+    *
+    * `border` may not be [[BorderType.Wrap]] — see [[BorderType.requireFilterSupport]].
     */
   def boxBlur(
       kernel: Size,
@@ -94,6 +99,7 @@ extension (self: Mat)
       border: BorderType = BorderType.Reflect101
   ): Managed[Mat] =
     Mats.requireKernel("boxBlur", kernel, allowZero = false)
+    BorderType.requireFilterSupport("boxBlur", border)
     Mats.produce("boxBlur")(Imgproc.blur(self, _, kernel.toCv, anchor.toCv, border.cvValue))
 
   /** Canny edge detection. The result is always `CV_8UC1` regardless of the source type.
@@ -116,7 +122,8 @@ extension (self: Mat)
 
   /** Sobel derivative.
     *
-    * See [[OutputDepth]] before leaving `depth` at its default on an 8-bit image.
+    * See [[OutputDepth]] before leaving `depth` at its default on an 8-bit image. `border` may not be
+    * [[BorderType.Wrap]] — see [[BorderType.requireFilterSupport]].
     */
   def sobel(
       dx: Int,
@@ -132,10 +139,14 @@ extension (self: Mat)
       kernelSize == -1 || (kernelSize > 0 && kernelSize % 2 == 1),
       s"sobel kernelSize must be odd and positive, or -1 for the 3x3 Scharr kernel, not $kernelSize"
     )
+    BorderType.requireFilterSupport("sobel", border)
     Mats.produce("sobel"):
       Imgproc.Sobel(self, _, depth.cvValue, dx, dy, kernelSize, scale, delta, border.cvValue)
 
-  /** Laplacian. `kernelSize` of 1 is the 3x3 aperture OpenCV special-cases, and is its default. */
+  /** Laplacian. `kernelSize` of 1 is the 3x3 aperture OpenCV special-cases, and is its default.
+    *
+    * `border` may not be [[BorderType.Wrap]] — see [[BorderType.requireFilterSupport]].
+    */
   def laplacian(
       kernelSize: Int = 1,
       depth: OutputDepth = OutputDepth.SameAsSource,
@@ -147,6 +158,7 @@ extension (self: Mat)
       kernelSize > 0 && kernelSize % 2 == 1,
       s"laplacian kernelSize must be odd and positive, not $kernelSize"
     )
+    BorderType.requireFilterSupport("laplacian", border)
     Mats.produce("laplacian"):
       Imgproc.Laplacian(self, _, depth.cvValue, kernelSize, scale, delta, border.cvValue)
 
@@ -168,24 +180,56 @@ extension (self: Mat)
       maxValue: Double = 255,
       kind: Threshold = Threshold.Binary
   ): (Managed[Mat], ThresholdResult) =
+    // `Mats.produce` fills a destination and returns only that, so the `double` OpenCV computes has to be
+    // carried out of the callback by hand. It is written exactly once, before `produce` returns, so the var
+    // never outlives this expression.
     var computed = 0.0
     val out = Mats.produce("threshold"): dst =>
       computed = Imgproc.threshold(self, dst, value, maxValue, kind.cvValue)
     (out, ThresholdResult(computed))
 
-  /** Resizes to an absolute size. */
+  /** Resizes to an absolute size, given here as a [[Size]] whose two `Double` extents are **truncated toward
+    * zero** on the way into native code: `Size(1.9, 1.9)` asks for a 1×1 image.
+    *
+    * That truncation is why the check below is on the truncated integers and not on the doubles. A computed
+    * target such as `Size(width * factor, height * factor)` with a small factor lands between 0 and 1, which
+    * is positive as a `Double` but empty as a `cv::Size`, and OpenCV then aborts with
+    * `CV_Assert(inv_scale_x > 0)` — a `CvError.NativeCall` quoting a C++ expression, in place of the
+    * [[IllegalArgumentException]] naming the caller's own argument that this file promises for a zero target
+    * size. Checking after truncation is what `Mats.requireKernel` already does for kernels.
+    */
   def resize(size: Size, interpolation: Interpolation = Interpolation.Linear): Managed[Mat] =
-    require(size.width > 0 && size.height > 0, s"resize needs a non-empty target size, got $size")
+    val w = size.width.toInt
+    val h = size.height.toInt
+    require(w > 0 && h > 0, s"resize needs a target of at least 1x1 pixel; $size truncates to ${w}x$h")
     Mats.produce("resize"):
       Imgproc.resize(self, _, size.toCv, 0, 0, interpolation.cvValue)
 
-  /** Resizes by independent x and y scale factors.
+  /** Resizes by independent x and y scale factors. Rejects a pair of factors that would round this Mat's own
+    * size down to an empty one.
     *
     * A separate method rather than an overload because OpenCV distinguishes the two modes by passing
     * `Size(0, 0)` — a sentinel that has no business in a typed API.
+    *
+    * Positive factors are not on their own enough to know the call is legal: OpenCV derives the destination
+    * from the receiver as `cvRound(cols * fx)` × `cvRound(rows * fy)` and then asserts `!dsize.empty()`, so
+    * shrinking a small image hard enough (a 100-pixel sprite at `fx = 0.005`) dies in native code. The check
+    * therefore has to be against the receiver's extent, not against the factors.
+    *
+    * `math.rint` and not `.toInt` or `math.round`, because `cvRound` rounds half **to even**: on a 100-wide
+    * source `fx = 0.006` legitimately yields a 1-pixel result that truncation would reject, and `fx = 0.025`
+    * yields 2 where `math.round` says 3. Note the asymmetry with [[resize]], where the destination arrives as
+    * a `cv::Size` and is truncated instead — the two native paths genuinely round differently, so one shared
+    * rule would be wrong for one of them.
     */
   def scaled(fx: Double, fy: Double, interpolation: Interpolation = Interpolation.Linear): Managed[Mat] =
     require(fx > 0 && fy > 0, s"scaled needs positive factors, got fx=$fx fy=$fy")
+    val w = math.rint(self.cols * fx).toInt
+    val h = math.rint(self.rows * fy).toInt
+    require(
+      w > 0 && h > 0,
+      s"scaled by fx=$fx fy=$fy shrinks ${self.cols}x${self.rows} to ${w}x$h, which is empty"
+    )
     Mats.produce("scaled"):
       Imgproc.resize(self, _, Size(0, 0).toCv, fx, fy, interpolation.cvValue)
 
@@ -286,12 +330,11 @@ extension (self: Mat)
     * `intrinsics.distortion` is empty. See [[Calibration]].
     */
   def undistorted(intrinsics: Intrinsics): Managed[Mat] =
-    val camera = intrinsics.cameraMatrix
-    val dist = intrinsics.distCoeffs
-    try Mats.produce("undistort")(dst => Calib3d.undistort(self, dst, camera, dist))
-    finally
-      try camera.release()
-      finally dist.release()
+    Managed.scope: own =>
+      val camera = own(intrinsics.cameraMatrix)
+      val dist = own(intrinsics.distCoeffs)
+      // The destination is deliberately NOT owned by the scope — it is what this method hands back.
+      Mats.produce("undistort")(dst => Calib3d.undistort(self, dst, camera, dist))
 
   /** Adds a border (padding) of the given pixel widths on each side. */
   def border(
@@ -353,11 +396,28 @@ extension (self: Mat)
   def masked(mask: Mat): Managed[Mat] =
     Mats.produce("masked")(Core.bitwise_and(self, self, _, mask))
 
-  /** Linearly rescales values into `[alpha, beta]` (min-max normalisation). Useful for stretching contrast or
-    * bringing a float result back into a displayable range.
+  /** Linearly rescales values into `[alpha, beta]` (min-max normalisation) and hands the result back at
+    * `depth`. Useful for stretching contrast, and the standard way of bringing a non-8-bit result — a
+    * disparity map, a distance transform, a float Sobel response — into a displayable range.
+    *
+    * `depth` defaults to [[OutputDepth.Unsigned8]] rather than to OpenCV's own `dtype = -1`, which means
+    * "same depth as the source". With `-1` a `CV_32F` input rescaled to `[0, 255]` comes back as a `CV_32F`
+    * holding the values 0..255, so the second half of the job — making it displayable — never happened:
+    * [[Image.toBufferedImage]] rejects it, `applyColorMap` ([[colorMap]]) aborts in native code because it
+    * takes `CV_8UC1`/`CV_8UC3` only, and `imwrite` only survives it by silently coercing behind our back. For
+    * an already-8-bit source `Unsigned8` and `-1` are the same conversion, so a plain contrast stretch is
+    * unaffected by the default.
+    *
+    * Pass [[OutputDepth.SameAsSource]] for a stretch that must keep the source's precision — rescaling a
+    * float image into `[0, 1]` for a model's input, for instance, where 8-bit would collapse the range onto
+    * 256 levels.
     */
-  def normalize(alpha: Double = 0, beta: Double = 255): Managed[Mat] =
-    Mats.produce("normalize")(Core.normalize(self, _, alpha, beta, Core.NORM_MINMAX))
+  def normalize(
+      alpha: Double = 0,
+      beta: Double = 255,
+      depth: OutputDepth = OutputDepth.Unsigned8
+  ): Managed[Mat] =
+    Mats.produce("normalize")(Core.normalize(self, _, alpha, beta, Core.NORM_MINMAX, depth.cvValue))
 
   /** Extracts a single channel as its own image. */
   def extractChannel(index: Int): Managed[Mat] =
@@ -467,22 +527,21 @@ extension (self: Mat)
     */
   def deskew(maxAngle: Double = 45.0): Managed[Mat] =
     require(maxAngle > 0 && maxAngle <= 90, s"maxAngle must be in (0, 90], got $maxAngle")
-    val binarised =
-      val gray =
-        if self.channels >= 3 then self.cvtColor(ColorConversion.BgrToGray) else Managed(self.clone())
-      gray.pipe(_.threshold(0, 255, Threshold.otsu(Threshold.Mode.BinaryInv))._1) // text becomes white
-    binarised.use: bin =>
-      val coords = Mat()
-      try
-        Cv.orThrow("deskew")(Core.findNonZero(bin, coords))
-        if coords.rows == 0 then Managed(self.clone()) // a blank page — nothing to straighten
-        else
-          Managed.use(org.opencv.core.MatOfPoint2f()): pts =>
-            Cv.orThrow("deskew")(coords.convertTo(pts, CvType.CV_32F))
-            val skew = normalizeSkew(Cv.orThrow("deskew")(Imgproc.minAreaRect(pts)).angle)
-            if math.abs(skew) < 0.1 || math.abs(skew) > maxAngle then Managed(self.clone())
-            else deskewRotate(self, skew)
-      finally coords.release()
+    // The scope owns the working Mats; the rotated result this returns is allocated outside it and escapes.
+    Managed.scope: own =>
+      // Otsu-inverted, so the text becomes white and `findNonZero` reads the ink rather than the page.
+      val bin = own.adopt(
+        Mats.grayscale(self).pipe(_.threshold(0, 255, Threshold.otsu(Threshold.Mode.BinaryInv))._1)
+      )
+      val coords = own(Mat())
+      Cv.orThrow("deskew")(Core.findNonZero(bin, coords))
+      if coords.rows == 0 then Managed(self.clone()) // a blank page — nothing to straighten
+      else
+        val pts = own(org.opencv.core.MatOfPoint2f())
+        Cv.orThrow("deskew")(coords.convertTo(pts, CvType.CV_32F))
+        val skew = normalizeSkew(Cv.orThrow("deskew")(Imgproc.minAreaRect(pts)).angle)
+        if math.abs(skew) < 0.1 || math.abs(skew) > maxAngle then Managed(self.clone())
+        else deskewRotate(self, skew)
 
   /** Folds a `minAreaRect` angle into the equivalent tilt in `(-45, 45]`. */
   private def normalizeSkew(angle: Double): Double =
@@ -580,6 +639,27 @@ object Mats:
         dst.release()
         throw e
 
+  /** A single-channel greyscale version of `mat`, owned by the caller.
+    *
+    * Almost every algorithm that is not about colour — corner detection, optical flow, stereo matching, ORB,
+    * template differencing, chessboard detection, deskewing — starts by reducing to one channel, and each has
+    * to cope with being handed an image that is *already* one channel. This is that step, in one place: it
+    * used to be copied verbatim into seven files, which is seven chances for one of them to drift on the
+    * question below and no way to notice.
+    *
+    * The question is what to do when the input is already grey, and the answer is **clone**, not "hand the
+    * receiver back". Every op in this file returns a Mat the caller owns and must release; a `Managed`
+    * wrapping the borrowed receiver would look identical at the call site and would free an image belonging
+    * to someone else the moment the `use` block ended — a caller's frame, a detector's input. One extra copy
+    * on an already-grey image is the price of a uniform ownership rule, and the alternative is a
+    * use-after-free that only appears on greyscale input.
+    *
+    * `channels >= 3` rather than `== 3`: a BGRA frame converts through the same `BGR2GRAY`, which ignores the
+    * fourth channel.
+    */
+  private[scalacv] def grayscale(mat: Mat): Managed[Mat] =
+    if mat.channels >= 3 then mat.cvtColor(ColorConversion.BgrToGray) else Managed(mat.clone())
+
   /** Reads the top-left `r`×`c` block of a `CV_64F` Mat into plain Scala rows — for lifting a small solver
     * result (a rotation, a camera matrix) out of native memory into immutable data. The Mat is borrowed.
     */
@@ -591,6 +671,24 @@ object Mats:
     */
   private[scalacv] def readColumn(mat: Mat, r: Int): Seq[Double] =
     (0 until r).map(i => mat.get(i, 0)(0))
+
+  /** The inverse of [[readColumn]]: `values` as a caller-owned `n`×1 `CV_64F` Mat, for handing a small vector
+    * — a Rodrigues rotation, a translation — back to a native solver.
+    *
+    * The write is guarded because it is the one step that can fail after the allocation: between a bare
+    * `Mat(...)` and the caller taking ownership there is nobody to free it, so a throwing `put` would strand
+    * a native buffer no one ever saw.
+    */
+  private[scalacv] def column(values: Seq[Double]): Mat =
+    require(values.nonEmpty, "a column Mat needs at least one value")
+    val m = Mat(values.size, 1, CvType.CV_64F)
+    try
+      m.put(0, 0, values*): Unit
+      m
+    catch
+      case e: Throwable =>
+        m.release()
+        throw e
 
   /** Shared kernel validation. OpenCV's own check lives in native code and aborts with a `CvException`
     * quoting a C++ expression; failing here names the parameter the caller actually passed.

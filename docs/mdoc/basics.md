@@ -27,7 +27,7 @@ canvas.close()
 (w, h, ch) // 320 wide, 240 tall, 3 channels (colour)
 ```
 
-:::note Width × height, but rows × cols underneath
+:::note[Width × height, but rows × cols underneath]
 You think in `width × height` (320 × 240). The underlying `Mat` thinks in `rows × cols` (240 rows × 320 cols) — rows are the height. scalacv's high-level API speaks width/height; you only meet rows/cols if you drop to the raw `Mat`.
 :::
 
@@ -68,7 +68,7 @@ val blue = Scalar.Blue    // == Scalar(255, 0, 0)
 (red, green, blue)
 ```
 
-:::tip You rarely hand-write channel order
+:::tip[You rarely hand-write channel order]
 Use the named `Scalar.Red` / `Green` / `Blue` / `Black` / `White` constants and you never have to remember the order. You only think about BGR when reading raw pixel values or converting to another library's RGB.
 :::
 
@@ -109,7 +109,7 @@ Each channel value is stored in a numeric type. The everyday one is **8-bit unsi
 CvType.typeToString(CvType.CV_8UC3) // 8-bit Unsigned, 3 Channels — a normal colour image
 ```
 
-:::warning A 16-bit or float image won't display directly
+:::warning[A 16-bit or float image won't display directly]
 Anything that isn't 8-bit has to be brought back to `CV_8U` before you save or show it — `normalize` rescales the range to 0–255, `colorMap` renders it in false colour. See [Image processing](/image-processing).
 :::
 

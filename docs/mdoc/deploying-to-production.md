@@ -48,7 +48,7 @@ Native pixel buffers live off-heap, so `-Xmx` does **not** bound them. Set a phy
 java -Xmx512m -Dorg.bytedeco.javacpp.maxPhysicalBytes=1G -jar app.jar
 ```
 
-:::danger Don't gate on `maxBytes` alone
+:::danger[Don't gate on `maxBytes` alone]
 `-Dorg.bytedeco.javacpp.maxBytes` is checked against `Pointer.totalBytes()`, which is **blind** to scalacv's `org.opencv.core.Mat` buffers — a Mat leak sails right past it. Use `maxPhysicalBytes` (RSS-based). See [Performance](/performance#measuring-memory-do-it-right).
 :::
 

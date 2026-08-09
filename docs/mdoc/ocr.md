@@ -15,7 +15,7 @@ engine itself — Tesseract, a cloud OCR — stays a dependency *you* add, becau
 separately-licensed native library that has no place inside a thin OpenCV wrapper. Wiring one in is a few
 lines (below).
 
-:::tip The shortest possible OCR
+:::tip[The shortest possible OCR]
 `Ocr.read(image, engine).text` — that one call greyscales, denoises, thresholds and deskews the image for
 you, then hands the clean result to your `engine`. The only decision you make is *which* engine.
 :::
@@ -73,7 +73,7 @@ val custom = scan().forOcr(denoise = 0, blockSize = 11, c = 8)
 custom.close()
 ```
 
-:::note Build your own variant
+:::note[Build your own variant]
 `forOcr` is just a convenience composition — the individual steps are all first-class on `Image`, so you
 can assemble a bespoke pipeline (`scan().gray.medianBlur(1).adaptiveThreshold(...).deskew()`) when the
 defaults do not fit. See [image processing](/image-processing) and [colour masking](/color-masking).
@@ -129,7 +129,7 @@ val text = Ocr.read(ready, engine, preprocess = false).text
 ready.close()                        // preprocess = false borrows; the caller still closes
 ```
 
-:::warning Who closes what
+:::warning[Who closes what]
 `Ocr.read` **borrows** the `image` you pass and never closes it — the prepared *copy* it makes internally
 (when `preprocess = true`) is the only thing it frees. Your original is yours to `close()`, as with every
 borrowing API in the library.
@@ -206,7 +206,7 @@ Image.read("receipt.jpg").map { img =>
 }
 ```
 
-:::note Why Tesseract is not bundled
+:::note[Why Tesseract is not bundled]
 Tesseract pulls its own native libraries and multi-megabyte `*.traineddata` files per language, and is
 GPL-adjacent — exactly the kind of heavy, opinionated dependency a wrapper should let you *choose* rather
 than impose. Keeping it behind the `OcrEngine` seam means scalacv stays a thin OpenCV layer and you pick

@@ -1,5 +1,7 @@
 # Tutorial: run a neural network (ONNX)
 
+**Needs: `scalacv` + `scalacv-vision`.** `Dnn`, `image.segment` and `image.blurBackground` are defined in the **vision** module, not the core one, so the core dependency alone will not compile this page. Both dependency lines are on [Getting started](/getting-started).
+
 Running a trained neural network sounds intimidating, but the shape is always the same four steps: **image → blob → forward → decode**. This tutorial walks each one, so you can drop any ONNX model — a classifier, a detector, a segmenter — into scalacv. We'll finish with the one-call helper that hides the whole thing when a model is common enough.
 
 Networks need a model file, so these snippets are `compile-only` — bring your own `.onnx` to run them.
@@ -57,7 +59,7 @@ Image.reading("input.jpg") { img =>
 }
 ```
 
-:::warning Match the model's numbers exactly
+:::warning[Match the model's numbers exactly]
 Wrong `size`, `scaleFactor`, `mean`, or `swapRB` won't error — the net just returns garbage. These four values come from how the model was trained; copy them from its model card.
 :::
 

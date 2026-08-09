@@ -13,7 +13,7 @@ model**, and scalacv gives you the typed result, the decode from the raw tensor,
 There is one exception that needs no model at all — **head pose** reuses the five landmarks a face
 detector already hands you — and we finish there because it is the part you can run today.
 
-:::note bring your own weights
+:::note[bring your own weights]
 scalacv does **not** bundle a pose model. Nothing on this page downloads one for you. Where a snippet
 needs weights it is marked `compile-only` and assumes a `Net` you loaded yourself with
 [`Dnn.fromOnnx`](/dnn).
@@ -209,7 +209,7 @@ val heatmapOut: Mat = ??? // from Dnn.forward(net, blob)
 val alsoBody = PoseEstimator.decode(heatmapOut, Size(1280, 720), KeypointLayout.Heatmap)
 ```
 
-:::warning shape mismatches are named, not cryptic
+:::warning[shape mismatches are named, not cryptic]
 `decode` validates the tensor before it reshapes it. A `Regression` output that is not `K × (y, x, score)`
 values, or a `Heatmap` output that is not 4-D `[1, K, H, W]`, raises a `CvError.NativeCall` that *names*
 the mismatch ("this is not the regression pose model this topology decodes") rather than letting OpenCV
@@ -290,7 +290,7 @@ ends clear `minScore`) and a dot per confident keypoint. Like every `draw*` on [
 | `color` | `Scalar.Green` | the bone line colour |
 | `jointColor` | `Scalar.Red` | the keypoint dot colour |
 
-:::danger move semantics
+:::danger[move semantics]
 `drawSkeleton` consumes its receiver. If you need both the annotated frame *and* the clean one, take a
 `.copy` first — reusing a consumed `Image` throws `IllegalStateException`. See [Mat lifecycle](/mat-lifecycle).
 :::
@@ -318,7 +318,7 @@ Dnn.fromOnnx("models/hand_landmark.onnx").flatMap { managedNet =>
 A decoded `Hand21` pose is exactly the input the [gesture recogniser](/gestures) reads — that page turns
 this pose into a named `HandGesture`.
 
-:::note the format is the bring-your-own part
+:::note[the format is the bring-your-own part]
 MediaPipe's hand model is TFLite, which OpenCV's DNN module does not read. Convert it to ONNX first (for
 example via `tf2onnx`), or use any hand-landmark network already exported to ONNX. This is the same
 constraint as the body models above — the format is what you supply, not the API.
@@ -390,7 +390,7 @@ val intrinsics = Intrinsics.approx(Size(200, 200), horizontalFovDegrees = 60)
 HeadPose.estimate(frontal, intrinsics).map(_.roll)
 ```
 
-:::warning indicative, not metric
+:::warning[indicative, not metric]
 The 3D reference is an **approximate** generic head. Even with the calibrated overload, the angles are
 **indicative** — trust them for "looking left / up / tilted", not for a number in degrees you would put on
 a chart. For a calibrated-metric result you want a dedicated head-pose network run through [DNN](/dnn) and

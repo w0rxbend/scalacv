@@ -42,7 +42,11 @@ object OpenCv:
       val platform = Loader.getPlatform
       val extracted =
         Loader.cacheResources(classOf[org.bytedeco.opencv.opencv_java], s"/org/bytedeco/opencv/$platform/")
-      val all = extracted.iterator.flatMap(collectLibs).toVector
+      // Each extracted entry anchors its own containment root, so a library is kept only if it really
+      // lives inside the directory javacpp extracted it to — see [[withinRoot]].
+      val all = extracted.iterator
+        .flatMap(e => collectLibs(if e.isDirectory then e else e.getParentFile, e))
+        .toVector
       val (jni, modules) = all.partition(_.getName.contains(JniName))
       val payload = modules.map(f => f.getName -> f).toMap
 
@@ -82,7 +86,13 @@ object OpenCv:
     * retry-load is used instead — and it is *safe* there for the reason it is not on Linux: the Windows DLL
     * names embed the version (`opencv_core4130.dll`, not `opencv_core.dll`), so a bulk load cannot silently
     * bind a different major version's DLL from the system, and `opencv_highgui` links only the OS-provided
-    * USER32/GDI32, which are always present.
+    * USER32/GDI32, which are always present. The bulk fallback is gated on the platform for exactly that
+    * reason — see [[bulkLoadIsSafe]] — because "the message named no library" is *not* a Windows-only
+    * condition: a cross-classloader conflict, an undefined symbol, a `noexec` cache mount or an architecture
+    * mismatch all produce messages [[missingSoname]] cannot parse, on every platform.
+    *
+    * Throws the `UnsatisfiedLinkError` or a [[CvError.NativesMissing]] describing the first dependency it
+    * cannot satisfy; off Windows an unparseable error is rethrown as-is rather than bulk-loaded around.
     */
   private def satisfy(target: File, payload: Map[String, File]): Unit =
     val loaded = scala.collection.mutable.Set.empty[String]
@@ -118,8 +128,15 @@ object OpenCv:
               attempt(() => Loader.loadGlobal(dep.getAbsolutePath), dep.getName, "")
               attempt(load, what, missing)
             case None =>
-              // The error named no library (Windows). Bulk-load the payload once, then retry.
-              // If we have already bulk-loaded and still cannot satisfy the shim, it is a real error.
+              // The error named no library. Only Windows reaches here legitimately, and only there is a
+              // bulk load safe; everywhere else an unparseable message means the shim failed for a reason
+              // no amount of extra loading can fix (already loaded in another classloader, undefined
+              // symbol, noexec mount, wrong ELF class), and sweeping the payload with RTLD_GLOBAL would
+              // map a system OpenCV of a different major version over ours — the crash described above.
+              // So off Windows the original error is rethrown untouched.
+              if !bulkLoadIsSafe(Loader.getPlatform) then throw e
+              // Bulk-load the payload once, then retry. If we have already bulk-loaded and still cannot
+              // satisfy the shim, it is a real error.
               if bulkTried then throw e
               bulkTried = true
               bulkLoad(payload.values)
@@ -127,11 +144,25 @@ object OpenCv:
 
     attempt(() => System.load(target.getAbsolutePath), target.getName, "")
 
+  /** Whether the speculative bulk load is safe on `platform`, which is a javacpp platform string such as
+    * `linux-x86_64`, `macosx-arm64` or `windows-x86_64`.
+    *
+    * Windows only. Its DLL names embed the major version (`opencv_core4130.dll`), so `LoadLibrary` cannot
+    * silently bind a system OpenCV of a different major version; the ELF and Mach-O payloads ship
+    * *unversioned* names (`libopencv_core.so`) that the dynamic linker will happily resolve against whatever
+    * the host has installed, which is the ABI-mixing crash [[satisfy]] describes.
+    *
+    * Fails closed: an absent or unrecognised platform string means "not safe", because the cost of wrongly
+    * declining is a clear error and the cost of wrongly allowing is a SIGSEGV with no Java stack trace.
+    */
+  private[scalacv] def bulkLoadIsSafe(platform: String | Null): Boolean =
+    Option(platform).exists(_.startsWith("windows"))
+
   /** Loads every library in `libs`, retrying until a whole pass makes no progress.
     *
-    * Only used on Windows, where the linker error is uninformative. Failures are tolerated: link order is a
-    * DAG we do not know, so a library that fails on one pass may succeed on the next once its dependencies
-    * are in, and `highgui` failing is not fatal.
+    * Only used on Windows — [[bulkLoadIsSafe]] is the gate — where the linker error is uninformative.
+    * Failures are tolerated: link order is a DAG we do not know, so a library that fails on one pass may
+    * succeed on the next once its dependencies are in, and `highgui` failing is not fatal.
     */
   private def bulkLoad(libs: Iterable[File]): Unit =
     var remaining = libs.toList
@@ -150,6 +181,10 @@ object OpenCv:
     * Linux: `libopencv_xphoto.so.413: cannot open shared object file: No such file or directory` macOS:
     * `Library not loaded: @rpath/libopencv_highgui.413.dylib` Windows: `Can't find dependent libraries` — no
     * name, so this returns None and [[satisfy]] falls back to a bulk load (safe there; see its comment).
+    *
+    * `None` does not mean "Windows". Any message this cannot parse yields it, including several that only
+    * ever occur on Linux or macOS, which is why [[satisfy]] gates the bulk fallback on [[bulkLoadIsSafe]]
+    * rather than on this returning `None`.
     */
   private[scalacv] def missingSoname(message: String | Null): Option[String] =
     Option(message).flatMap: m =>
@@ -160,11 +195,35 @@ object OpenCv:
   private def baseName(soname: String): String =
     soname.split("/").last
 
-  /** javacpp hands back a mix of files and directories depending on the resource layout. */
-  private def collectLibs(f: File): Seq[File] =
-    if f.isDirectory then Option(f.listFiles).toSeq.flatten.flatMap(collectLibs)
-    else if isNativeLib(f.getName) then Seq(f)
+  /** javacpp hands back a mix of files and directories depending on the resource layout. `root` is the
+    * directory the walk started in; libraries that escape it are dropped — see [[withinRoot]].
+    */
+  private[scalacv] def collectLibs(root: File | Null, f: File): Seq[File] =
+    if f.isDirectory then Option(f.listFiles).toSeq.flatten.flatMap(collectLibs(root, _))
+    else if isNativeLib(f.getName) && withinRoot(root, f) then Seq(f)
     else Seq.empty
+
+  /** Whether `f` really lives under `root`, with symlinks resolved.
+    *
+    * The extracted payload is not all regular files. javacpp materialises the unversioned aliases as
+    * symlinks, and on a machine with OpenCV already installed one of them can point straight out of the
+    * cache: on the machine this was found on, `libopencv_highgui.so` → `/usr/lib/libopencv_highgui.so.5.0.0`
+    * — whose own `NEEDED` entries name OpenCV **5.x** core, imgproc and imgcodecs. Handing that path to the
+    * dynamic linker is the ABI-mixing crash [[satisfy]] describes, so an entry that escapes the directory
+    * javacpp extracted never enters the payload map in the first place. Defence in depth behind
+    * [[bulkLoadIsSafe]]: the demand-driven path only ever looks up versioned sonames, which these aliases are
+    * not, but nothing in the types says it must stay that way.
+    *
+    * A `null` root (an extracted entry sitting at the filesystem root) cannot be judged, so it is allowed; a
+    * path that cannot be canonicalised at all is dropped, because a library the filesystem will not resolve
+    * is not one worth loading.
+    */
+  private[scalacv] def withinRoot(root: File | Null, f: File): Boolean =
+    root match
+      case null => true
+      case r =>
+        try f.getCanonicalPath.startsWith(r.getCanonicalPath + File.separator)
+        catch case _: java.io.IOException => false
 
   /** The library-name prefix comes from javacpp rather than being hardcoded, because Windows has none: module
     * libraries are `libopencv_core.so.413` on Linux, `libopencv_core.413.dylib` on macOS and
@@ -182,19 +241,45 @@ object OpenCv:
   /** The natives are not on the classpath — which, for a consumer, is the expected state until they add the
     * dependency for their platform. Tell them exactly what to add, for the platform they are actually on,
     * rather than making them find it.
+    *
+    * One failure wears this exception's clothes without being this failure: a JVM refuses to map the same
+    * native file twice, so a second classloader loading scalacv throws `UnsatisfiedLinkError: … already
+    * loaded in another classloader` even though the jars are right there. Advising that user to add
+    * dependencies they demonstrably already have sends them down a dead end, so that message gets its own
+    * text.
     */
-  private def nativesMissingHelp(cause: String): String =
+  private def nativesMissingHelp(cause: String | Null): String =
+    if Option(cause).exists(_.contains("already loaded in another classloader")) then
+      s"""The OpenCV natives are on the classpath but another classloader in this JVM has already
+         |loaded them ($cause).
+         |
+         |A JVM maps a given native library file into exactly one classloader, so the second one to
+         |ask gets this error. Loading a second copy is not an option either: two copies of
+         |libopencv_java each keep their own globals, and a Mat allocated by one is meaningless to the
+         |other. Load scalacv from a classloader both sides share — in a servlet container that means
+         |the container's shared/common library directory rather than each web application's
+         |WEB-INF/lib; in OSGi, a single bundle that exports scalacv rather than one copy per
+         |bundle.""".stripMargin
+    else nativesNotOnClasspathHelp(cause)
+
+  /** The genuine "add the dependency" case, split out so the classloader message above reads as prose. */
+
+  private def nativesNotOnClasspathHelp(cause: String | Null): String =
     val plat =
       try Loader.getPlatform
-      catch case _: Throwable => "<your-platform>"
+      catch
+        case _: Throwable => "<your-platform>"
+    // The versions come from Build, which is generated from the build's own Deps block: a hard-coded
+    // number here would keep telling users to add whatever release was current when this text was
+    // written, which for a "your classpath is wrong" message is the one thing it must not do.
     s"""OpenCV natives are not on the classpath ($cause).
        |
        |scalacv depends on the classifier-less OpenCV Java API only, because a build tool cannot
        |express a per-platform classifier in a published POM. Add the natives for your platform:
        |
-       |  "org.bytedeco" % "opencv"   % "4.13.0-1.5.13" classifier "$plat"
-       |  "org.bytedeco" % "openblas" % "0.3.31-1.5.13" classifier "$plat"
+       |  "org.bytedeco" % "opencv"   % "${Build.openCvArtifactVersion}" classifier "$plat"
+       |  "org.bytedeco" % "openblas" % "${Build.openBlasArtifactVersion}" classifier "$plat"
        |
        |Both lines are needed: libopencv_core links libopenblas. If you would rather not pick a
-       |platform, "org.bytedeco" % "opencv-platform" % "4.13.0-1.5.13" bundles every one, at a
-       |cost of about 408 MB.""".stripMargin
+       |platform, "org.bytedeco" % "opencv-platform" % "${Build.openCvArtifactVersion}" bundles every
+       |one, at a cost of about 408 MB.""".stripMargin

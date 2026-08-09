@@ -64,7 +64,10 @@ plain-JVM harness, not JMH — the annotation processor is awkward under Mill 1.
 natives, and the wins here are large next to timer noise). `BenchImages.hash` is the
 pixel-exact regression key: an optimized path must hash identically to the baseline unless a
 deviation is intentional and documented. Absolute `µs` are machine-specific — quote the
-delta, and put it in the commit message. See `PERF-scalacv.md` for the standing report.
+delta, and put it in the commit message. The standing record of every measured win, every
+optimization that was measured and rejected, and the known headroom left in place is the
+[Benchmark results](docs/mdoc/benchmark-results.md) guide (published at `/benchmark-results`) —
+add your numbers there in the same pull request.
 
 ## Documentation
 

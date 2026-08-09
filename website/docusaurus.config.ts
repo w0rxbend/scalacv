@@ -87,7 +87,12 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: 'img/docusaurus-social-card.jpg',
+    // The Open Graph / Twitter card, used whenever a link to this site is unfurled. It was the
+    // stock Docusaurus template card, which announced the framework rather than the project.
+    // Regenerate after a branding change by rendering scripts/social-card.html headless at
+    // 1200x630 with a device scale factor of 2 — the source is checked in so the card is
+    // reproducible rather than an unexplained binary.
+    image: 'img/social-card.png',
     colorMode: {
       respectPrefersColorScheme: true,
     },

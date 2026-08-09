@@ -25,6 +25,12 @@ import org.opencv.dnn.{Dnn as CvDnn, Net}
   * `Net` cannot be driven from two threads concurrently — [[forward]] does both in one call precisely so that
   * the window between them is not something a caller can accidentally widen, but it is still not a lock. One
   * `Net` per thread, or serialise access yourself.
+  *
+  * That statefulness reaches the results too, and this is where OpenCV would otherwise hand back a nasty
+  * surprise: `Net.forward` returns a header onto the layer's own output buffer, which the next pass
+  * overwrites. [[forward]] copies before it returns, so holding two outputs from one `Net` — this frame's
+  * heatmap against the previous frame's, or `frames.map(f => Dnn.forward(net, blob(f)))` — means what it
+  * looks like it means.
   */
 object Dnn:
 
@@ -144,7 +150,9 @@ object Dnn:
     *   `net.getUnconnectedOutLayersNames`, and note that these are *blob* names, which for an ONNX import are
     *   the graph's declared outputs and not the `onnx_node!…` layer names.
     * @return
-    *   a caller-owned output blob. Its shape is the network's, not the input's.
+    *   a caller-owned output blob — an independent copy rather than a view onto the network's internals, so
+    *   it keeps its values when the same `Net` is forwarded again. Its shape is the network's, not the
+    *   input's.
     * @throws IllegalArgumentException
     *   if the net has no layers or the blob is empty — both are programmer errors that OpenCV would otherwise
     *   report from native code with no reference to the call site.
@@ -155,6 +163,19 @@ object Dnn:
     require(!net.empty(), "Dnn.forward needs a network with at least one layer")
     require(!blob.empty(), "Dnn.forward needs a non-empty input blob")
     Cv.orThrow("Net.setInput")(net.setInput(blob))
-    Managed(Cv.orThrow("Net.forward")(outputName match
+    // `Net.forward` hands back a header onto the layer's *own* output blob, not a copy: the generated JNI
+    // wraps the returned `cv::Mat` with `new Mat(_retval_)`, which shares the pixel buffer, and OpenCV's dnn
+    // blob manager reuses that same allocation for the next pass of the same shape. Measured on 4.13.0: two
+    // forwards from one `Net` returned the identical `dataAddr`, and the second rewrote the first result's
+    // pixels in place — so a caller diffing this frame's output against the previous frame's got zero, every
+    // time, with nothing thrown. `release()` on such a header frees nothing either, because the `Net` still
+    // holds a reference to the buffer. Copying once here is what makes the returned handle the unique owner
+    // this file documents, and the borrowed header is released immediately so its refcount does not linger
+    // until GC. Rejected: handing out a borrowed view type that pins the `Net`, which would introduce a
+    // second ownership model for the sake of one method. The copy is a single memcpy of the output blob,
+    // negligible beside the forward pass that produced it.
+    val borrowed = Cv.orThrow("Net.forward")(outputName match
       case Some(name) => net.forward(name)
-      case None => net.forward()))
+      case None => net.forward())
+    try Mats.produce("Net.forward output copy")(dst => borrowed.copyTo(dst))
+    finally borrowed.release()

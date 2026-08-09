@@ -329,8 +329,10 @@ object scalacv.Affine
 object scalacv.Animation
   extends java.lang.Object
   implements java.io.Serializable
+  def foreach$default$4(): scalacv.Color
+  def foreach(int, int, int, scalacv.Color, scala.Function1<java.lang.Object, scalacv.Picture>, scala.Function1<scalacv.Image, scala.runtime.BoxedUnit>): void
   def frames$default$4(): scalacv.Color
-  def frames(int, int, int, scalacv.Color, scala.Function1<java.lang.Object, scalacv.Picture>): scala.collection.immutable.LazyList<scalacv.Image>
+  def frames(int, int, int, scalacv.Color, scala.Function1<java.lang.Object, scalacv.Picture>): scala.collection.immutable.Seq<scalacv.Image>
   def gif$default$5(): double
   def gif$default$6(): scalacv.Color
   def gif$default$7(): boolean

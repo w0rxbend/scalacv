@@ -17,10 +17,9 @@ import org.opencv.core.{CvType, Mat}
   */
 final class OccupancyGrid private (val cols: Int, val rows: Int, val resolution: Double):
 
+  import OccupancyGrid.{Clamp, LogHit, LogMiss}
+
   private val logOdds = Array.fill(cols * rows)(0.0)
-  private val LogHit = 0.85
-  private val LogMiss = 0.4
-  private val Clamp = 4.0
 
   /** The `(column, row)` cell containing world point `(x, y)`. The grid is centred on the origin. */
   def cellOf(x: Double, y: Double): (Int, Int) =
@@ -56,14 +55,25 @@ final class OccupancyGrid private (val cols: Int, val rows: Int, val resolution:
 
   /** Renders the grid as a grayscale [[Image]]: occupied → white, free → black, unknown → mid-grey. */
   def toImage: Image =
-    val mat = Mat(rows, cols, CvType.CV_8UC1)
+    // The pixels are built before the Mat, not after. Between a raw `Mat(...)` and the `Managed` that
+    // adopts it there is no owner, so anything thrown in that window strands a native buffer — and
+    // allocating a rows×cols JVM array is exactly the kind of thing that throws (OutOfMemoryError on a
+    // large grid). Filling first leaves no window at all, which is cheaper than the try/catch that
+    // `Interop.toMat` needs for the same hazard where the order cannot be swapped.
     val bytes = new Array[Byte](rows * cols)
     var i = 0
     while i < bytes.length do
       bytes(i) = (sigmoid(logOdds(i)) * 255).toByte
       i += 1
-    mat.put(0, 0, bytes)
-    Image.wrap(Managed(mat))
+    val mat = Mat(rows, cols, CvType.CV_8UC1)
+    val handle = Managed(mat)
+    try
+      mat.put(0, 0, bytes): Unit
+      Image.wrap(handle)
+    catch
+      case e: Throwable =>
+        handle.release()
+        throw e
 
   private def sigmoid(l: Double): Double = 1.0 - 1.0 / (1.0 + math.exp(l))
 
@@ -99,6 +109,19 @@ final class OccupancyGrid private (val cols: Int, val rows: Int, val resolution:
     cells.toSeq
 
 object OccupancyGrid:
+
+  /** The log-odds a single obstacle reading adds to a cell. */
+  private val LogHit = 0.85
+
+  /** The log-odds a single see-through reading subtracts from a cell. Smaller than [[LogHit]] on purpose:
+    * seeing nothing is weaker evidence of free space than a return is of an obstacle.
+    */
+  private val LogMiss = 0.4
+
+  /** The bound each cell's log-odds is clamped to, so a long run of identical readings cannot saturate a cell
+    * beyond what a few contrary ones can undo.
+    */
+  private val Clamp = 4.0
 
   /** A `cols`×`rows` grid, each cell `resolution` world-units square, centred on the origin. */
   def apply(cols: Int, rows: Int, resolution: Double = 0.05): OccupancyGrid =
