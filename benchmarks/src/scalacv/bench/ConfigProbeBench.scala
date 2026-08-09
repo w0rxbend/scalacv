@@ -5,8 +5,12 @@ import org.opencv.core.Core
 import scalacv.*
 
 /** Probes the OpenCV runtime configuration (Track E) and measures how a heavy, internally-parallel op
-  * (bilateral filter) scales with `Core.setNumThreads`. This is the evidence behind the config guide in
-  * PERF-scalacv.md — it does not change any library code.
+  * (bilateral filter) scales with `Core.setNumThreads`. This is the evidence behind the thread-pool guidance
+  * in `docs/mdoc/performance.md` — it does not change any library code.
+  *
+  * Its numbers are deliberately not published: thread scaling is a property of the machine, not of the
+  * library, so `docs/mdoc/benchmark-results.md` (the standing record for every other benchmark here) tells
+  * readers to run this one themselves rather than quoting one machine's answer.
   *
   * Run: `./mill benchmarks.runMain scalacv.bench.ConfigProbeBench`
   */
