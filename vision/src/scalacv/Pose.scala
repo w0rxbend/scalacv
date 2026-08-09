@@ -81,6 +81,17 @@ object PoseTopology:
   * that stays valid after the frame and the network output are freed.
   */
 final case class Pose(keypoints: Seq[Keypoint], topology: PoseTopology):
+  // The topology is an index scheme over these keypoints, so the two lengths are one fact, not two.
+  // Without this check the mismatch is not caught anywhere — it surfaces later as an
+  // IndexOutOfBoundsException from `bones` (whose edge indices are validated against the *topology*) or
+  // from `GestureRecognizer.recognize` (which validates the *topology* is Hand21 and then reads 21
+  // keypoints). Both would blame the wrong line. `Pose` is public data and the documentation encourages
+  // building one by hand from your own model's output, so this is the constructor a mismatch arrives at.
+  require(
+    keypoints.size == topology.size,
+    s"a pose must have one keypoint per topology entry: got ${keypoints.size} keypoints for a " +
+      s"${topology.size}-landmark topology"
+  )
 
   /** The keypoint with this name, if the model reported it. */
   def apply(name: String): Option[Keypoint] = keypoints.find(_.name == name)

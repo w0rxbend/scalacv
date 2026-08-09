@@ -95,6 +95,16 @@ class PoseTest extends munit.FunSuite:
         assert(math.abs(hp.roll) < 20, s"a symmetric frontal face should have little roll, got $hp")
         assert(math.abs(hp.yaw) < 20, s"a symmetric frontal face should have little yaw, got $hp")
 
+  test("a pose cannot be built with fewer keypoints than its topology names"):
+    // The failure this prevents is not "a confusing value" but an IndexOutOfBoundsException thrown later,
+    // from `bones` or from GestureRecognizer, both of which index keypoints by a topology-derived index.
+    val topo = PoseTopology(Seq("a", "b", "c"), Seq((0, 1), (1, 2)))
+    val tooFew = intercept[IllegalArgumentException](Pose(Seq(Keypoint("a", Point(0, 0), 0.9f)), topo))
+    assert(tooFew.getMessage.contains("one keypoint per topology entry"), tooFew.getMessage)
+    val tooMany = intercept[IllegalArgumentException]:
+      Pose(Seq.tabulate(4)(i => Keypoint(s"k$i", Point(0, 0), 0.9f)), topo)
+    assert(tooMany.getMessage.contains("one keypoint per topology entry"), tooMany.getMessage)
+
   test("drawSkeleton renders a pose without error"):
     val pose = Pose(
       Seq(Keypoint("a", Point(10, 10), 0.9f), Keypoint("b", Point(40, 40), 0.9f)),
