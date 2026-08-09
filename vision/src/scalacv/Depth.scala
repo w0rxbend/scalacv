@@ -40,7 +40,7 @@ object StereoDepth:
           .use: r =>
             Managed(StereoSGBM.create(0, numDisparities, blockSize)).use: sgbm =>
               Managed.use(Mat()): raw => // CV_16S disparity, fixed-point
-                sgbm.compute(l, r, raw)
+                Cv.orThrow("StereoSGBM.compute")(sgbm.compute(l, r, raw))
                 // `normalize` defaults to an 8-bit result, which is exactly what a viewable disparity map
                 // needs: the raw CV_16S fixed-point values mean nothing to a display or to `colorMap`.
                 Image.wrap(raw.normalize(0, 255))

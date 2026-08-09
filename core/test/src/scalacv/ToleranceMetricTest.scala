@@ -7,8 +7,8 @@ import org.opencv.core.Core
   * and OpenCV-build differences break it, so a golden set that must survive a multi-OS/arch matrix has to
   * compare within a threshold. This suite exercises the metrics on a genuinely lossy path (JPEG roundtrip),
   * which by construction is never bit-exact, and pins the comparator behaviour so the infrastructure is ready
-  * when the CI matrix grows. The choice between the two comparators, and when a bit-exact hash is still
-  * the right gate, is written up in docs/mdoc/testing.md.
+  * when the CI matrix grows. The choice between the two comparators, and when a bit-exact hash is still the
+  * right gate, is written up in docs/mdoc/testing.md.
   */
 class ToleranceMetricTest extends munit.FunSuite:
 

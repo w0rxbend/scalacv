@@ -29,36 +29,41 @@ object BackgroundEffect:
       s"the mask (${mask.cols}x${mask.rows}) must match the image (${fg.cols}x${fg.rows})"
     )
     require(feather >= 0, s"feather cannot be negative, got $feather")
-    Using
-      .Manager: use =>
-        // A feathered soft mask, then a 3-channel float alpha in [0, 1] and its complement.
-        val side = (feather * 2 + 1).toDouble
-        val soft =
-          if feather > 0 then use(mask.gaussianBlur(Size(side, side))).get
-          else use(Managed(mask.clone())).get
-        val alpha1 = use(Managed(Mat())).get
-        soft.convertTo(alpha1, CvType.CV_32F, 1.0 / 255.0)
-        val alpha3 = use(Managed(Mat())).get
-        Imgproc.cvtColor(alpha1, alpha3, Imgproc.COLOR_GRAY2BGR)
-        val ones = use(Managed(Mat(alpha3.size(), CvType.CV_32FC3, CvScalar.all(1.0)))).get
-        val inv3 = use(Managed(Mat())).get
-        Core.subtract(ones, alpha3, inv3)
-        // fg*alpha + bg*(1-alpha), in float, back to 8-bit.
-        val fgF = use(Managed(Mat())).get
-        fg.convertTo(fgF, CvType.CV_32F)
-        val bgF = use(Managed(Mat())).get
-        bg.convertTo(bgF, CvType.CV_32F)
-        val fgP = use(Managed(Mat())).get
-        Core.multiply(fgF, alpha3, fgP)
-        val bgP = use(Managed(Mat())).get
-        Core.multiply(bgF, inv3, bgP)
-        val sumF = use(Managed(Mat())).get
-        Core.add(fgP, bgP, sumF)
-        // The result escapes the Using.Manager alive, so it must be allocated under its own guard:
-        // if convertTo throws between `Mat()` and the `Managed` wrap, `out` would otherwise be a bare
-        // native buffer no `use` registered and nobody frees. `Mats.produce` releases it on any throw.
-        Mats.produce("alphaBlend")(sumF.convertTo(_, CvType.CV_8U))
-      .get
+    // One `orThrow` around the whole block rather than eight around the individual calls. Every step below
+    // is part of one operation from a caller's point of view, and OpenCV's own message already quotes the
+    // failing C++ expression; what it cannot say is which scalacv call it came from. A `CvError` raised
+    // further in (by `Mats.produce` at the end) is a `CvError` already and passes through unchanged.
+    Cv.orThrow("alphaBlend"):
+      Using
+        .Manager: use =>
+          // A feathered soft mask, then a 3-channel float alpha in [0, 1] and its complement.
+          val side = (feather * 2 + 1).toDouble
+          val soft =
+            if feather > 0 then use(mask.gaussianBlur(Size(side, side))).get
+            else use(Managed(mask.clone())).get
+          val alpha1 = use(Managed(Mat())).get
+          soft.convertTo(alpha1, CvType.CV_32F, 1.0 / 255.0)
+          val alpha3 = use(Managed(Mat())).get
+          Imgproc.cvtColor(alpha1, alpha3, Imgproc.COLOR_GRAY2BGR)
+          val ones = use(Managed(Mat(alpha3.size(), CvType.CV_32FC3, CvScalar.all(1.0)))).get
+          val inv3 = use(Managed(Mat())).get
+          Core.subtract(ones, alpha3, inv3)
+          // fg*alpha + bg*(1-alpha), in float, back to 8-bit.
+          val fgF = use(Managed(Mat())).get
+          fg.convertTo(fgF, CvType.CV_32F)
+          val bgF = use(Managed(Mat())).get
+          bg.convertTo(bgF, CvType.CV_32F)
+          val fgP = use(Managed(Mat())).get
+          Core.multiply(fgF, alpha3, fgP)
+          val bgP = use(Managed(Mat())).get
+          Core.multiply(bgF, inv3, bgP)
+          val sumF = use(Managed(Mat())).get
+          Core.add(fgP, bgP, sumF)
+          // The result escapes the Using.Manager alive, so it must be allocated under its own guard:
+          // if convertTo throws between `Mat()` and the `Managed` wrap, `out` would otherwise be a bare
+          // native buffer no `use` registered and nobody frees. `Mats.produce` releases it on any throw.
+          Mats.produce("alphaBlend")(sumF.convertTo(_, CvType.CV_8U))
+        .get
 
   /** Blurs the background behind `mask`, keeping the person sharp. Borrows `image` and `mask`. */
   private[scalacv] def blur(image: Mat, mask: Mat, strength: Int, feather: Int): Managed[Mat] =
