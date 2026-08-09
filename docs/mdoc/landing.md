@@ -125,12 +125,28 @@ hatches, and [coming from OpenCV](/opencv-java) if you already know the C++ or P
 
 </Section>
 
-<Section eyebrow="next" title="Start where it suits you" tinted>
+<Section eyebrow="learn by building" title="Five tutorials, easiest first" tinted lede="Ordered by what each one needs from you, not by topic. The first two need nothing at all — they draw their own input, because this repository ships no image files.">
 
-- **Never done this before?** [Image basics](/basics) then [the tutorial](/tutorial).
-- **Want it running today?** [Getting started](/getting-started) then the [cookbook](/cookbook).
-- **Evaluating it?** [Architecture](/architecture), [performance](/performance), and the
-  [FAQ](/faq).
+| Tutorial | What it teaches | What you need |
+|---|---|---|
+| [Count objects in an image](/tutorial) | threshold → contours → count | nothing — it draws its own scene |
+| [Track a coloured object](/tutorial-color-tracking) | HSV masking and centroids | nothing — it draws its own scene |
+| [Process a video frame by frame](/tutorial-video) | capture, transform, record | a clip or a webcam — or [make one](/sample-inputs) |
+| [Detect faces in a photo](/tutorial-faces) | Haar cascades, then YuNet | a photograph; no model download |
+| [Run a neural network](/tutorial-dnn) | ONNX inference through OpenCV | a model file — [get one](/models) |
+
+</Section>
+
+<Section eyebrow="next" title="Start where it suits you">
+
+- **Never done this before?** [Image basics](/basics), then the [glossary](/glossary) when a word
+  stops you.
+- **Want it running today?** [Getting started](/getting-started) then the [cookbook](/cookbook) —
+  around sixty recipes, each one runnable.
+- **Evaluating it?** [Architecture](/architecture), [performance](/performance),
+  [benchmark results](/benchmark-results), and the [FAQ](/faq).
+- **Taking it to production?** [Streaming and backpressure](/streaming-and-backpressure),
+  [observability](/observability), and [degradation and error budgets](/degradation-and-error-budgets).
 - **Stuck?** [Troubleshooting](/troubleshooting) covers the errors people actually hit first.
 
 Reference: [Operations](/operations-reference) · [Enums and constants](/enums-reference) ·

@@ -19,13 +19,18 @@ const sidebars: SidebarsConfig = {
       ],
     },
     {
+      // Ordered by what each tutorial DEMANDS of the reader, not by topic. `sample-inputs` comes
+      // first because the repository ships no bitmaps (a licensing decision), so three of the five
+      // tutorials name a file the reader does not have; that page shows how to draw one. After it,
+      // the two that run with no assets at all, then a clip, then a photo, then a model download.
       type: 'category',
       label: 'Tutorials',
       items: [
+        'sample-inputs',
         'tutorial',
+        'tutorial-color-tracking',
         'tutorial-video',
         'tutorial-faces',
-        'tutorial-color-tracking',
         'tutorial-dnn',
       ],
     },
@@ -41,10 +46,30 @@ const sidebars: SidebarsConfig = {
       items: ['mat-lifecycle', 'native-cache'],
     },
     {
-      // Advanced operational topics — how to go fast, parallelise safely, and diagnose.
+      // The production reading path, in order: measure it → read the numbers → parallelise it →
+      // survive a producer faster than you → watch it → degrade instead of dying → test it →
+      // ship it → diagnose it.
+      //
+      // Renamed from "Performance & scaling": the old label undersold the category and left
+      // nowhere for an operational topic that is not about speed to land, so streaming,
+      // observability and degradation had no home.
+      //
+      // `streaming-and-backpressure` could equally sit under "Video & runtime". It is here
+      // deliberately — it is a capacity topic, and the reader who needs it arrives from
+      // `concurrency`, not from `video`.
       type: 'category',
-      label: 'Performance & scaling',
-      items: ['performance', 'concurrency', 'testing', 'deploying-to-production', 'troubleshooting'],
+      label: 'Production',
+      items: [
+        'performance',
+        'benchmark-results',
+        'concurrency',
+        'streaming-and-backpressure',
+        'observability',
+        'degradation-and-error-budgets',
+        'testing',
+        'deploying-to-production',
+        'troubleshooting',
+      ],
     },
     {
       type: 'category',
@@ -64,6 +89,8 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Detection & deep learning',
+      // `models` sits immediately before `dnn`: every page above it tells the reader to supply a
+      // model file, and until that page existed none of them said where one comes from.
       items: [
         'object-detection',
         'face-recognition',
@@ -71,6 +98,7 @@ const sidebars: SidebarsConfig = {
         'motion-detection',
         'pose-estimation',
         'gestures',
+        'models',
         'dnn',
       ],
     },
