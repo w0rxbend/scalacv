@@ -95,12 +95,18 @@ object Models:
     val target = into.resolve(spec.fileName)
     if cacheHit(spec, target) then Right(target)
     else
-      try
-        Files.createDirectories(into)
-        fetchFirst(spec, target)
-      catch
-        case e: Exception =>
-          Left(CvError.LoadFailed(into.toString, s"could not create the download directory: $e"))
+      // Only this one step belongs under the `catch` below. A wider `try` would take a failure raised while
+      // downloading — a temp file that could not be created, a mirror that refused the connection — and
+      // report it as "could not create the download directory", pointing the reader at the step that had
+      // demonstrably just succeeded. `fetchFirst` reports its own failures, per mirror.
+      val prepared: Either[CvError, Path] =
+        try Right(Files.createDirectories(into))
+        catch
+          case e: Exception =>
+            Left(
+              CvError.LoadFailed(into.toString, s"could not create the download directory: ${describe(e)}")
+            )
+      prepared.flatMap(_ => fetchFirst(spec, target))
 
   /** Whether `target` is already the model we want, so nothing needs downloading.
     *
@@ -169,19 +175,28 @@ object Models:
           )
         )
 
-  /** Downloads one URL to a sibling temp file, verifies it, and only then moves it onto `target`. */
+  /** Downloads one URL to a sibling temp file, verifies it, and only then moves it onto `target`.
+    *
+    * Creating the temp file sits inside the `try`, not ahead of it: a destination that is read-only, full, or
+    * without permission to create files makes `createTempFile` throw, and that is as much a reason this
+    * mirror did not work as a refused connection is. Caught here it joins the per-mirror list [[fetchFirst]]
+    * builds; escaping instead, it would surface from [[fetch]] under an unrelated message. The inner
+    * `try`/`finally` still deletes the temp file whatever happens — it is nested only so that `tmp` is bound
+    * inside the region the outer `catch` guards.
+    */
   private def fetchOne(spec: ModelSpec, url: String, target: Path): Either[CvError, Path] =
-    val tmp = Files.createTempFile(target.getParent, ".model-", ".part")
     try
-      download(url, tmp)
-      // The mirror, not the temp file, is what the reader has to act on, so `verify`'s message is
-      // re-attributed to the URL it came from.
-      verify(spec, tmp).left
-        .map(e => CvError.LoadFailed(url, describe(e)))
-        .map(_ => move(tmp, target))
+      val tmp = Files.createTempFile(target.getParent, ".model-", ".part")
+      try
+        download(url, tmp)
+        // The mirror, not the temp file, is what the reader has to act on, so `verify`'s message is
+        // re-attributed to the URL it came from.
+        verify(spec, tmp).left
+          .map(e => CvError.LoadFailed(url, describe(e)))
+          .map(_ => move(tmp, target))
+      finally
+        val _ = Files.deleteIfExists(tmp)
     catch case e: Exception => Left(CvError.LoadFailed(url, describe(e)))
-    finally
-      val _ = Files.deleteIfExists(tmp)
 
   /** An exception as text a reader can act on. `getMessage` is `null` for several of the exceptions that
     * reach here — a bare `ConnectException` among them — and "could not be downloaded from any source: null"
