@@ -30,6 +30,23 @@ object Chart:
         Picture.rectangle(Rect(x, height - h, barWidth, h)).fillColor(color).noStroke
       })
 
+  /** The polyline every series chart is drawn from: `values` spread evenly across the width, their magnitudes
+    * scaled against the largest one so the tallest point sits at the top of the box (the 2px inset keeps that
+    * point's stroke inside the box rather than clipped by its edge).
+    *
+    * [[line]] and [[area]] must agree on this shape down to the pixel — `area` strokes the very same polyline
+    * on top of its own fill — so they share one definition. Were each to derive it, a later change to the
+    * scaling on one side would let a fill drift away from its own outline, with nothing to catch it.
+    *
+    * Callers are responsible for the `values.sizeIs < 2` guard: with fewer than two points the
+    * `values.size - 1` divisor is zero, and there is no line to draw anyway.
+    */
+  private def seriesPoints(values: Seq[Double], width: Int, height: Int): Seq[Point] =
+    val peak = values.map(math.abs).max.max(1e-9)
+    values.zipWithIndex.map { (v, i) =>
+      Point(i.toDouble / (values.size - 1) * width, height - math.abs(v) / peak * (height - 2))
+    }
+
   /** A line chart of `values` across the width (scaled to the largest magnitude). */
   def line(
       values: Seq[Double],
@@ -41,10 +58,7 @@ object Chart:
     requireBox(width, height)
     if values.sizeIs < 2 then Picture.empty
     else
-      val peak = values.map(math.abs).max.max(1e-9)
-      val points = values.zipWithIndex.map { (v, i) =>
-        Point(i.toDouble / (values.size - 1) * width, height - math.abs(v) / peak * (height - 2))
-      }
+      val points = seriesPoints(values, width, height)
       Picture.polyline(points).strokeColor(color).strokeWidth(strokeWidth)
 
   /** A scatter plot of `(x, y)` data, its range mapped into the box. */
@@ -79,10 +93,7 @@ object Chart:
     requireBox(width, height)
     if values.sizeIs < 2 then Picture.empty
     else
-      val peak = values.map(math.abs).max.max(1e-9)
-      val top = values.zipWithIndex.map { (v, i) =>
-        Point(i.toDouble / (values.size - 1) * width, height - math.abs(v) / peak * (height - 2))
-      }
+      val top = seriesPoints(values, width, height)
       val filled = (Point(0, height.toDouble) +: top) :+ Point(width.toDouble, height.toDouble)
       Picture
         .polyline(top)
