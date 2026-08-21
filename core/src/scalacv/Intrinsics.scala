@@ -6,7 +6,8 @@ import org.opencv.core.{Mat, MatOfDouble}
   *
   * `fx`/`fy` are the focal length in pixels, `cx`/`cy` the principal point (usually near the image centre).
   * `distortion` is OpenCV's radial/tangential coefficients (`k1, k2, p1, p2[, k3 …]`); leave it empty for an
-  * ideal lens. A real camera's numbers come from a chessboard calibration; when you have not calibrated,
+  * ideal lens. Only the counts OpenCV itself accepts are allowed — see [[Intrinsics.ValidDistortionSizes]]. A
+  * real camera's numbers come from a chessboard calibration; when you have not calibrated,
   * [[Intrinsics.approx]] gives a serviceable guess from the image size and a field-of-view estimate — good
   * enough to *see* an augmented overlay track, not good enough to *measure* with.
   *
@@ -21,6 +22,12 @@ final case class Intrinsics(
     distortion: Seq[Double] = Seq.empty
 ):
   require(fx > 0 && fy > 0, s"focal lengths must be positive, got fx=$fx fy=$fy")
+  require(
+    Intrinsics.ValidDistortionSizes.contains(distortion.size),
+    s"distortion must have ${Intrinsics.ValidDistortionSizes.mkString(", ")} coefficients " +
+      s"(k1, k2, p1, p2[, k3[, k4, k5, k6[, s1, s2, s3, s4[, taux, tauy]]]]), got ${distortion.size}. " +
+      "Leave it empty for an ideal lens."
+  )
 
   /** The 3×3 camera matrix as a caller-owned `CV_64F` Mat. */
   private[scalacv] def cameraMatrix: Mat =
@@ -33,6 +40,20 @@ final case class Intrinsics(
     if distortion.isEmpty then MatOfDouble() else MatOfDouble(distortion*)
 
 object Intrinsics:
+
+  /** The coefficient counts OpenCV's `undistort`, `solvePnP` and `projectPoints` accept: the four
+    * radial/tangential terms `k1, k2, p1, p2`, optionally extended with `k3`, then the rational model's
+    * `k4, k5, k6`, then the thin-prism `s1..s4`, then the tilted-sensor `taux, tauy`. Zero means an ideal
+    * lens and is accepted too.
+    *
+    * Checked in the constructor because OpenCV does not fail usefully on a wrong count. A five-element vector
+    * with a coefficient dropped is still a legal length, so the native call runs and returns a silently wrong
+    * undistortion or pose -- a number that looks plausible and is not, which is far more expensive to track
+    * down than a rejected constructor. This mirrors the focal-length check directly above it: reject what
+    * cannot be a camera, at the point the value is made rather than at the point it is used, which may be
+    * several layers away.
+    */
+  val ValidDistortionSizes: Seq[Int] = Seq(0, 4, 5, 8, 12, 14)
 
   /** A rough camera model from the image size and horizontal field of view. Assumes a centred principal
     * point, square pixels and no lens distortion — fine for a live AR overlay, not for metrology.

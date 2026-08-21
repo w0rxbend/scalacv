@@ -551,6 +551,7 @@ final class scalacv.Point
   def copy$default$1(): double
   def copy$default$2(): double
   def copy(double, double): scalacv.Point
+  def distanceTo(scalacv.Point): double
   def equals(java.lang.Object): boolean
   def hashCode(): int
   def productArity(): int
@@ -1253,6 +1254,7 @@ object scalacv.Intrinsics
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product
   def <init>$default$5(): scala.collection.immutable.Seq<java.lang.Object>
+  def ValidDistortionSizes(): scala.collection.immutable.Seq<java.lang.Object>
   def apply(double, double, double, double, scala.collection.immutable.Seq<java.lang.Object>): scalacv.Intrinsics
   def approx$default$2(): double
   def approx(scalacv.Size, double): scalacv.Intrinsics
@@ -1326,6 +1328,7 @@ object scalacv.NativeDelete
 object scalacv.NativeFinalizer
   extends java.lang.Object
   implements java.io.Serializable
+  def address(java.lang.Object): long
   def disarm(java.lang.Object): void
 object scalacv.OpenCv
   extends java.lang.Object
@@ -1513,6 +1516,7 @@ object scalacv.Releasable
   def given_Releasable_VideoCapture(): scalacv.Releasable<org.opencv.videoio.VideoCapture>
   def given_Releasable_VideoWriter(): scalacv.Releasable<org.opencv.videoio.VideoWriter>
   def handle<A>(scala.Function1<A, java.lang.Object>): scalacv.Releasable<A>
+  def nativeHandle<A>(): scalacv.Releasable<A>
 object scalacv.Releasable.package
   extends java.lang.Object
   implements java.io.Serializable
