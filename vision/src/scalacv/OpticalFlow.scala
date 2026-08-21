@@ -12,7 +12,7 @@ final case class Track(from: Point, to: Point, found: Boolean):
   def displacement: Point = Point(to.x - from.x, to.y - from.y)
 
   /** How far the point moved, in pixels. */
-  def distance: Double = math.hypot(to.x - from.x, to.y - from.y)
+  def distance: Double = from.distanceTo(to)
 
 /** Sparse optical flow — following points from one frame to the next.
   *

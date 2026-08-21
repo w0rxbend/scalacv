@@ -16,6 +16,14 @@ import org.opencv.core as cv
 final case class Point(x: Double, y: Double):
   private[scalacv] def toCv: cv.Point = cv.Point(x, y)
 
+  /** The straight-line distance to `other`, in pixels.
+    *
+    * Uses `math.hypot` rather than `math.sqrt(dx * dx + dy * dy)`. The two agree on ordinary pixel
+    * coordinates, but `hypot` is written to avoid overflowing or underflowing while squaring, and it is the
+    * form every call site in this library had already converged on independently.
+    */
+  def distanceTo(other: Point): Double = math.hypot(x - other.x, y - other.y)
+
 /** A point in 3D space — a model coordinate for [[Ar]] pose work, in the same units you give a marker's side
   * length (metres is the usual choice). `z` points out of the marker plane toward the camera.
   */

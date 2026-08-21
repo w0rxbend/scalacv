@@ -548,7 +548,7 @@ private[scalacv] object Graphics:
           case Some(dash) => segments.foreach((s, e) => dashSegment(m, s, e, col, style, dash))
 
   private def dashSegment(mat: Mat, from: Point, to: Point, col: Color, style: Style, dash: Dash): Unit =
-    val length = math.hypot(to.x - from.x, to.y - from.y)
+    val length = from.distanceTo(to)
     if length > 0 then
       val ux = (to.x - from.x) / length
       val uy = (to.y - from.y) / length

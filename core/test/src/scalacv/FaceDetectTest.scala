@@ -109,10 +109,8 @@ class FaceDetectTest extends munit.FunSuite:
       case Left(e) => fail(s"could not build a detector from the downloaded model: $e")
       case Right(d) => d.use(f)
 
-  private def distance(a: Point, b: Point): Double = math.hypot(a.x - b.x, a.y - b.y)
-
   private def near(actual: Point, expected: Point, tolerance: Double, what: String): Unit =
-    val d = distance(actual, expected)
+    val d = actual.distanceTo(expected)
     assert(d <= tolerance, s"$what: expected around $expected, got $actual (off by ${d.round}px)")
 
   private def sha256(p: Path): String =

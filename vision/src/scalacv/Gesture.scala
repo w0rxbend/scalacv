@@ -35,7 +35,7 @@ object GestureRecognizer:
     // independent, so it holds whichever way the hand is turned.
     def extended(tip: Int, joint: Int): Boolean =
       kp(tip).score >= minScore &&
-        distance(kp(tip).point, wrist) > distance(kp(joint).point, wrist)
+        kp(tip).point.distanceTo(wrist) > kp(joint).point.distanceTo(wrist)
 
     val thumb = extended(4, 2)
     val index = extended(8, 6)
@@ -50,5 +50,3 @@ object GestureRecognizer:
       case (false, true, true, false, false) => HandGesture.Victory
       case (t, i, m, r, p) if Seq(t, i, m, r, p).count(identity) >= 4 => HandGesture.OpenPalm
       case _ => HandGesture.Unknown
-
-  private def distance(a: Point, b: Point): Double = math.hypot(a.x - b.x, a.y - b.y)

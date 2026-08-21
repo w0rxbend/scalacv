@@ -24,11 +24,15 @@ class ArTest extends munit.FunSuite:
     * each make, and the only documented way it fails is a native allocation failure — `std::bad_alloc`, which
     * the OpenCV bindings hand back as a plain `java.lang.Exception` (see `Cv.attempt`). A 72-byte
     * `MatOfDouble` cannot be made to fail on demand, so this stands in for it and fails at the same instant:
-    * `Intrinsics` validates only `fx`/`fy` when it is built, and `distCoeffs` reads `distortion` only when it
-    * splats it into the `MatOfDouble` constructor.
+    * `distCoeffs` reads `distortion` only when it splats it into the `MatOfDouble` constructor.
+    *
+    * The length is four — the shortest count `Intrinsics` accepts — because the constructor checks the
+    * coefficient count, and it checks it via `size`, which for a `Seq` that defines `length` is that number
+    * and reads no element. So the vector is built without incident and detonates where this test needs it to:
+    * on the first read past element zero, inside the native acquisition.
     */
   private final class ExplodingDistortion extends scala.collection.immutable.Seq[Double]:
-    def length: Int = 2
+    def length: Int = 4
     override def isEmpty: Boolean = false
     def apply(i: Int): Double = if i == 0 then 0.01 else throw Boom
     def iterator: Iterator[Double] = Iterator.range(0, length).map(i => apply(i))
@@ -66,7 +70,7 @@ class ArTest extends munit.FunSuite:
       marker.corners
         .zip(reprojected)
         .foreach: (observed, projected) =>
-          val err = math.hypot(observed.x - projected.x, observed.y - projected.y)
+          val err = observed.distanceTo(projected)
           assert(err < 2.0, s"reprojection error $err px too large ($observed vs $projected)")
     finally scene.close()
 
