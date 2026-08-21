@@ -28,6 +28,14 @@ final class Managed[A] private (initial: A, releaser: Releasable[A]) extends Aut
 
   private val ref = AtomicReference[A | Null](initial)
 
+  /** The object's class, captured at construction so that [[spentError]] can name the type without this
+    * `Managed` holding on to the object itself. Keeping the `initial` parameter alive would defeat the point
+    * of nulling `ref` in [[release]]: the released object would stay strongly reachable for as long as the
+    * handle lives, and the `cv::Mat` header it owns could never be reclaimed by the collector. A `Class`
+    * costs one field and is already kept alive by its classloader.
+    */
+  private val ofType: Class[?] = initial.getClass
+
   /** Where this handle was spent, captured **only** when `-Dscalacv.trackOwnership=true` (see [[Managed]]).
     * Off, it stays `null` and costs nothing on the hot path; on, it is attached as the cause of the
     * use-after-move error so the crash points at the transform/terminal that consumed the handle, not just at
@@ -42,7 +50,7 @@ final class Managed[A] private (initial: A, releaser: Releasable[A]) extends Aut
     * [[Image]] used after a move, and pointing at the consuming call when ownership tracking is on.
     */
   private def spentError(verb: String): IllegalStateException =
-    val what = initial.getClass.getSimpleName
+    val what = ofType.getSimpleName
     val hint =
       spentAt match
         case _: Throwable => "" // the consuming site is attached as the cause below
