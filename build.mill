@@ -92,6 +92,30 @@ object Deps {
     if (jvmMajor >= 24) Seq("--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow")
     else Seq.empty
 
+  /** [[runtimeJvmArgs]] plus `-Djava.awt.headless=true`, for every module that forks a JVM which must
+    * never open a window: the CI-built examples, the leak harness, the benchmarks and the tests.
+    * Headless is an assertion rather than a preference — a GUI-toolkit regression then fails loudly in
+    * CI instead of silently opening a window on whichever developer machine happens to have a display.
+    */
+  def headlessJvmArgs(jvmMajor: Int): Seq[String] = runtimeJvmArgs(jvmMajor) :+ "-Djava.awt.headless=true"
+
+  /** The JDK a module is compiled and forked with when `MILL_JVM_ID` is not set in the environment.
+    *
+    * One `val` rather than a literal repeated per module: main modules and test modules select their
+    * JVM separately (test modules do not extend `ScalacvModule`), so the default used to be written
+    * out twice, and a drift between the two copies is silent — the build keeps working locally, where
+    * everything is 25 anyway, and fails only on a CI matrix rung pinned to an older JDK.
+    */
+  val defaultJvmId = "zulu:25"
+
+  /** The major version behind a jvm id such as `zulu:25` or `temurin:21.0.4`, for flags that do not
+    * exist on older JDKs. The fallback is derived from [[defaultJvmId]] rather than written out again,
+    * so an unparseable id lands on exactly the JDK the build would have used anyway.
+    */
+  def jvmMajorOf(jvmId: String): Int =
+    jvmId.split(":").last.split("[.+-]").head.toIntOption
+      .getOrElse(defaultJvmId.split(":").last.split("[.+-]").head.toInt)
+
   /** Scaladoc options shared by the API doc builds (`apidocs`, `zio`). All verified to exist in
     * scaladoc 3.3.8 via `-help` (see API-REFERENCE.md).
     *   - `-source-links` puts a "source" link on every member, to its exact line on GitHub master.
@@ -132,10 +156,10 @@ trait ScalacvModule extends ScalaModule with ScalafixModule {
     * a single JDK and make the matrix decorative. `actions/setup-java` cannot steer Mill either,
     * since Mill 1.1.7 ignores JAVA_HOME and MILL_JVM_VERSION for module execution.
     */
-  def jvmId = Task.Input { Task.env.getOrElse("MILL_JVM_ID", "zulu:25") }
+  def jvmId = Task.Input { Task.env.getOrElse("MILL_JVM_ID", Deps.defaultJvmId) }
 
   /** The major version behind [[jvmId]], for flags that do not exist on older JDKs. */
-  def jvmMajor = Task { jvmId().split(":").last.split("[.+-]").head.toIntOption.getOrElse(25) }
+  def jvmMajor = Task { Deps.jvmMajorOf(jvmId()) }
 
   def forkArgs = Task { Deps.runtimeJvmArgs(jvmMajor()) }
 
@@ -169,16 +193,17 @@ trait ScalacvModule extends ScalaModule with ScalafixModule {
 trait ScalacvTests extends TestModule.Munit {
   def mvnDeps = Seq(mvn"org.scalameta::munit:1.3.4")
 
-  /* Test modules pick their own JVM, so they need the same override and the same
-   * version-gating as ScalacvModule -- see the comments there. */
-  def jvmId = Task.Input { Task.env.getOrElse("MILL_JVM_ID", "zulu:25") }
-  def jvmMajor = Task { jvmId().split(":").last.split("[.+-]").head.toIntOption.getOrElse(25) }
+  /* Test modules pick their own JVM, so they need the same override and the same version-gating as
+   * ScalacvModule -- see the comments there. The default and the fallback live in Deps so that this
+   * copy and ScalacvModule's cannot drift apart. */
+  def jvmId = Task.Input { Task.env.getOrElse("MILL_JVM_ID", Deps.defaultJvmId) }
+  def jvmMajor = Task { Deps.jvmMajorOf(jvmId()) }
 
   /* Natives are loaded by dlopen from the caller's classloader, and OpenCV's own error
    * reporting is chatty on stderr. Forking keeps a crashed native call from taking the
-   * whole test run with it, and headless=true makes a GUI-toolkit regression fail loudly
-   * rather than silently opening a window on a developer machine. */
-  def forkArgs = Task { Deps.runtimeJvmArgs(jvmMajor()) :+ "-Djava.awt.headless=true" }
+   * whole test run with it, and headless=true (see Deps.headlessJvmArgs) makes a GUI-toolkit
+   * regression fail loudly rather than silently opening a window on a developer machine. */
+  def forkArgs = Task { Deps.headlessJvmArgs(jvmMajor()) }
 }
 
 /** Everything that ships to Maven Central.
@@ -316,7 +341,7 @@ object zio extends ScalacvPublishModule {
       mvn"dev.zio::zio-test:2.1.26",
       mvn"dev.zio::zio-test-sbt:2.1.26"
     ) ++ Deps.opencvNatives
-    def forkArgs = Task { Deps.runtimeJvmArgs(jvmMajor()) :+ "-Djava.awt.headless=true" }
+    def forkArgs = Task { Deps.headlessJvmArgs(jvmMajor()) }
   }
 }
 
@@ -324,7 +349,7 @@ object zio extends ScalacvPublishModule {
 object examples extends ScalacvModule {
   def moduleDeps = Seq(core, vision, graphs, zio)
   def mvnDeps    = Deps.opencvNatives
-  def forkArgs   = Task { Deps.runtimeJvmArgs(jvmMajor()) :+ "-Djava.awt.headless=true" }
+  def forkArgs   = Task { Deps.headlessJvmArgs(jvmMajor()) }
 
   /* The Track D gate is "CannyEdges + QrDecode produce asserted file output in CI". That means
    * the examples need real assertions, not just successful compilation, so each example is a
@@ -345,7 +370,7 @@ object examples extends ScalacvModule {
 object leaks extends ScalacvModule {
   def moduleDeps = Seq(core, vision, graphs)
   def mvnDeps    = Deps.opencvNatives
-  def forkArgs   = Task { Deps.runtimeJvmArgs(jvmMajor()) :+ "-Djava.awt.headless=true" }
+  def forkArgs   = Task { Deps.headlessJvmArgs(jvmMajor()) }
 
   object test extends ScalaTests with ScalacvTests {
     def scalacOptions = Task { Deps.looseTestScalacOptions }
@@ -366,11 +391,9 @@ object leaks extends ScalacvModule {
 object benchmarks extends ScalacvModule {
   def moduleDeps = Seq(core, vision, graphs)
   def mvnDeps    = Deps.opencvNatives
-  def forkArgs = Task {
-    // -Djava.awt.headless keeps toBufferedImage benchmarks from opening a window; the GC/JIT flags
-    // below are printed by the harness so a run is reproducible.
-    Deps.runtimeJvmArgs(jvmMajor()) :+ "-Djava.awt.headless=true"
-  }
+  // Headless (via Deps.headlessJvmArgs) keeps toBufferedImage benchmarks from opening a window; the
+  // GC/JIT flags used for a run are printed by the harness so a run is reproducible.
+  def forkArgs = Task { Deps.headlessJvmArgs(jvmMajor()) }
 }
 
 /** JavaFX examples. Deliberately excluded from CI and never published: OpenJFX resolves

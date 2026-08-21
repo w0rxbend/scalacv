@@ -17,9 +17,7 @@ import org.opencv.imgproc.Imgproc
     Image.wrap(Managed(m))
 
   for f <- Filter.all do
-    val out = scene().filter(f)
-    try out.bytes(".png").foreach(b => println(f"${f.name}%-10s ${b.length} bytes"))
-    finally out.close()
+    scene().filter(f).bytes(".png").foreach(b => println(f"${f.name}%-10s ${b.length} bytes"))
 
   // Heatmap: a horizontal depth ramp false-coloured with an honest, perceptually-uniform map.
   val ramp = Mat(60, 200, CvType.CV_8UC1)
