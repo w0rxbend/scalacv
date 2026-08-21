@@ -1,7 +1,7 @@
 package scalacv
 
 import org.opencv.calib3d.Calib3d
-import org.opencv.core.{Mat, MatOfPoint2f, MatOfPoint3f, Point as CvPoint, Point3}
+import org.opencv.core.{Mat, MatOfPoint2f, MatOfPoint3f, Point3}
 
 /** A camera's absolute pose: the 3×3 rotation and 3-vector translation that map world points into the camera
   * frame (`x_cam = R·x_world + t`).
@@ -52,7 +52,7 @@ object Localizer:
       // constructor frees the earlier ones. Mirrors HeadPose.estimate in Pose.scala.
       Managed.scope: own =>
         val objectPoints = own(MatOfPoint3f(worldPoints.map((x, y, z) => Point3(x, y, z))*))
-        val imgPoints = own(MatOfPoint2f(imagePoints.map(p => CvPoint(p.x, p.y))*))
+        val imgPoints = own(MatOfPoint2f(imagePoints.map(_.toCv)*))
         val camera = own(intrinsics.cameraMatrix)
         val distortion = own(intrinsics.distCoeffs)
         val rvec = own(Mat())

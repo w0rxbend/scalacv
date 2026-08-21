@@ -1,6 +1,6 @@
 package scalacv
 
-import org.opencv.core.{Mat, MatOfPoint2f, MatOfPoint3f, Point as CvPoint, Point3}
+import org.opencv.core.{Mat, MatOfPoint2f, MatOfPoint3f, Point3}
 import org.opencv.dnn.Net
 
 /** One named landmark of a [[Pose]] — a point in image pixels and the model's confidence in it. */
@@ -254,7 +254,7 @@ object HeadPose:
     // failure, not a raw CvException.
     Managed.scope: own =>
       val objectPoints = own(MatOfPoint3f(model*))
-      val imagePoints = own(MatOfPoint2f(face.landmarks.map(p => CvPoint(p.x, p.y))*))
+      val imagePoints = own(MatOfPoint2f(face.landmarks.map(_.toCv)*))
       val camera = own(intrinsics.cameraMatrix)
       val distortion = own(intrinsics.distCoeffs)
       val rvec = own(Mat())

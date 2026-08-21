@@ -1,6 +1,6 @@
 package scalacv
 
-import org.opencv.core.{MatOfByte, MatOfFloat, MatOfPoint, MatOfPoint2f, Point as CvPoint}
+import org.opencv.core.{MatOfByte, MatOfFloat, MatOfPoint, MatOfPoint2f}
 import org.opencv.imgproc.Imgproc
 
 /** One tracked point across two frames: where it started, where it ended up, and whether the tracker kept
@@ -49,7 +49,7 @@ object OpticalFlow:
       Managed.scope: own =>
         val prevGray = own.adopt(Mats.grayscale(previous.mat))
         val currentGray = own.adopt(Mats.grayscale(current.mat))
-        val prevPts = own(MatOfPoint2f(points.map(p => CvPoint(p.x, p.y))*))
+        val prevPts = own(MatOfPoint2f(points.map(_.toCv)*))
         val nextPts = own(MatOfPoint2f())
         val status = own(MatOfByte())
         // `err` carries the per-point matching error, which this API does not expose; the tracker still
@@ -60,7 +60,7 @@ object OpticalFlow:
         )
         val next = nextPts.toArray
         val kept = status.toArray
-        points.indices.map(i => Track(points(i), Point(next(i).x, next(i).y), kept(i) != 0))
+        points.indices.map(i => Track(points(i), Point.from(next(i)), kept(i) != 0))
 
   /** Seeds good features on `previous` and tracks them into `current` — the one-call form. */
   def track(previous: Image, current: Image): Seq[Track] =

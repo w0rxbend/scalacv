@@ -49,7 +49,7 @@ object Features:
             try
               Managed.use(Mat()): noMask =>
                 Cv.orThrow("ORB.detectAndCompute")(orb.detectAndCompute(gray, noMask, keypoints, descriptors))
-              val points = keypoints.toArray.map(kp => Point(kp.pt.x, kp.pt.y)).toSeq
+              val points = keypoints.toArray.map(kp => Point.from(kp.pt)).toSeq
               new Descriptors(points, Managed(descriptors))
             catch
               case e: Throwable =>

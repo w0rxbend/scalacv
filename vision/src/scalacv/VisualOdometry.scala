@@ -1,7 +1,7 @@
 package scalacv
 
 import org.opencv.calib3d.Calib3d
-import org.opencv.core.{Mat, MatOfPoint2f, Point as CvPoint}
+import org.opencv.core.{Mat, MatOfPoint2f}
 
 /** The camera's motion between two frames: a 3×3 rotation and a translation direction, with the inlier count.
   *
@@ -36,8 +36,8 @@ object VisualOdometry:
       // constructor — or from findEssentialMat, which does throw on degenerate input — frees the earlier
       // ones.
       Managed.scope: own =>
-        val pts1 = own(MatOfPoint2f(from.map(p => CvPoint(p.x, p.y))*))
-        val pts2 = own(MatOfPoint2f(to.map(p => CvPoint(p.x, p.y))*))
+        val pts1 = own(MatOfPoint2f(from.map(_.toCv)*))
+        val pts2 = own(MatOfPoint2f(to.map(_.toCv)*))
         val camera = own(intrinsics.cameraMatrix)
         val essential = own(Cv.orThrow("findEssentialMat"):
           Calib3d.findEssentialMat(pts1, pts2, camera, Calib3d.RANSAC, 0.999, 1.0))
