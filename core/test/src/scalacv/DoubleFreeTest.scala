@@ -31,7 +31,7 @@ class DoubleFreeTest extends munit.FunSuite:
   /** Enough allocations to make the collector run, and enough GC pressure to drain the finalizer queue while
     * the test is still in scope rather than after the JVM has moved on.
     */
-  private def churn[A <: AnyRef](name: String, make: () => A)(using Releasable[A]): Unit =
+  private def churn[A <: AnyRef](make: () => A)(using Releasable[A]): Unit =
     var i = 0
     while i < 300 do
       Managed(make()).release()
@@ -46,16 +46,16 @@ class DoubleFreeTest extends munit.FunSuite:
     // itself is asserted directly, structurally, in the test below.
 
   test("releasing 300 CascadeClassifiers does not double-free"):
-    churn("CascadeClassifier", () => CascadeClassifier())
+    churn(() => CascadeClassifier())
 
   test("releasing 300 QRCodeDetectors does not double-free"):
-    churn("QRCodeDetector", () => QRCodeDetector())
+    churn(() => QRCodeDetector())
 
   test("releasing 300 ArucoDetectors does not double-free"):
-    churn("ArucoDetector", () => ArucoDetector())
+    churn(() => ArucoDetector())
 
   test("releasing 300 Nets does not double-free"):
-    churn("Net", () => Net())
+    churn(() => Net())
 
   test("the disarm actually zeroes nativeObj, which is what makes the finalizer harmless"):
     // The mechanism, asserted directly rather than inferred from survival — so a regression is

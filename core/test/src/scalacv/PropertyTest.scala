@@ -35,21 +35,10 @@ class PropertyTest extends munit.ScalaCheckSuite:
       img = img.drawRect(Rect(x, y, 1 + rnd.nextInt(w - x), 1 + rnd.nextInt(h - y)), c, Thickness.Filled)
     img
 
-  /** FNV-1a over the raw pixel bytes, row by row (correct for non-continuous Mats). */
-  private def hash(img: Image): Long =
-    val m = img.mat
-    val rowBytes = m.cols * m.elemSize().toInt
-    val buf = new Array[Byte](rowBytes)
-    var h = 0xcbf29ce484222325L
-    var r = 0
-    while r < m.rows do
-      val _ = m.get(r, 0, buf)
-      var i = 0
-      while i < rowBytes do
-        h = (h ^ (buf(i) & 0xffL)) * 0x100000001b3L
-        i += 1
-      r += 1
-    h
+  /** The module's one pixel-exact content hash — see [[PixelHash]] for why every bit-exactness gate here
+    * folds pixels the same way. Borrows the image rather than consuming it.
+    */
+  private def hash(img: Image): Long = PixelHash.of(img.mat)
 
   /** dims/channels equal and pixels byte-identical. Consumes neither. */
   private def samePixels(a: Image, b: Image): Boolean =

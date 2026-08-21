@@ -59,19 +59,7 @@ class GraphicsAlphaRoiTest extends munit.FunSuite:
       finally img.close()
     finally bg.release()
 
-  private def hash(m: Mat): Long =
-    val rowBytes = m.cols * m.elemSize().toInt
-    val buf = new Array[Byte](rowBytes)
-    var h = 0xcbf29ce484222325L
-    var r = 0
-    while r < m.rows do
-      val _ = m.get(r, 0, buf)
-      var i = 0
-      while i < rowBytes do
-        h = (h ^ (buf(i) & 0xffL)) * 0x100000001b3L
-        i += 1
-      r += 1
-    h
+  private def hash(m: Mat): Long = PixelHash.of(m)
 
   private def col(a: Int): Color = Color.Orange.withAlpha(a)
 
