@@ -4,7 +4,7 @@ All notable changes to scalacv are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `early-semver`: while the library is on `0.x`, a minor bump may break compatibility.
 
-## [Unreleased]
+## [0.1.0] — 2026-08-22
 
 ### Added
 - `OpenCv.load()` — headless native loading that never requires a GUI toolkit, with a
@@ -56,6 +56,15 @@ All notable changes to scalacv are recorded here. The format follows
   argument instead of discarding it through a bare `.get`.
 - Opt-in ownership tracing (`-Dscalacv.trackOwnership=true`): a use-after-move `IllegalStateException`
   now carries the transform/terminal that consumed the handle as its cause.
+- `Point.distanceTo` — the straight-line distance between two points, via `math.hypot` so it neither
+  overflows nor underflows while squaring.
+- `Releasable.nativeHandle` — `Releasable.handle` without the accessor argument, reading the address
+  from the binding's own `nativeObj` field. `handle` is generic, so passing one type's
+  `_.getNativeObjAddr` for another compiles cleanly and would free the wrong pointer; this form cannot
+  be given the wrong accessor. `handle` remains for bindings that keep their address elsewhere.
+- `Intrinsics` now rejects a distortion vector whose length is not one OpenCV accepts (0, 4, 5, 8, 12
+  or 14), instead of passing it to native code that returns a silently wrong undistortion or pose. The
+  accepted counts are public as `Intrinsics.ValidDistortionSizes`.
 
 ### Changed
 - **Split the published artifact into three**: `scalacv` (core OpenCV wrapping), `scalacv-vision`
@@ -81,4 +90,4 @@ All notable changes to scalacv are recorded here. The format follows
   unchecked throw, on OpenCV rejection) and the library's Scala-first stance; `CLAUDE.md` records the
   two-tier (managed high-level / borrowed mid-level) API contract and corrects two stale notes.
 
-_Nothing has been released yet; `0.1.0` will be the first tag._
+The first released version.
