@@ -16,7 +16,7 @@ final case class Obstacle(region: Rect, nearness: Double)
   */
 object StereoDepth:
 
-  private given Releasable[StereoSGBM] = Releasable.handle(_.getNativeObjAddr)
+  private given Releasable[StereoSGBM] = Releasable.nativeHandle
 
   /** A disparity map from a rectified `left`/`right` pair, as an 8-bit single-channel [[Image]] normalised so
     * **brighter = nearer**. `numDisparities` (the depth range searched) must be positive and a multiple of

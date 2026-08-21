@@ -11,7 +11,7 @@ import org.opencv.core.Mat
 object FaceDetectHaar:
 
   given Releasable[org.opencv.objdetect.CascadeClassifier] =
-    Releasable.handle(_.getNativeObjAddr)
+    Releasable.nativeHandle
 
   /** Returns the detected face rectangles, or a Left if the cascade is unavailable (Windows). */
   def run(image: Mat): Either[CvError, Seq[Rect]] =

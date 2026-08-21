@@ -73,7 +73,7 @@ object ScalacvZioSpec extends ZIOSpecDefault:
 
     test("acquireRelease frees a handle type through the delete bridge"):
       given Releasable[org.opencv.objdetect.CascadeClassifier] =
-        Releasable.handle(_.getNativeObjAddr)
+        Releasable.nativeHandle
       for
         _ <- loadNatives
         c <- ZIO.succeed(org.opencv.objdetect.CascadeClassifier())

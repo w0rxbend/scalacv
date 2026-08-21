@@ -19,10 +19,10 @@ import org.opencv.core.{CvType, Mat}
 @main def smoke(): Unit =
   OpenCv.load()
 
-  given Releasable[org.opencv.objdetect.CascadeClassifier] = Releasable.handle(_.getNativeObjAddr)
-  given Releasable[org.opencv.objdetect.ArucoDetector] = Releasable.handle(_.getNativeObjAddr)
-  given Releasable[org.opencv.objdetect.QRCodeDetector] = Releasable.handle(_.getNativeObjAddr)
-  given Releasable[org.opencv.dnn.Net] = Releasable.handle(_.getNativeObjAddr)
+  given Releasable[org.opencv.objdetect.CascadeClassifier] = Releasable.nativeHandle
+  given Releasable[org.opencv.objdetect.ArucoDetector] = Releasable.nativeHandle
+  given Releasable[org.opencv.objdetect.QRCodeDetector] = Releasable.nativeHandle
+  given Releasable[org.opencv.dnn.Net] = Releasable.nativeHandle
 
   Managed.use(Mat(8, 8, CvType.CV_8UC3)): m =>
     require(m.rows == 8 && m.cols == 8, s"expected an 8x8 Mat, got ${m.rows}x${m.cols}")

@@ -26,7 +26,7 @@ object Fixtures:
     * bridge — the same one-liner every detector in the library uses.
     */
   def qrCode(payload: String, scale: Int = 12): Managed[Mat] =
-    given Releasable[QRCodeEncoder] = Releasable.handle(_.getNativeObjAddr)
+    given Releasable[QRCodeEncoder] = Releasable.nativeHandle
     Managed.scope: own =>
       val small = own(Mat())
       own(QRCodeEncoder.create()).encode(payload, small)

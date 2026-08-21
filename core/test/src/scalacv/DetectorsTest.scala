@@ -123,7 +123,7 @@ class DetectorsTest extends munit.FunSuite:
     val payload = "scalacv-b12"
     Using
       .Manager: use =>
-        given Releasable[QRCodeEncoder] = Releasable.handle(_.getNativeObjAddr)
+        given Releasable[QRCodeEncoder] = Releasable.nativeHandle
         val encoder = use(Managed(QRCodeEncoder.create()))
         val raw = use(Managed(Mat()))
         encoder.get.encode(payload, raw.get)

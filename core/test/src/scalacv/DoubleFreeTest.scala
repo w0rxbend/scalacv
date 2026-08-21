@@ -7,8 +7,8 @@ import org.opencv.dnn.Net
   *
   * The 185 `org.opencv.*` types that have no public `release()` all carry
   * `protected void finalize() { delete(this.nativeObj); }` — unconditional. So freeing one through
-  * [[Releasable.handle]] and then dropping it means `delete` runs twice on the same address: once from us,
-  * once from the finalizer thread whenever the collector next runs.
+  * [[Releasable.nativeHandle]] and then dropping it means `delete` runs twice on the same address: once from
+  * us, once from the finalizer thread whenever the collector next runs.
   *
   * That does not fail here. It corrupts the heap and takes the JVM down somewhere else entirely, with
   * `double free or corruption` or a SIGSEGV and no Java stack trace — which is exactly how it was found, in
@@ -23,10 +23,10 @@ class DoubleFreeTest extends munit.FunSuite:
 
   override def beforeAll(): Unit = OpenCv.load()
 
-  private given Releasable[CascadeClassifier] = Releasable.handle(_.getNativeObjAddr)
-  private given Releasable[QRCodeDetector] = Releasable.handle(_.getNativeObjAddr)
-  private given Releasable[ArucoDetector] = Releasable.handle(_.getNativeObjAddr)
-  private given Releasable[Net] = Releasable.handle(_.getNativeObjAddr)
+  private given Releasable[CascadeClassifier] = Releasable.nativeHandle
+  private given Releasable[QRCodeDetector] = Releasable.nativeHandle
+  private given Releasable[ArucoDetector] = Releasable.nativeHandle
+  private given Releasable[Net] = Releasable.nativeHandle
 
   /** Enough allocations to make the collector run, and enough GC pressure to drain the finalizer queue while
     * the test is still in scope rather than after the JVM has moved on.

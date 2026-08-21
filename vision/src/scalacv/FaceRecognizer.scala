@@ -130,7 +130,7 @@ final class FaceRecognizer private (private val handle: Managed[FaceRecognizerSF
 
 object FaceRecognizer:
 
-  private given Releasable[FaceRecognizerSF] = Releasable.handle(_.getNativeObjAddr)
+  private given Releasable[FaceRecognizerSF] = Releasable.nativeHandle
 
   /** The SFace model as a [[ModelSpec]] for the generic [[Models.fetch]] downloader, with its SHA-256 pinned
     * so the fetched bytes are verified before the model is handed to OpenCV.

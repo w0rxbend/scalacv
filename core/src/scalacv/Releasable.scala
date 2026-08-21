@@ -44,13 +44,34 @@ object Releasable:
     * looks like success.
     */
   def handle[A <: AnyRef](getNativeAddr: A => Long): Releasable[A] =
-    a =>
-      val addr = getNativeAddr(a)
-      if addr != 0L then
-        // Disarm BEFORE deleting, never after: between the two there is a window in which the
-        // finalizer could run against a pointer we have already freed.
-        NativeFinalizer.disarm(a)
-        NativeDelete.of(a.getClass).invokeExact(addr): Unit
+    a => free(a, getNativeAddr(a))
+
+  /** [[handle]] without the accessor: the address is read from the binding's own `nativeObj` field.
+    *
+    * Every one of the 185 types spells its accessor the same way, so the [[handle]] call naming it was
+    * written out identically at two dozen sites -- two dozen chances to hand one type another type's
+    * accessor, which compiles cleanly and frees the wrong pointer. This form cannot be given the wrong one.
+    *
+    * It reads `nativeObj` reflectively rather than calling `getNativeObjAddr`, which sounds like the weaker
+    * choice and is not: the disarm step below must reflect on that exact field on this exact path anyway, so
+    * the `Field` is already open and cached by the time the address is wanted, and reading it costs nothing
+    * beyond the lookup that was going to happen regardless. It also fails in the same place and with the same
+    * message as the disarm would, instead of succeeding at reading an address the disarm then refuses to
+    * neutralise.
+    *
+    * [[handle]] stays for anything that does not follow the pattern -- a binding whose address lives
+    * somewhere other than `nativeObj`, or a type outside `org.opencv.*` altogether.
+    */
+  def nativeHandle[A <: AnyRef]: Releasable[A] =
+    a => free(a, NativeFinalizer.address(a))
+
+  /** The release sequence both forms share, once the address is in hand. */
+  private def free[A <: AnyRef](a: A, addr: Long): Unit =
+    if addr != 0L then
+      // Disarm BEFORE deleting, never after: between the two there is a window in which the
+      // finalizer could run against a pointer we have already freed.
+      NativeFinalizer.disarm(a)
+      NativeDelete.of(a.getClass).invokeExact(addr): Unit
 
 /** The `--add-opens` line that would let reflection reach `cls`, computed from the class's own module and
   * package rather than guessed. A class in the unnamed module — OpenCV on the classpath, the normal case —
@@ -121,6 +142,12 @@ private object NativeDelete:
 private object NativeFinalizer:
 
   private val fields = java.util.concurrent.ConcurrentHashMap[Class[?], java.lang.reflect.Field]()
+
+  /** The address currently in `target`'s `nativeObj`, through the same cached `Field` [[disarm]] uses. Zero
+    * once disarmed, which is why callers must read it first.
+    */
+  def address(target: AnyRef): Long =
+    fields.computeIfAbsent(target.getClass, findNativeObj).getLong(target)
 
   def disarm(target: AnyRef): Unit =
     val f = fields.computeIfAbsent(target.getClass, findNativeObj)

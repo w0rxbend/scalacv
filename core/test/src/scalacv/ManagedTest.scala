@@ -127,14 +127,14 @@ class ManagedTest extends munit.FunSuite:
   test("the delete(long) bridge frees a handle class that has no release()"):
     // CascadeClassifier is one of the 185 types with no public release(). If this regime ever
     // stops working the failure must be loud, because the alternative is a silent 634x leak.
-    given Releasable[CascadeClassifier] = Releasable.handle(_.getNativeObjAddr)
+    given Releasable[CascadeClassifier] = Releasable.nativeHandle
     val c = Managed(CascadeClassifier())
     c.release()
     assert(c.isReleased)
     intercept[IllegalStateException](c.get)
 
   test("the delete(long) bridge is idempotent for handle classes too"):
-    given Releasable[CascadeClassifier] = Releasable.handle(_.getNativeObjAddr)
+    given Releasable[CascadeClassifier] = Releasable.nativeHandle
     val c = Managed(CascadeClassifier())
     c.release()
     c.release()

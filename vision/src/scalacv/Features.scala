@@ -32,8 +32,8 @@ final class Descriptors private[scalacv] (
   */
 object Features:
 
-  private given Releasable[ORB] = Releasable.handle(_.getNativeObjAddr)
-  private given Releasable[BFMatcher] = Releasable.handle(_.getNativeObjAddr)
+  private given Releasable[ORB] = Releasable.nativeHandle
+  private given Releasable[BFMatcher] = Releasable.nativeHandle
 
   /** Detects up to `maxFeatures` ORB keypoints and computes their descriptors. The result owns native memory
     * — close it.

@@ -28,7 +28,7 @@ final case class QrCode(text: String, corners: Seq[Point])
   */
 object Qr:
 
-  private given Releasable[QRCodeDetector] = Releasable.handle(_.getNativeObjAddr)
+  private given Releasable[QRCodeDetector] = Releasable.nativeHandle
 
   /** Finds and decodes every QR code in `mat`.
     *
@@ -102,8 +102,8 @@ final case class ArucoMarker(id: Int, corners: Seq[Point])
   */
 object Aruco:
 
-  private given Releasable[ArucoDetector] = Releasable.handle(_.getNativeObjAddr)
-  private given Releasable[Dictionary] = Releasable.handle(_.getNativeObjAddr)
+  private given Releasable[ArucoDetector] = Releasable.nativeHandle
+  private given Releasable[Dictionary] = Releasable.nativeHandle
 
   /** Finds every marker from `dictionary` in `mat`.
     *

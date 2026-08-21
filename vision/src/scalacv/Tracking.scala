@@ -50,7 +50,7 @@ final class Tracker private (private val handle: Managed[CvTracker]) extends Aut
 
 object Tracker:
 
-  private given Releasable[CvTracker] = Releasable.handle(_.getNativeObjAddr)
+  private given Releasable[CvTracker] = Releasable.nativeHandle
 
   /** Builds a tracker of the given kind. Free it when done. */
   def create(kind: TrackerKind): Tracker =
@@ -91,7 +91,7 @@ final class Kalman private (private val handle: Managed[KalmanFilter]) extends A
 
 object Kalman:
 
-  private given Releasable[KalmanFilter] = Releasable.handle(_.getNativeObjAddr)
+  private given Releasable[KalmanFilter] = Releasable.nativeHandle
 
   /** A filter tracking `initial`, ready to [[Kalman.predict]]. `processNoise` is how much the model is
     * allowed to drift (larger ⇒ more responsive, more jitter); `measurementNoise` is how much the

@@ -19,7 +19,7 @@ import org.opencv.imgcodecs.{Animation as CvAnimation, Imgcodecs}
   */
 object Animation:
 
-  private given Releasable[CvAnimation] = Releasable.handle(_.getNativeObjAddr)
+  private given Releasable[CvAnimation] = Releasable.nativeHandle
 
   /** Removes a half-written output after a failed render or encode. A truncated video or GIF still opens in a
     * player, so a partial file reads as success; deleting it makes a failure a failure. Best-effort — a

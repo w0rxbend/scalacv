@@ -116,10 +116,10 @@ object FaceDetect:
     * non-default `topK` — can `import FaceDetect.given` and manage it on the same terms.
     *
     * This is the same one-liner every other handle type uses ([[Cascades]], [[Dnn]], [[Qr]], [[Aruco]]):
-    * [[Releasable.handle]] reads the address, then disarms the binding's unconditional `finalize()` *before*
-    * freeing the pointer. That disarm is not optional — without it a released `FaceDetectorYN` is a live
-    * double-free, and because a DNN allocates enough to make the collector run mid-suite, this class's own
-    * tests are where that SIGSEGV first surfaced:
+    * [[Releasable.nativeHandle]] reads the address, then disarms the binding's unconditional `finalize()`
+    * *before* freeing the pointer. That disarm is not optional — without it a released `FaceDetectorYN` is a
+    * live double-free, and because a DNN allocates enough to make the collector run mid-suite, this class's
+    * own tests are where that SIGSEGV first surfaced:
     *
     * {{{
     * SIGSEGV (0xb)  C  [libopencv_java.so+0x163155]  Java_org_opencv_objdetect_FaceDetectorYN_delete
@@ -129,7 +129,7 @@ object FaceDetect:
     * The hazard belongs to every one of the 185 types, not to YuNet, so the fix lives in `handle` rather than
     * here.
     */
-  given Releasable[FaceDetectorYN] = Releasable.handle(_.getNativeObjAddr)
+  given Releasable[FaceDetectorYN] = Releasable.nativeHandle
 
   /** The number of columns in one row of YuNet's output Mat: `x, y, w, h`, 5 landmark pairs, score. */
   val ResultColumns: Int = 15

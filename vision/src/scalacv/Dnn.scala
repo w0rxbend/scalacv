@@ -15,9 +15,9 @@ import org.opencv.dnn.{Dnn as CvDnn, Net}
   * ==Ownership==
   *
   * `Net` is one of the 185 generated types with no public `release()`, so it is freed through the
-  * `delete(long)` bridge — see [[Releasable.handle]]. Both the `Net` from [[fromOnnx]] and the `Mat`s from
-  * [[blobFromImage]] and [[forward]] are **caller-owned**: release them, or take them with [[Managed.use]].
-  * Nothing here takes ownership of an argument.
+  * `delete(long)` bridge — see [[Releasable.nativeHandle]]. Both the `Net` from [[fromOnnx]] and the `Mat`s
+  * from [[blobFromImage]] and [[forward]] are **caller-owned**: release them, or take them with
+  * [[Managed.use]]. Nothing here takes ownership of an argument.
   *
   * ==Statefulness==
   *
@@ -38,7 +38,7 @@ object Dnn:
     * who obtain a `Net` some other way — `Dnn.readNet`, `Net.quantize` — can put it in a [[Managed]] on the
     * same terms with `import Dnn.given`.
     */
-  given Releasable[Net] = Releasable.handle(_.getNativeObjAddr)
+  given Releasable[Net] = Releasable.nativeHandle
 
   /** Loads an ONNX model from a filesystem path.
     *

@@ -85,7 +85,7 @@ trait MotionDetector extends AutoCloseable:
 
 object MotionDetector:
 
-  private given Releasable[BackgroundSubtractorMOG2] = Releasable.handle(_.getNativeObjAddr)
+  private given Releasable[BackgroundSubtractorMOG2] = Releasable.nativeHandle
 
   /** Frame-difference motion detection: each frame is compared to the previous one. The first frame reports
     * [[Motion.still]] and becomes the baseline.

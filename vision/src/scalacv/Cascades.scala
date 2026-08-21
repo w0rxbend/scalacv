@@ -64,7 +64,7 @@ object Cascades:
     * `delete(long)` bridge. Exposed as a `given` so callers who build their own classifiers can
     * `import Cascades.given` and put them in a [[Managed]] on the same terms.
     */
-  given Releasable[CascadeClassifier] = Releasable.handle(_.getNativeObjAddr)
+  given Releasable[CascadeClassifier] = Releasable.nativeHandle
 
   private val ResourceDir = "share/opencv4/haarcascades"
 
