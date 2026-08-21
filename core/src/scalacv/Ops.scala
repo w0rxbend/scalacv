@@ -625,9 +625,9 @@ object Mats:
   /** Allocates the destination, runs the native call, and wraps the result.
     *
     * Private, and the single place a destination Mat is created, so the ownership contract is enforced in one
-    * spot rather than eleven. If the native call throws, the destination is released before the exception
-    * propagates — otherwise every failed operation would leak a Mat that no caller ever saw and therefore
-    * could not free.
+    * spot rather than at every operation in this file. If the native call throws, the destination is released
+    * before the exception propagates — otherwise every failed operation would leak a Mat that no caller ever
+    * saw and therefore could not free.
     */
   private[scalacv] def produce(operation: String)(fill: Mat => Unit): Managed[Mat] =
     val dst = Mat()

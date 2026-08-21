@@ -95,7 +95,10 @@ object OpenCv:
     * cannot satisfy; off Windows an unparseable error is rethrown as-is rather than bulk-loaded around.
     */
   private def satisfy(target: File, payload: Map[String, File]): Unit =
-    val loaded = scala.collection.mutable.Set.empty[String]
+    // Named for what it holds — the dependency files already loaded on this path — rather than `loaded`,
+    // which is the object's own load-completion flag a few lines up. Two different things under one name in
+    // one file is a trap for the next reader even though the scopes never actually collide.
+    val dependenciesLoaded = scala.collection.mutable.Set.empty[String]
     var bulkTried = false
 
     // `lastMissing` is threaded as a parameter, not shared: each retry chain carries its own last-missing
@@ -122,7 +125,7 @@ object OpenCv:
                      |the platform-classifier jar is incomplete or was extracted only partially; try
                      |clearing the javacpp cache (~/.javacpp) and running again.""".stripMargin
                   )
-              if !loaded.add(dep.getName) then throw e
+              if !dependenciesLoaded.add(dep.getName) then throw e
               // Load the dependency on its own fresh path, then retry the original load — remembering this
               // round's missing soname, so a repeat of it means loading the dependency did not help.
               attempt(() => Loader.loadGlobal(dep.getAbsolutePath), dep.getName, "")
