@@ -156,6 +156,10 @@ object FaceRecognizer:
 
   /** The 1×15 detection row SFace's `alignCrop` expects: box, five landmarks, score — the YuNet output format
     * reconstructed from a decoded [[Face]].
+    *
+    * The write is guarded because it is the one step that can fail after the allocation: the caller only
+    * takes ownership of the Mat once this method returns, so a throwing `put` would strand a native buffer
+    * nobody ever saw and nobody can free.
     */
   private def faceRow(face: Face): Mat =
     val lm = face.landmarks
@@ -177,5 +181,10 @@ object FaceRecognizer:
       face.score
     )
     val m = Mat(1, 15, CvType.CV_32F)
-    m.put(0, 0, row)
-    m
+    try
+      m.put(0, 0, row): Unit
+      m
+    catch
+      case e: Throwable =>
+        m.release()
+        throw e

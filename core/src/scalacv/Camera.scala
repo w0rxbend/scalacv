@@ -295,19 +295,26 @@ object Recorder:
     require(fps > 0, s"fps must be positive, got $fps")
     require(size.width > 0 && size.height > 0, s"a recorder needs a positive frame size, got $size")
     val vw = VideoWriter()
-    Cv.attempt(s"VideoWriter.open('$path')")(vw.open(path, codec.fourcc, fps, size.toCv, color))
-      .flatMap: opened =>
-        if opened && vw.isOpened then Right(new Recorder(Managed(vw), size))
-        else
-          vw.release()
-          Left(
-            CvError.LoadFailed(
-              path,
-              s"VideoWriter could not open with codec $codec — the codec may be unavailable in this OpenCV " +
-                "build, or the path may not be writable. Try Codec.Mjpg with an .avi extension, which encodes " +
-                "with the built-in codecs."
+    // `vw` is a native object with no owner until it reaches `new Recorder`, so every exit that does not get
+    // there has to release it by hand. Failure arrives in two shapes: `vw.open` can throw at the codec
+    // boundary, which `Cv.attempt` turns into a `Left` so `flatMap` never runs its body, or it can return
+    // without throwing while leaving the writer closed. Releasing once, after the whole attempt, whenever the
+    // outcome is a `Left` covers both — the same discipline `Video.openCapture` applies to its capture.
+    val outcome =
+      Cv.attempt(s"VideoWriter.open('$path')")(vw.open(path, codec.fourcc, fps, size.toCv, color))
+        .flatMap: opened =>
+          if opened && vw.isOpened then Right(new Recorder(Managed(vw), size))
+          else
+            Left(
+              CvError.LoadFailed(
+                path,
+                s"VideoWriter could not open with codec $codec — the codec may be unavailable in this OpenCV " +
+                  "build, or the path may not be writable. Try Codec.Mjpg with an .avi extension, which " +
+                  "encodes with the built-in codecs."
+              )
             )
-          )
+    if outcome.isLeft then vw.release()
+    outcome
 
   /** Opens a recorder, runs `use`, and closes it afterwards — even on an exception. `codec` defaults to
     * [[Codec.Mjpg]] for the reason given on [[open]]; `path` should end in `.avi` to match it.
