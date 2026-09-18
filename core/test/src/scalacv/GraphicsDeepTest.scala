@@ -276,8 +276,8 @@ class GraphicsDeepTest extends munit.FunSuite:
 
   test("bars scale to the tallest, sit on the baseline, and use magnitudes"):
     // gap 4 and two values: barWidth = (60 - 12) / 2 = 24, so the bars are Rect(4, 2, 24, 48) and
-    // Rect(32, 26, 24, 24).
-    val img = Chart.bars(Seq(2.0, 1.0), 60, 50, Color.White, gap = 4).render(60, 50)
+    // Rect(32, 26, 24, 24). LINE_8 keeps the gap probe, 2 px from the first bar's edge, clear of any spread.
+    val img = Chart.bars(Seq(2.0, 1.0), 60, 50, Color.White, gap = 4).smooth(false).render(60, 50)
     try
       assert(px(img, 16, 10)(0) > 200, "inside the tall bar")
       assert(px(img, 44, 10)(0) < 30, "above the short bar")
@@ -315,10 +315,16 @@ class GraphicsDeepTest extends munit.FunSuite:
       val left = px(two, 20, 40)
       assert(left(2) > 200 && left(0) < 60, s"the second slice is red, got ${left.toList}")
     finally two.close()
-    val cycled = Chart.pie(Seq(1, 1, 1), 80, 80, palette = Seq(Color.White)).render(80, 80)
+    // Three slices over two colours: the third must wrap back to white, which a palette that merely clamps
+    // at its last entry would paint red.
+    val cycled = Chart.pie(Seq(1.0, 1.0, 1.0), 80, 80, palette = Seq(Color.White, Color.Red)).render(80, 80)
     try
-      assert(px(cycled, 40, 55).forall(_ > 240), "the second slice reuses the only colour")
-      assert(px(cycled, 25, 40).forall(_ > 240), "so does the third")
+      val second = px(cycled, 40, 55)
+      assert(second(2) > 200 && second(0) < 60, s"the second slice is red, got ${second.toList}")
+      assert(
+        px(cycled, 25, 40).forall(_ > 240),
+        s"the third slice wraps to white, got ${px(cycled, 25, 40).toList}"
+      )
     finally cycled.close()
     assertEquals(Chart.pie(Seq(0.0, 0.0), 80, 80).bounds, None)
     assertEquals(Chart.pie(Seq(1.0), 80, 80, palette = Seq.empty).bounds, None)
@@ -341,8 +347,8 @@ class GraphicsDeepTest extends munit.FunSuite:
 
   // -- Animation.record and gif ------------------------------------------------------------------------
 
-  // Video paths get a fixed name inside a temp directory: digits in the file name (as createTempFile adds)
-  // make videoio probe it as an image sequence and log a spurious warning.
+  // Output files get a fixed name inside a per-test temp directory, as VideoTest and CameraTest do, so one
+  // recursive delete removes whatever a run left behind, including a file a failing assertion never reached.
 
   test("record deletes the partial file and rethrows when a frame throws"):
     val dir = Files.createTempDirectory("scalacv-record-throw")
