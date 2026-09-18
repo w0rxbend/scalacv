@@ -1,12 +1,15 @@
 package scalacv
 
+import org.scalacheck.Gen
+import org.scalacheck.Prop.{forAll, propBoolean}
+
 /** Invariant/property-style checks for the algorithm-heavy SLAM stack, complementing the example-based
   * [[MappingTest]] and [[NavigationTest]]. Where those assert one worked case, these hammer the invariants a
-  * regression is most likely to break: the occupancy grid's probability bounds and monotonicity, the reactive
-  * [[Navigator]]'s steering logic (otherwise untested), and the stateful [[Odometry]] and [[LoopDetector]]
-  * pipelines' bookkeeping.
+  * regression is most likely to break: the occupancy grid's probability bounds, monotonicity and ray
+  * integration, the reactive [[Navigator]]'s steering logic (otherwise untested), and the stateful
+  * [[Odometry]] and [[LoopDetector]] pipelines' bookkeeping.
   */
-class SlamPropertiesTest extends munit.FunSuite:
+class SlamPropertiesTest extends munit.ScalaCheckSuite:
 
   override def beforeAll(): Unit = OpenCv.load()
 
@@ -59,6 +62,94 @@ class SlamPropertiesTest extends munit.FunSuite:
       "unknown space is not occupied above the 0.5 prior"
     )
 
+  // -- OccupancyGrid: ray integration as a law over every direction and slope ----------------------
+
+  /** A 21×21 unit-resolution grid: integer world coordinates in -10..10 land exactly on cells 0..20, so a
+    * test can address every cell by its world coordinate without rounding.
+    */
+  private def unitGrid(): OccupancyGrid = OccupancyGrid(21, 21, resolution = 1.0)
+
+  private val genCoord: Gen[Int] = Gen.choose(-10, 10)
+
+  property(
+    "one observation frees exactly max(|dx|, |dy|) 8-connected ray cells and occupies only the obstacle"
+  ):
+    forAll(genCoord, genCoord, genCoord, genCoord): (x0, y0, x1, y1) =>
+      val grid = unitGrid()
+      grid.observe(x0, y0, x1, y1)
+      val cells = for x <- -10 to 10; y <- -10 to 10 yield (x, y, grid.probability(x, y))
+      val free = cells.collect { case (x, y, p) if p < 0.5 => (x, y) }
+      val occupied = cells.collect { case (x, y, p) if p > 0.5 => (x, y) }
+      val unknown = cells.count(_._3 == 0.5)
+      val span = math.max(math.abs(x1 - x0), math.abs(y1 - y0))
+      // Bresenham advances the major axis by exactly one cell per step, so ordering the ray by distance
+      // along that axis recovers the order it was walked in.
+      val xMajor = math.abs(x1 - x0) >= math.abs(y1 - y0)
+      def along(cell: (Int, Int)): Int =
+        if xMajor then math.abs(cell._1 - x0) else math.abs(cell._2 - y0)
+      val ray = (free :+ ((x1, y1))).sortBy(along)
+      val steps = ray.zip(ray.drop(1))
+      (free.size == span) :| s"${free.size} free cells, expected $span" &&
+      (occupied == Seq((x1, y1))) :| s"occupied cells $occupied, expected only ($x1, $y1)" &&
+      (unknown == 21 * 21 - span - 1) :| "every cell off the ray still reads exactly 0.5" &&
+      (ray.head == (x0, y0)) :| s"the ray starts at the sensor, got ${ray.head}" &&
+      steps.forall((a, b) => along(b) - along(a) == 1) :| "the major axis advances one cell per step" &&
+      steps.forall((a, b) => math.abs(a._1 - b._1) <= 1 && math.abs(a._2 - b._2) <= 1) :| "8-connected"
+
+  test("an obstacle in the sensor's own cell records one hit and no miss"):
+    val grid = OccupancyGrid(11, 11, resolution = 1.0)
+    grid.observe(0.0, 0.0, 0.0, 0.0)
+    // A one-cell ray has no free part to mark, so the cell carries exactly one LogHit (0.85).
+    assertEqualsDouble(grid.probability(0.0, 0.0), 1.0 - 1.0 / (1.0 + math.exp(0.85)), 1e-6)
+
+  test("one hit outweighs one miss"):
+    val grid = OccupancyGrid(11, 11, resolution = 1.0)
+    grid.hit(0.0, 0.0)
+    grid.miss(0.0, 0.0)
+    // A return is stronger evidence than seeing nothing: LogHit 0.85 - LogMiss 0.4 leaves +0.45.
+    assertEqualsDouble(grid.probability(0.0, 0.0), 1.0 - 1.0 / (1.0 + math.exp(0.45)), 1e-6)
+    assert(grid.probability(0.0, 0.0) > 0.5)
+
+  test("out-of-bounds readings are ignored but the in-bounds part of a ray is still integrated"):
+    val grid = unitGrid()
+    grid.hit(1000.0, 0.0) // must not throw
+    assertEqualsDouble(grid.probability(1000.0, 0.0), 0.5, 0.0)
+    grid.observe(0.0, 0.0, 1000.0, 0.0)
+    assert(grid.probability(5.0, 0.0) < 0.5, "a cell inside the grid on the way to the obstacle is free")
+    assert(grid.probability(10.0, 0.0) < 0.5, "the last cell before the edge is free")
+
+  test("a 1x1 grid maps the origin to its only cell and renders as a 1x1 image"):
+    val one = OccupancyGrid(1, 1)
+    assertEquals(one.cellOf(0.0, 0.0), (0, 0))
+    one.hit(0.0, 0.0)
+    assert(one.probability(0.0, 0.0) > 0.5)
+    val img = one.toImage
+    try assertEquals((img.width, img.height), (1, 1))
+    finally img.close()
+
+  test("cell boundaries round half-up, so +0.5 and -0.5 land in different cells"):
+    // Documents Java's Math.round: half rounds toward positive infinity on both sides of zero, so the
+    // cells are not mirror images. If symmetric rounding is ever preferred, this is where it shows.
+    val grid = unitGrid()
+    assertEquals(grid.cellOf(0.5, 0.5), (11, 11))
+    assertEquals(grid.cellOf(-0.5, -0.5), (10, 10))
+
+  test("toImage places an off-centre hit at (row = cell y, col = cell x), unknown as 127, free near black"):
+    val grid = OccupancyGrid(9, 7, resolution = 1.0)
+    for _ <- 0 until 20 do grid.hit(3.0, -2.0) // cell (col 7, row 1)
+    for _ <- 0 until 20 do grid.miss(-4.0, 3.0) // cell (col 0, row 6)
+    val img = grid.toImage
+    try
+      // Clamped log-odds ±4.0 render as sigmoid(4) * 255 = 250.4 -> 250 and sigmoid(-4) * 255 = 4.6 -> 4;
+      // the 0.5 prior renders as 127.5 -> 127. Under a transposed index the bright pixel lands elsewhere.
+      assertEquals(img.mat.get(1, 7)(0), 250.0)
+      assert(
+        img.mat.get(6, 0)(0) < 10,
+        s"a saturated-free cell should be near black, was ${img.mat.get(6, 0)(0)}"
+      )
+      assertEquals(img.mat.get(0, 0)(0), 127.0)
+    finally img.close()
+
   // -- Navigator: the reactive steering logic (otherwise untested) ---------------------------------
 
   /** A single-channel disparity image with three flat vertical bands (brighter = nearer), each 0…255. */
@@ -109,6 +200,32 @@ class SlamPropertiesTest extends munit.FunSuite:
       intercept[IllegalArgumentException](Navigator.steer(g, dangerNearness = 1.5))
       intercept[IllegalArgumentException](Navigator.steer(g, blockedNearness = -0.1))
     finally g.close()
+
+  test("steer breaks a left/right tie to the Right"):
+    val tied = disparity(left = 0, centre = 255, right = 0)
+    try assertEquals(Navigator.steer(tied).steering, Steering.Right)
+    finally tied.close()
+
+  test("steer treats centre nearness exactly at dangerNearness as a threat, not as clear"):
+    val atThreshold = disparity(0, 255, 0) // centre nearness is exactly 1.0
+    try assertNotEquals(Navigator.steer(atThreshold, dangerNearness = 1.0).steering, Steering.Straight)
+    finally atThreshold.close()
+    val justUnder = disparity(0, 254, 0) // 254/255 is strictly below 1.0
+    try assertEquals(Navigator.steer(justUnder, dangerNearness = 1.0).steering, Steering.Straight)
+    finally justUnder.close()
+
+  test("steer gives the columns left over from the thirds to the right band"):
+    // Width 4 splits as third = 1: left is column 0, centre column 1, and the right band takes columns 2..3.
+    // Only column 3 is bright, so the right band averages 0 and 255 while the other two read nothing.
+    val map =
+      Image.blank(4, 6, Scalar(0), channels = 1).drawRect(Rect(3, 0, 1, 6), Scalar(255), Thickness.Filled)
+    try
+      val g = Navigator.steer(map)
+      assertEqualsDouble(g.leftNearness, 0.0, 1e-9)
+      assertEqualsDouble(g.centreNearness, 0.0, 1e-9)
+      assertEqualsDouble(g.rightNearness, 0.5, 1e-9)
+      assertEquals(g.steering, Steering.Straight)
+    finally map.close()
 
   // -- Odometry: the stateful pipeline's bookkeeping -----------------------------------------------
 
@@ -179,7 +296,9 @@ class SlamPropertiesTest extends munit.FunSuite:
         finally img.close()
     finally d.close()
 
-  test("a reported loop's score is a fraction in (0, 1] and clears minMatches"):
+  test(
+    "a revisit of the oldest place is reported, and its score is a fraction in (0, 1] that clears minMatches"
+  ):
     val d = LoopDetector(minMatches = 20, recentExclusion = 1)
     try
       for s <- 1 to 5 do
@@ -188,8 +307,13 @@ class SlamPropertiesTest extends munit.FunSuite:
         finally img.close()
       val revisit = place(1) // old enough to be searchable
       try
-        d.detect(revisit)
-          .foreach: loop =>
+        d.detect(revisit) match
+          case None =>
+            fail(
+              "place 1 at index 0 is byte-identical and searchable (5 keyframes, exclusion 1), so a loop must be reported"
+            )
+          case Some(loop) =>
+            assertEquals(loop.keyframe, 0, s"the loop must close to the identical keyframe, got $loop")
             assert(loop.matches >= 20, s"a reported loop must clear minMatches, got ${loop.matches}")
             assert(loop.score > 0.0 && loop.score <= 1.0, s"score must be in (0,1], got ${loop.score}")
       finally revisit.close()
