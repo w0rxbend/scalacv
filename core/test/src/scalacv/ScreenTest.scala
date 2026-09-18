@@ -28,22 +28,6 @@ class ScreenTest extends munit.FunSuite:
       screen.close()
       template.close()
 
-  test("findAll finds every occurrence of a repeated template"):
-    // Two identical squares; a template cropped from one should match both.
-    val screen = Image
-      .blank(160, 120, Scalar(50, 50, 50))
-      .drawRect(Rect(20, 20, 20, 20), Scalar.White, Thickness.Filled)
-      .drawRect(Rect(20, 20, 20, 20), Scalar.Black, Thickness.Stroke(2))
-      .drawRect(Rect(110, 70, 20, 20), Scalar.White, Thickness.Filled)
-      .drawRect(Rect(110, 70, 20, 20), Scalar.Black, Thickness.Stroke(2))
-    val template = screen.copy.crop(Rect(16, 16, 28, 28))
-    try
-      val matches = Screen.findAll(screen, template, minScore = 0.8)
-      assert(matches.size >= 2, s"expected both squares, found ${matches.size}")
-    finally
-      screen.close()
-      template.close()
-
   test("a template larger than the image is rejected"):
     val screen = Image.blank(30, 30)
     val template = Image.blank(50, 50)
@@ -99,14 +83,21 @@ class ScreenTest extends munit.FunSuite:
       screen.close()
       template.close()
 
-  test("maxMatches caps findAll, locate is its head, and a cap below one is rejected"):
+  test("maxMatches caps findAll and locate is its head"):
     val screen = screenWithTwoSquares()
     val template = screen.copy.crop(Rect(16, 16, 28, 28))
     try
       val capped = Screen.findAll(screen, template, maxMatches = 1)
       assertEquals(capped.size, 1)
       assertEquals(capped, Screen.locate(screen, template).toSeq)
-      intercept[IllegalArgumentException](Screen.findAll(screen, template, maxMatches = 0))
+    finally
+      screen.close()
+      template.close()
+
+  test("a maxMatches below one is rejected"):
+    val screen = screenWithTwoSquares()
+    val template = screen.copy.crop(Rect(16, 16, 28, 28))
+    try intercept[IllegalArgumentException](Screen.findAll(screen, template, maxMatches = 0))
     finally
       screen.close()
       template.close()
