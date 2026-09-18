@@ -1,7 +1,10 @@
 package scalacv
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import scala.util.Using
 
+import org.opencv.core as cv
 import org.opencv.core.{CvType, Mat}
 import org.opencv.objdetect.CascadeClassifier
 
@@ -157,3 +160,148 @@ class ManagedTest extends munit.FunSuite:
     r.left.foreach: e =>
       assert(e.isInstanceOf[CvError.NativeCall], s"expected NativeCall, got $e")
       assert(e.getMessage.contains("cvtColor"), e.getMessage)
+
+  test("take hands the object out without freeing it, spends the handle, and makes a later release a no-op"):
+    val frees = AtomicInteger(0)
+    given Releasable[String] = _ => { frees.incrementAndGet(); () }
+    val m = Managed("payload")
+    assertEquals(m.take(), "payload")
+    assert(m.isReleased, "a taken handle is spent")
+    assertEquals(frees.get, 0, "take transfers ownership; it must not free")
+    val e = intercept[IllegalStateException](m.take())
+    assert(e.getMessage.contains("transferring"), e.getMessage)
+    intercept[IllegalStateException](m.get)
+    m.release()
+    assertEquals(frees.get, 0, "the object now belongs to the taker, so the spent handle has nothing to free")
+
+    // The same contract on a real Mat: the buffer survives both the take and the later release.
+    val raw = Mat(16, 16, CvType.CV_8UC1)
+    val handle = Managed(raw)
+    val out = handle.take()
+    assertNotEquals(out.dataAddr(), 0L, "take must not free the buffer")
+    handle.release()
+    assertNotEquals(out.dataAddr(), 0L, "releasing a taken handle must not free the transferred buffer")
+    out.release()
+
+  test("adopt releases an already-wrapped handle exactly once, at scope end, and leaves the original spent"):
+    val frees = AtomicInteger(0)
+    given Releasable[String] = _ => { frees.incrementAndGet(); () }
+    val h = Managed("x")
+    val v = Managed.scope: own =>
+      val a = own.adopt(h)
+      assertEquals(frees.get, 0, "nothing may be released while the body is still running")
+      assert(!h.isReleased)
+      a + "!"
+    assertEquals(v, "x!")
+    assertEquals(frees.get, 1)
+    assert(h.isReleased, "the scope took over the handle, so the original is spent")
+    h.release()
+    assertEquals(frees.get, 1, "the scope already freed it; the original handle's release is the CAS no-op")
+
+  test("adopting the same handle twice in one scope still frees it once"):
+    val frees = AtomicInteger(0)
+    given Releasable[String] = _ => { frees.incrementAndGet(); () }
+    val h = Managed("x")
+    Managed.scope: own =>
+      own.adopt(h)
+      own.adopt(h)
+      ()
+    assertEquals(frees.get, 1)
+
+  test("scope keeps the body's exception and attaches a release failure as suppressed, releasing the rest"):
+    val goodFrees = AtomicInteger(0)
+    given Releasable[String] = s =>
+      if s == "bad" then throw RuntimeException("release failed") else { goodFrees.incrementAndGet(); () }
+    val e = intercept[RuntimeException]:
+      Managed.scope: own =>
+        own("good")
+        own("bad")
+        throw RuntimeException("boom")
+    assertEquals(e.getMessage, "boom")
+    assertEquals(e.getSuppressed.map(_.getMessage).toSeq, Seq("release failed"))
+    assertEquals(goodFrees.get, 1, "a failing release must not stop the other handles from being released")
+
+  test("scope propagates a release failure when the body itself succeeded"):
+    given Releasable[String] = s => if s == "bad" then throw RuntimeException("release failed") else ()
+    val e = intercept[RuntimeException]:
+      Managed.scope: own =>
+        own("bad")
+        1
+    assertEquals(e.getMessage, "release failed")
+
+  test("the delete bridge refuses a type without a nativeObj field with NativesMissing, in both forms"):
+    // Plain JVM objects have no nativeObj, so both forms must fail loudly rather than pretend to free.
+    locally:
+      given Releasable[Object] = Releasable.nativeHandle
+      val e = intercept[CvError.NativesMissing](Managed(new Object).release())
+      assert(e.getMessage.contains("no nativeObj field"), e.getMessage)
+    locally:
+      // A non-zero address forces the disarm step, which is where the missing field is discovered.
+      given Releasable[StringBuilder] = Releasable.handle(_ => 42L)
+      val e = intercept[CvError.NativesMissing](Managed(StringBuilder()).release())
+      assert(e.getMessage.contains("no nativeObj field"), e.getMessage)
+
+  test("the accessor form of the delete bridge zeroes nativeObj, so re-wrapping a freed object is a no-op"):
+    given Releasable[CascadeClassifier] = Releasable.handle(_.getNativeObjAddr)
+    val c = CascadeClassifier()
+    assertNotEquals(c.getNativeObjAddr, 0L, "a fresh CascadeClassifier should hold a pointer")
+    Managed(c).release()
+    assertEquals(c.getNativeObjAddr, 0L, "release must zero nativeObj so finalize() deletes nullptr")
+    // The second wrap reads address 0, and free() short-circuits before touching delete(long).
+    Managed(c).release()
+
+  test("Cv.attempt returns a thrown CvError as-is, and orThrow rethrows that same instance"):
+    val err = CvError.LoadFailed("r", "d")
+    Cv.attempt("op")(throw err) match
+      case Left(e) => assert(e eq err, s"a CvError must pass through unwrapped, got $e")
+      case other => fail(other.toString)
+    val rethrown = intercept[CvError.LoadFailed](Cv.orThrow("op")(throw err))
+    assert(rethrown eq err)
+    assertEquals(Cv.orThrow("op")(41 + 1), 42)
+
+  test("Cv.attempt wraps a CvException in NativeCall, naming the operation and keeping the message"):
+    val r = Cv.attempt("op")(throw new org.opencv.core.CvException("native"))
+    r match
+      case Left(e @ CvError.NativeCall("op", cause)) =>
+        assertEquals(cause.getMessage, "native")
+        assertEquals(e.getMessage, "OpenCV failed during op: native")
+      case other => fail(other.toString)
+
+  test("every CvError names its resource and details, and the wrapping variants keep their cause"):
+    assertEquals(
+      CvError.DecodeFailed("/p.png", "bad header").getMessage,
+      "could not decode an image from '/p.png': bad header"
+    )
+    assertEquals(CvError.LoadFailed("m.onnx", "404").getMessage, "could not load 'm.onnx': 404")
+    assertEquals(CvError.EncodeFailed("/o.jpg", "x").getMessage, "could not write an image to '/o.jpg': x")
+    assertEquals(CvError.CalibrationFailed("3 views").getMessage, "camera calibration failed: 3 views")
+    val cause = RuntimeException("inner")
+    val native = CvError.NativeCall("cvtColor", cause)
+    assertEquals(native.getMessage, "OpenCV failed during cvtColor: inner")
+    assert(native.getCause eq cause)
+    assert(CvError.NativesMissing("d", cause).getCause eq cause)
+    assertEquals(CvError.NativesMissing("d").getCause, null)
+    val all: Seq[CvError] = Seq(
+      CvError.DecodeFailed("p", "d"),
+      CvError.LoadFailed("r", "d"),
+      CvError.EncodeFailed("p", "d"),
+      CvError.CalibrationFailed("d"),
+      native,
+      CvError.NativesMissing("d")
+    )
+    all.foreach(e => assert(e.isInstanceOf[RuntimeException], s"$e must be a RuntimeException"))
+
+  test("Mats.grayscale hands back an owned clone for an already-grey input, never an alias of the receiver"):
+    val grey = Mat(8, 8, CvType.CV_8UC1, cv.Scalar(7))
+    try
+      val out = Mats.grayscale(grey)
+      assertNotEquals(out.get.dataAddr(), grey.dataAddr(), "the result must not share the borrowed buffer")
+      out.release()
+      assertNotEquals(grey.dataAddr(), 0L, "releasing the result must leave the borrowed receiver intact")
+      assertEquals(grey.get(0, 0)(0), 7.0)
+    finally grey.release()
+
+  test("Mats.grayscale reduces a 4-channel input to CV_8UC1"):
+    val bgra = Mat(8, 8, CvType.CV_8UC4, cv.Scalar(1, 2, 3, 4))
+    try Mats.grayscale(bgra).use(m => assertEquals(m.`type`(), CvType.CV_8UC1))
+    finally bgra.release()
