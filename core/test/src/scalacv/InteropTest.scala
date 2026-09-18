@@ -4,6 +4,11 @@ import java.awt.image.BufferedImage
 import java.nio.file.{Files, Path}
 import java.security.MessageDigest
 
+import scala.jdk.CollectionConverters.*
+import scala.util.Using
+
+import org.opencv.core.{Core, CvType, Mat}
+
 /** BufferedImage interop and the Models downloader (tested offline through file:// URLs). */
 class InteropTest extends munit.FunSuite:
 
@@ -156,3 +161,157 @@ class InteropTest extends munit.FunSuite:
   test("the YuNet spec carries the same file and checksum FaceDetect pins"):
     assertEquals(FaceDetect.modelSpec.fileName, FaceDetect.ModelFileName)
     assertEquals(FaceDetect.modelSpec.sha256, Some(FaceDetect.ModelSha256))
+
+  test(
+    "toBufferedImage rejects a non-8-bit, an empty, and a 2-channel Mat before any raster is touched, and a 1×1 image round-trips"
+  ):
+    Managed.use(Mat(4, 4, CvType.CV_16UC1)) { m =>
+      val e = intercept[IllegalArgumentException](Interop.toBufferedImage(m))
+      assert(e.getMessage.contains("8-bit"), e.getMessage)
+      assert(e.getMessage.contains("normalize"), s"the remedy should be named, got: ${e.getMessage}")
+    }
+    Managed.use(Mat(4, 4, CvType.CV_32FC3)) { m =>
+      val e = intercept[IllegalArgumentException](Interop.toBufferedImage(m))
+      assert(e.getMessage.contains("8-bit"), e.getMessage)
+    }
+    // An empty Mat reports depth CV_8U, so it clears the depth guard and must be caught by the next one.
+    Managed.use(Mat()) { m =>
+      val e = intercept[IllegalArgumentException](Interop.toBufferedImage(m))
+      assert(e.getMessage.contains("non-empty"), e.getMessage)
+    }
+    Managed.use(Mat(4, 4, CvType.CV_8UC2)) { m =>
+      val e = intercept[IllegalArgumentException](Interop.toBufferedImage(m))
+      assert(e.getMessage.contains("channel count: 2"), e.getMessage)
+    }
+    val img = Image.blank(1, 1, Scalar(1, 2, 3))
+    try
+      val bi = img.toBufferedImage
+      assertEquals((bi.getWidth, bi.getHeight), (1, 1))
+      val back = Image.fromBufferedImage(bi)
+      try assertEquals(back.mat.get(0, 0).toSeq, Seq(1.0, 2.0, 3.0))
+      finally back.close()
+    finally img.close()
+
+  test(
+    "fromBufferedImage of a 3BYTE_BGR sub-image takes the safe path and yields the sub-region's own pixels; a BYTE_GRAY source yields three equal channels"
+  ):
+    val parent = BufferedImage(20, 16, BufferedImage.TYPE_3BYTE_BGR)
+    for x <- 0 until 20; y <- 0 until 16 do parent.setRGB(x, y, (x * 10 << 16) | (y * 10 << 8) | 7)
+    val sub = parent.getSubimage(5, 4, 8, 6)
+    // A sub-image shares its parent's backing array, so the exact-length guard is what keeps the fast path
+    // from copying the parent's rows into the child's Mat.
+    assertNotEquals(sub.getRaster.getDataBuffer.getSize, 8 * 6 * 3)
+    val img = Image.fromBufferedImage(sub)
+    try
+      assertEquals((img.width, img.height), (8, 6))
+      assertEquals(img.mat.get(0, 0).toSeq, Seq(7.0, 40.0, 50.0)) // parent (5, 4): B=7, G=4·10, R=5·10
+      assertEquals(img.mat.get(5, 7).toSeq, Seq(7.0, 90.0, 120.0)) // parent (12, 9)
+    finally img.close()
+
+    val grey = BufferedImage(6, 6, BufferedImage.TYPE_BYTE_GRAY)
+    grey.getRaster.setSample(2, 3, 0, 90)
+    val g = Image.fromBufferedImage(grey)
+    try
+      assertEquals(g.channels, 3)
+      // Java2D's ByteGray→ThreeByteBgr blit replicates the sample into each channel, so this is exact.
+      assertEquals(g.mat.get(3, 2).toSeq, Seq(90.0, 90.0, 90.0))
+      assertEquals(g.mat.get(0, 0).toSeq, Seq(0.0, 0.0, 0.0))
+    finally g.close()
+
+  test("a 3-, 1- and 4-channel image round-trips through BufferedImage bit-for-bit"):
+    // Non-uniform fixtures: a flat fill would let a stride or row-order bug hide behind identical pixels.
+    // These paths are pure byte copies with no codec involved, so exact equality is honest here.
+    val bgr =
+      Image.blank(20, 12, Scalar(30, 60, 200)).drawRect(Rect(3, 2, 6, 5), Scalar.Red, Thickness.Filled)
+    try
+      val back = Image.fromBufferedImage(bgr.toBufferedImage)
+      try assertEquals(Core.norm(bgr.mat, back.mat, Core.NORM_INF), 0.0)
+      finally back.close()
+    finally bgr.close()
+
+    val grey =
+      Image.blank(8, 8, Scalar(128), channels = 1).drawRect(Rect(1, 1, 3, 3), Scalar(7), Thickness.Filled)
+    try
+      // fromBufferedImage always yields 3 channels, so the comparison baseline is the grey image widened to BGR.
+      val back = Image.fromBufferedImage(grey.toBufferedImage)
+      val expected = grey.copy.convert(ColorConversion.GrayToBgr)
+      try assertEquals(Core.norm(expected.mat, back.mat, Core.NORM_INF), 0.0)
+      finally
+        back.close()
+        expected.close()
+    finally grey.close()
+
+    val bgra = Image
+      .blank(10, 8, Scalar(30, 60, 200, 255), channels = 4)
+      .drawRect(Rect(2, 2, 4, 3), Scalar(9, 8, 7, 255), Thickness.Filled)
+    try
+      val back = Image.fromBufferedImage(bgra.toBufferedImage)
+      val expected = bgra.copy.convert(ColorConversion.BgraToBgr)
+      try assertEquals(Core.norm(expected.mat, back.mat, Core.NORM_INF), 0.0)
+      finally
+        back.close()
+        expected.close()
+    finally bgra.close()
+
+  test(
+    "Models.fetch falls through a dead mirror to the next one, and when every mirror fails names each of them in order"
+  ):
+    withModelSource() { (src, sha, into) =>
+      val dead = "file:///no/such/dir/first.bin"
+      val dead2 = "file:///no/such/dir/second.bin"
+      val spec = ModelSpec("m.bin", Seq(dead, src.toUri.toString), sha)
+      assert(
+        Models.fetch(spec, into).isRight,
+        "a dead first mirror must not prevent the second from being used"
+      )
+      assertEquals(Files.readAllBytes(into.resolve("m.bin")).toSeq, Files.readAllBytes(src).toSeq)
+
+      Models.fetch(ModelSpec.unverified("n.bin", Seq(dead, dead2)), into) match
+        case Left(e: CvError.LoadFailed) =>
+          val msg = e.getMessage
+          assert(
+            msg.contains("first.bin") && msg.contains("second.bin"),
+            s"every mirror must be named, got: $msg"
+          )
+          assert(
+            msg.indexOf("first.bin") < msg.indexOf("second.bin"),
+            s"mirrors must be listed in order, got: $msg"
+          )
+          assert(!msg.contains(": null"), s"a message-less exception must still be described, got: $msg")
+        case other => fail(other.toString)
+    }
+
+  test(
+    "Models.fetch reports an unusable destination as a Left, and a rejected download leaves neither a target nor a .part file behind"
+  ):
+    withModelSource() { (src, sha, into) =>
+      // A regular file standing where the directory should be: createDirectories refuses it on every JDK/OS,
+      // unlike a permission-based failure, which root would sail through.
+      val notADir = Files.createTempFile("scalacv-not-a-dir", "")
+      try
+        Models.fetch(ModelSpec("m.bin", Seq(src.toUri.toString), sha), notADir) match
+          case Left(e: CvError.LoadFailed) =>
+            assert(
+              e.getMessage.contains("download directory"),
+              s"the failing stage must be named, got: ${e.getMessage}"
+            )
+          case other => fail(other.toString)
+      finally Files.deleteIfExists(notADir)
+
+      val rejected = ModelSpec("m.bin", Seq(src.toUri.toString), "00" * 32)
+      assert(Models.fetch(rejected, into).isLeft, "a checksum mismatch must fail")
+      assert(!Files.exists(into.resolve("m.bin")), "a rejected download must not be moved into place")
+      val leftovers = Using.resource(Files.list(into))(_.iterator.asScala.map(_.getFileName.toString).toList)
+      assert(leftovers.forall(!_.endsWith(".part")), s"the temp file must be cleaned up, found: $leftovers")
+    }
+
+  test(
+    "ModelSpec rejects an empty file name, an empty mirror list and a non-positive pinned size; unverified pins nothing"
+  ):
+    intercept[IllegalArgumentException](ModelSpec("", Seq("file:///x"), "00" * 32))
+    intercept[IllegalArgumentException](ModelSpec("m.bin", Seq.empty, "00" * 32))
+    intercept[IllegalArgumentException](ModelSpec("m.bin", Seq("file:///x"), "00" * 32, sizeBytes = Some(0L)))
+    intercept[IllegalArgumentException](ModelSpec.unverified("m.bin", Seq.empty))
+    val u = ModelSpec.unverified("m.bin", Seq("file:///x"))
+    assertEquals(u.sha256, None)
+    assertEquals(u.sizeBytes, None)
