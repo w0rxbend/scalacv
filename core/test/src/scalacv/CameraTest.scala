@@ -2,9 +2,12 @@ package scalacv
 
 import java.nio.file.{Files, Path}
 
+import scala.concurrent.duration.*
+
 import org.opencv.core as cv
 import org.opencv.core.{CvType, Mat}
 import org.opencv.imgproc.Imgproc
+import org.opencv.videoio.{VideoCapture, VideoWriter}
 
 /** The high-level [[Camera]] and [[Recorder]]. Exercised entirely on the filesystem — record synthetic frames
   * with the built-in MJPG/AVI codec, then read them back — so it needs no camera and runs headless. A real
@@ -202,3 +205,180 @@ class CameraTest extends munit.FunSuite:
             finally wrong.close()
           finally rec.close()
     finally Files.deleteIfExists(out)
+
+  test("foreach closes every frame it hands out, even when the body throws"):
+    val file = recordFixture()
+    var seen = Vector.empty[Image]
+    Camera
+      .usingFile(file.toString): cam =>
+        cam.foreach(attemptsPerFrame = 1): img =>
+          seen :+= img
+          assert(!img.mat.empty(), "a frame must be live inside the body")
+      .fold(e => fail(e.getMessage), identity)
+    assertEquals(seen.size, FrameCount)
+    seen.foreach(img => intercept[IllegalStateException](img.mat))
+
+    var leaked: Option[Image] = None
+    // `usingFile` only maps the Either, so the body's exception escapes as a throw — the finally blocks in
+    // foreach and scoped are what is under test here.
+    intercept[RuntimeException]:
+      Camera.usingFile(file.toString): cam =>
+        cam.foreach(attemptsPerFrame = 1): img =>
+          leaked = Some(img)
+          throw RuntimeException("stop")
+    intercept[IllegalStateException](leaked.get.width)
+
+  test(
+    "usingFile closes the camera on the way out of a failing body and never runs the body for a missing source"
+  ):
+    val file = recordFixture()
+    var escaped: Option[Camera] = None
+    intercept[RuntimeException]:
+      Camera.usingFile(file.toString): cam =>
+        escaped = Some(cam)
+        throw RuntimeException("stop")
+    intercept[IllegalStateException](escaped.get.capture)
+
+    var ran = false
+    val missing = Camera.usingFile("/no/such/scalacv.avi"): _ =>
+      ran = true
+      0
+    assert(missing.isLeft, "a missing source must be a Left")
+    assert(!ran, "the body must not run for a source that did not open")
+
+  test("take rejects a negative count, take(0) is Nil, and taken frames are distinct owned copies"):
+    val file = recordFixture()
+    Camera
+      .usingFile(file.toString): cam =>
+        intercept[IllegalArgumentException](cam.take(-1))
+        assertEquals(cam.take(0), Nil)
+        val two = cam.take(2, attemptsPerFrame = 1)
+        try
+          assertEquals(two.map(_.mat.getNativeObjAddr).distinct.size, 2, "the taken frames alias each other")
+          two.foreach(img => assertEquals(img.width, Width))
+        finally two.foreach(_.close())
+      .fold(e => fail(e.getMessage), identity)
+
+  test(
+    "take past the end is shorter, never padded, and snapshot on an exhausted source is a LoadFailed Left"
+  ):
+    val file = recordFixture()
+    Camera
+      .usingFile(file.toString): cam =>
+        cam.taking(2, attemptsPerFrame = 1)(imgs => assertEquals(imgs.size, 2))
+        val rest = cam.take(FrameCount + 5, attemptsPerFrame = 1)
+        try assertEquals(rest.size, FrameCount - 2)
+        finally rest.foreach(_.close())
+        cam.snapshot(attemptsPerFrame = 1) match
+          case Left(e: CvError.LoadFailed) =>
+            assert(e.getMessage.contains("no frame available"), e.getMessage)
+          case Left(other) => fail(s"expected a LoadFailed, got $other")
+          case Right(img) => img.close(); fail("an exhausted source must not snapshot")
+      .fold(e => fail(e.getMessage), identity)
+
+  test("a recorder rejects impossible open parameters before touching the writer"):
+    val out = Files.createTempFile("scalacv-rec-params-", ".avi")
+    try
+      intercept[IllegalArgumentException](Recorder.open(out.toString, FrameSize, fps = 0))
+      intercept[IllegalArgumentException](Recorder.open(out.toString, FrameSize, fps = -1))
+      intercept[IllegalArgumentException](Recorder.open(out.toString, Size(0, 10)))
+    finally Files.deleteIfExists(out)
+
+  test("a recorder borrows the frame it writes, and is dead but harmless after close"):
+    val out = Files.createTempFile("scalacv-rec-lifecycle-", ".avi")
+    try
+      Recorder.open(out.toString, FrameSize, codec = Codec.Mjpg) match
+        case Left(e) => fail(e.getMessage)
+        case Right(rec) =>
+          val img = frame(0)
+          try
+            assert(rec.write(img).isRight, "a matching frame should write")
+            assertEquals((img.width, img.height), (Width, Height), "write must borrow, not consume")
+          finally img.close()
+          rec.close()
+          rec.close()
+          // The size and depth preconditions still pass on a closed recorder; it is the spent handle that
+          // refuses, and it does so on the Scala side rather than as a native write into a released writer.
+          val again = frame(1)
+          try intercept[IllegalStateException](rec.write(again))
+          finally again.close()
+          intercept[IllegalStateException](rec.writer)
+          assert(Files.size(out) > 0, "the written frame should have been flushed on close")
+    finally Files.deleteIfExists(out)
+
+  test("recordTo writes at the source's fps by default and at the explicit fps when one is given"):
+    val file = recordFixture()
+    val byDefault = Files.createTempFile("scalacv-camera-fps-default-", ".avi")
+    val explicit = Files.createTempFile("scalacv-camera-fps-explicit-", ".avi")
+    try
+      Camera
+        .usingFile(file.toString)(cam => cam.recordTo(byDefault.toString, attemptsPerFrame = 1)(identity))
+        .flatMap(identity)
+        .fold(e => fail(e.getMessage), identity)
+      Camera
+        .usingFile(byDefault.toString)(cam => assertEqualsDouble(cam.fps, 10.0, 0.5))
+        .fold(e => fail(e.getMessage), identity)
+
+      Camera
+        .usingFile(file.toString): cam =>
+          cam.recordTo(explicit.toString, fps = 25.0, attemptsPerFrame = 1)(identity)
+        .flatMap(identity)
+        .fold(e => fail(e.getMessage), identity)
+      Camera
+        .usingFile(explicit.toString)(cam => assertEqualsDouble(cam.fps, 25.0, 0.5))
+        .fold(e => fail(e.getMessage), identity)
+    finally
+      Files.deleteIfExists(byDefault)
+      Files.deleteIfExists(explicit)
+
+  test(
+    "every Codec packs its four characters exactly as VideoWriter.fourcc does, and the codes are distinct"
+  ):
+    val spelled = Map(Codec.Mjpg -> "MJPG", Codec.Mp4v -> "mp4v", Codec.Avc1 -> "avc1", Codec.Xvid -> "XVID")
+    assertEquals(spelled.keySet, Codec.values.toSet, "a new Codec case needs its spelling pinned here")
+    for (codec, s) <- spelled do
+      assertEquals(codec.fourcc, VideoWriter.fourcc(s(0), s(1), s(2), s(3)), codec.toString)
+    assertEquals(Codec.values.map(_.fourcc).distinct.length, Codec.values.length)
+
+  test("Video.frames hands the capture back with the exception mode it found, even when the block throws"):
+    val file = recordFixture()
+    Camera
+      .usingFile(file.toString): cam =>
+        val capture = cam.capture
+        capture.setExceptionMode(true)
+        var inside = true
+        Video.frames(capture): it =>
+          inside = capture.getExceptionMode
+          it.next()
+        assert(!inside, "the loop needs exception mode off to tell end-of-file from a broken stream")
+        assert(capture.getExceptionMode, "the caller's exception mode must be restored")
+
+        var escaped: Option[Iterator[Mat]] = None
+        intercept[RuntimeException]:
+          Video.frames(capture): it =>
+            escaped = Some(it)
+            it.next()
+            throw RuntimeException("boom")
+        assert(capture.getExceptionMode, "restored on the throw path too")
+        assert(!escaped.get.hasNext, "an iterator whose block threw must be retired")
+
+        capture.setExceptionMode(false)
+        assertEquals(Video.frames(capture)(_.size), FrameCount - 2, "exactly one frame per block was pulled")
+      .fold(e => fail(e.getMessage), identity)
+
+  test("Video.info refuses a capture that is not open"):
+    val capture = VideoCapture()
+    try intercept[IllegalArgumentException](Video.info(capture))
+    finally capture.release()
+
+  test("CaptureOptions accepts timeouts that fit OpenCV's int milliseconds and rejects the rest"):
+    for ms <- Seq(1L, 1000L, Int.MaxValue.toLong) do
+      CaptureOptions(openTimeout = Some(ms.millis))
+      CaptureOptions(readTimeout = Some(ms.millis))
+    for d <- Seq(0.millis, -1.millis, (Int.MaxValue.toLong + 1).millis, 30.days) do
+      intercept[IllegalArgumentException](CaptureOptions(openTimeout = Some(d)))
+      intercept[IllegalArgumentException](CaptureOptions(readTimeout = Some(d)))
+    assertEquals(
+      CaptureOptions.withTimeout(3.seconds, CaptureBackend.FFmpeg),
+      CaptureOptions(CaptureBackend.FFmpeg, Some(3.seconds), Some(3.seconds))
+    )
