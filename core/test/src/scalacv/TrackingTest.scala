@@ -193,7 +193,10 @@ class TrackingTest extends munit.ScalaCheckSuite:
       t.init(f0, Rect(35, 85, 30, 30))
       t.close()
       intercept[IllegalStateException](t.update(f0)): Unit
-    finally f0.close()
+    finally
+      // Idempotent, so this only matters if init throws before the close above.
+      t.close()
+      f0.close()
 
   test("every TrackerKind constructs and keeps an unchanged object on a still frame"):
     val box = Rect(35, 85, 30, 30)
