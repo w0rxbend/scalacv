@@ -145,27 +145,30 @@ class ImageOwnershipTest extends munit.FunSuite:
   test(
     "Image.reading turns a NativeCall thrown inside the body into a Left, lets programmer errors escape, closes even after the body consumed the image, and never runs the body for an unreadable path"
   ):
-    // Three channels, so equalizeHist fails inside OpenCV rather than in a precondition.
-    val png = tempDir().resolve("scene.png").toString
-    assertEquals(Image.blank(32, 24, Scalar(30, 30, 30)).write(png), Right(()))
+    // A file rather than a directory under deleteOnExit: a non-empty directory never gets deleted on exit.
+    val png = Files.createTempFile("scalacv-image-own-", ".png")
+    try
+      // Three channels, so equalizeHist fails inside OpenCV rather than in a precondition.
+      assertEquals(Image.blank(32, 24, Scalar(30, 30, 30)).write(png.toString), Right(()))
 
-    Image.reading(png)(_.equalizeHist) match
-      case Left(e: CvError.NativeCall) => assertEquals(e.operation, "equalizeHist")
-      case other => fail(s"expected the body's NativeCall as a Left, got $other")
+      Image.reading(png.toString)(_.equalizeHist) match
+        case Left(e: CvError.NativeCall) => assertEquals(e.operation, "equalizeHist")
+        case other => fail(s"expected the body's NativeCall as a Left, got $other")
 
-    intercept[IllegalArgumentException](Image.reading(png)(_.blur(-1)))
+      intercept[IllegalArgumentException](Image.reading(png.toString)(_.blur(-1)))
 
-    val width = Image.reading(png): img =>
-      val g = img.gray // spends `img`; reading's own close afterwards must be a harmless no-op
-      try g.width
-      finally g.close()
-    assertEquals(width, Right(32))
+      val width = Image.reading(png.toString): img =>
+        val g = img.gray // spends `img`; reading's own close afterwards must be a harmless no-op
+        try g.width
+        finally g.close()
+      assertEquals(width, Right(32))
 
-    var ran = false
-    val missing = Image.reading("/does/not/exist.png"): _ =>
-      ran = true
-      0
-    missing match
-      case Left(_: CvError.DecodeFailed) => ()
-      case other => fail(s"expected DecodeFailed, got $other")
-    assert(!ran, "the body must not run when there is no image to hand it")
+      var ran = false
+      val missing = Image.reading("/does/not/exist.png"): _ =>
+        ran = true
+        0
+      missing match
+        case Left(_: CvError.DecodeFailed) => ()
+        case other => fail(s"expected DecodeFailed, got $other")
+      assert(!ran, "the body must not run when there is no image to hand it")
+    finally Files.deleteIfExists(png)
