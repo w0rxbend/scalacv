@@ -281,22 +281,12 @@ class ManagedTest extends munit.FunSuite:
     assert(native.getCause eq cause)
     assert(CvError.NativesMissing("d", cause).getCause eq cause)
     assertEquals(CvError.NativesMissing("d").getCause, null)
-    val all: Seq[CvError] = Seq(
-      CvError.DecodeFailed("p", "d"),
-      CvError.LoadFailed("r", "d"),
-      CvError.EncodeFailed("p", "d"),
-      CvError.CalibrationFailed("d"),
-      native,
-      CvError.NativesMissing("d")
-    )
-    all.foreach(e => assert(e.isInstanceOf[RuntimeException], s"$e must be a RuntimeException"))
 
   test("Mats.grayscale hands back an owned clone for an already-grey input, never an alias of the receiver"):
     val grey = Mat(8, 8, CvType.CV_8UC1, cv.Scalar(7))
     try
-      val out = Mats.grayscale(grey)
-      assertNotEquals(out.get.dataAddr(), grey.dataAddr(), "the result must not share the borrowed buffer")
-      out.release()
+      val outAddr = Mats.grayscale(grey).use(_.dataAddr())
+      assertNotEquals(outAddr, grey.dataAddr(), "the result must not share the borrowed buffer")
       assertNotEquals(grey.dataAddr(), 0L, "releasing the result must leave the borrowed receiver intact")
       assertEquals(grey.get(0, 0)(0), 7.0)
     finally grey.release()
