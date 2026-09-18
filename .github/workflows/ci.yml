@@ -19,6 +19,9 @@ jobs:
   build:
     name: JDK ${{ matrix.jdk }} · ubuntu
     runs-on: ubuntu-latest
+    # Every job is bounded: a hung native call (capture.read cannot be interrupted) would otherwise
+    # pin a runner for GitHub's 6-hour default.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -65,6 +68,7 @@ jobs:
   leak-check:
     name: Native leak — RSS stays flat under load
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     # The one gate the test suite cannot be: an unreleased Mat frees its native buffer only when
     # finalize eventually runs, so a leak shows up as *resident-memory growth*, not a failing
     # assertion -- a green test run with a steadily climbing RSS. This is the leg that would have
@@ -151,6 +155,7 @@ jobs:
   style:
     name: Format and lint
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: coursier/cache-action@v8
@@ -163,8 +168,9 @@ jobs:
         run: ./mill core.fix --check vision.fix --check graphs.fix --check zio.fix --check examples.fix --check
 
   natives:
-    name: Natives · macos-14
+    name: Natives · macos-26 arm64
     runs-on: macos-26
+    timeout-minutes: 60
     # macOS only. The headless loader is verified on linux-x86_64 by the build job; this leg
     # verifies the @rpath-resolved macOS path. Windows is deliberately absent: the `./mill`
     # bootstrap is a Unix-only launcher (it prints "supports only Linux and macOS" and exits),
@@ -188,12 +194,14 @@ jobs:
         # assertions to Apple-silicon arm64, where an arch-specific bug — a wrong native classifier,
         # an endianness or alignment assumption — would otherwise ship unseen. Mill's default JDK
         # (the build header) is enough; the point is the architecture, not another JDK rung.
-        # `+`-separated for the same reason as the build matrix's Test step.
-        run: ./mill core.test + zio.test
+        # `+`-separated for the same reason as the build matrix's Test step. examples.test is
+        # included so the QR/ArUco/Haar/Canny end-to-end assertions also run on arm64.
+        run: ./mill core.test + zio.test + examples.test
 
   publish-shape:
     name: Published artifact shape
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: coursier/cache-action@v8
@@ -225,6 +233,7 @@ jobs:
   consumer-smoke:
     name: Consumer resolves the published artifact
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: coursier/cache-action@v8
