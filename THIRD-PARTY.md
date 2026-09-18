@@ -9,16 +9,16 @@ in [`NOTICE`](NOTICE).
 
 | Component | Coordinate | Version | SPDX | Notice required | Source |
 |---|---|---|---|---|---|
-| OpenCV Java API | `org.bytedeco:opencv` | `4.13.0-1.5.13` | `Apache-2.0` | yes | https://github.com/opencv/opencv |
-| OpenCV natives | `org.bytedeco:opencv:<classifier>` | `4.13.0-1.5.13` | `Apache-2.0` | yes | https://github.com/bytedeco/javacpp-presets |
-| JavaCPP | `org.bytedeco:javacpp` | `1.5.13` | `Apache-2.0` | yes | https://github.com/bytedeco/javacpp |
-| OpenBLAS natives | `org.bytedeco:openblas:<classifier>` | `0.3.31-1.5.13` | `BSD-3-Clause` | yes | https://github.com/OpenMathLib/OpenBLAS |
+| OpenCV Java API | `org.bytedeco:opencv` | `4.14.0-1.5.14` | `Apache-2.0` | yes | https://github.com/opencv/opencv |
+| OpenCV natives | `org.bytedeco:opencv:<classifier>` | `4.14.0-1.5.14` | `Apache-2.0` | yes | https://github.com/bytedeco/javacpp-presets |
+| JavaCPP | `org.bytedeco:javacpp` | `1.5.14` | `Apache-2.0` | yes | https://github.com/bytedeco/javacpp |
+| OpenBLAS natives | `org.bytedeco:openblas:<classifier>` | `0.3.34-1.5.14` | `BSD-3-Clause` | yes | https://github.com/OpenMathLib/OpenBLAS |
 | Scala 3 standard library | `org.scala-lang:scala3-library_3` | `3.3.8` | `Apache-2.0` | no | https://github.com/scala/scala3 |
 | ZIO (`scalacv-zio` only) | `dev.zio:zio`, `dev.zio:zio-streams` | `2.1.26` | `Apache-2.0` | no | https://github.com/zio/zio |
-| munit (test only) | `org.scalameta:munit` | `1.3.4` | `Apache-2.0` | no | https://github.com/scalameta/munit |
+| munit (test only) | `org.scalameta:munit` | `1.3.6` | `Apache-2.0` | no | https://github.com/scalameta/munit |
 
 **OpenCV's license changed at 4.5.0**, from 3-clause BSD to Apache-2.0. We depend
-on 4.13.0, so Apache-2.0 applies. The older BSD notice is only relevant to
+on 4.14.0, so Apache-2.0 applies. The older BSD notice is only relevant to
 artifacts built against 3.x — including the `lib/opencv-300.jar` this repository
 used to vendor, which had had the Intel/Willow Garage notice stripped from it.
 That jar was deleted in `9bbcc13`.

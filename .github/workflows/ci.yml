@@ -251,8 +251,8 @@ jobs:
             "com.worxbend:scalacv-vision_3:$VER" \
             "com.worxbend:scalacv-graphs_3:$VER" \
             "com.worxbend:scalacv-zio_3:$VER" \
-            "org.bytedeco:opencv:4.13.0-1.5.13,classifier=linux-x86_64" \
-            "org.bytedeco:openblas:0.3.31-1.5.13,classifier=linux-x86_64")
+            "org.bytedeco:opencv:4.14.0-1.5.14,classifier=linux-x86_64" \
+            "org.bytedeco:openblas:0.3.34-1.5.14,classifier=linux-x86_64")
           javac -cp "$CP" -d /tmp/consumer ci/consumer-smoke/ConsumerSmoke.java
           out=$(java -cp "/tmp/consumer:$CP" ConsumerSmoke 2>&1) || true
           echo "$out"

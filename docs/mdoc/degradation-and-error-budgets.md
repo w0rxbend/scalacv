@@ -211,7 +211,8 @@ so the error you receive is the one that explains itself.
 ### What the ceiling does not do
 
 Be honest with yourself about the mechanism, because it changes what you monitor. On javacpp
-`1.5.13` — the version this project builds against — the comparison against `maxPhysicalBytes` lives
+`1.5.13` (this project now builds against `1.5.14`; re-check there before relying on the detail), the
+comparison against `maxPhysicalBytes` lives
 in one place: `org.bytedeco.javacpp.Pointer.deallocator(Pointer.Deallocator)`, the method a JavaCPP
 `Pointer` calls to register its native buffer. It is not a background watchdog; it runs **when
 JavaCPP allocates**, and nowhere else.

@@ -33,8 +33,8 @@ Scan the left column for what you saw, then jump to the section:
 The `scalacv` jar contains no native code — the OpenCV symbols live in per-platform classifier jars you add yourself. If they are absent, `OpenCv.load()` throws `CvError.NativesMissing` with a **copy-pasteable fix naming your actual platform**. Add the two lines it prints:
 
 ```scala
-mvn"org.bytedeco:opencv:4.13.0-1.5.13;classifier=linux-x86_64",
-mvn"org.bytedeco:openblas:0.3.31-1.5.13;classifier=linux-x86_64"
+mvn"org.bytedeco:opencv:4.14.0-1.5.14;classifier=linux-x86_64",
+mvn"org.bytedeco:openblas:0.3.34-1.5.14;classifier=linux-x86_64"
 ```
 
 :::warning[Both lines are required]
@@ -51,7 +51,7 @@ The classifiers, one per target:
 | macOS Apple silicon | `macosx-arm64` |
 | Windows x86-64 | `windows-x86_64` |
 
-If you would rather not pick, `org.bytedeco:opencv-platform:4.13.0-1.5.13` bundles every one — at a cost of about 408 MB. See [Getting Started](/getting-started) for the full build snippet.
+If you would rather not pick, `org.bytedeco:opencv-platform:4.14.0-1.5.14` bundles every one — at a cost of about 408 MB. See [Getting Started](/getting-started) for the full build snippet.
 
 ## `Not found: Cascades` / `value faces is not a member of Image` {#missing-module}
 

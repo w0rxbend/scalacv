@@ -11,14 +11,14 @@ import mill.util.VcsVersion
 import com.goyeau.mill.scalafix.ScalafixModule
 
 object Deps {
-  val opencv   = "4.13.0-1.5.13"
-  val openblas = "0.3.31-1.5.13"
+  val opencv   = "4.14.0-1.5.14"
+  val openblas = "0.3.34-1.5.14"
 
   /** The Scala version every module compiles with. Read by `ScalacvModule.scalaVersion` and baked
     * into the generated `scalacv.BuildValues` so `Build.scalaVersion` cannot drift from it. */
   val scala = "3.3.8"
 
-  /** The OpenCV *release* behind the bytedeco coordinate — `4.13.0` out of `4.13.0-1.5.13`.
+  /** The OpenCV *release* behind the bytedeco coordinate — `4.14.0` out of `4.14.0-1.5.14`.
     *
     * Derived rather than written twice: bytedeco's version is `<opencv release>-<javacpp release>`,
     * and a Scala Steward bump moves both halves at once. Baked into `scalacv.BuildValues` so that
@@ -221,7 +221,7 @@ trait ScalacvPublishModule extends ScalacvModule with PublishModule {
   def publishVersion = Task { VcsVersion.calcVcsState(Task.log).format() }
 
   def pomSettings = PomSettings(
-    description = "A Scala 3 wrapper for the OpenCV 4.13 Java API",
+    description = "A Scala 3 wrapper for the OpenCV 4.14 Java API",
     organization = "com.worxbend",
     url = "https://github.com/w0rxbend/scalacv",
     licenses = Seq(License.`Apache-2.0`),

@@ -4,6 +4,16 @@ All notable changes to scalacv are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `early-semver`: while the library is on `0.x`, a minor bump may break compatibility.
 
+## [Unreleased]
+
+### Changed
+- **OpenCV 4.14.0** (bytedeco `opencv:4.14.0-1.5.14`, JavaCPP 1.5.14) and **OpenBLAS 0.3.34**
+  (`openblas:0.3.34-1.5.14`) replace 4.13.0-1.5.13 / 0.3.31-1.5.13. The two move together because
+  `libopencv_core` links the OpenBLAS from the same presets line. Consumers must bump both classifier
+  lines in their build to match; `Build.openCvVersion` now reports `4.14.0`. No scalacv API changed and
+  the full suite passes unmodified against 4.14 on JDK 17 and 25 — including the Hough decode types and
+  the `blobFromImage` mean/`swapRB` ordering, whose scaladoc now records the 4.14 verification.
+
 ## [0.1.0] — 2026-08-22
 
 ### Added

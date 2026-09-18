@@ -171,7 +171,7 @@ The classifier jar you add decides the size and capabilities of the payload:
 | Want | Add |
 |---|---|
 | One platform (the right answer for almost everyone) | `opencv:…;classifier=linux-x86_64` (~31 MB) + `openblas:…;classifier=linux-x86_64` (~20 MB) |
-| "just make it work anywhere" | `org.bytedeco:opencv-platform:4.13.0-1.5.13` — every platform, ~408 MB |
+| "just make it work anywhere" | `org.bytedeco:opencv-platform:4.14.0-1.5.14` — every platform, ~408 MB |
 
 bytedeco publishes no OpenCV natives at all for `windows-arm64` (scalacv's own build fails fast and says
 so). For CI and most services, a single classifier pair is the right, lean choice — see
@@ -241,7 +241,7 @@ buildInfo.linesIterator.exists(l => l.contains("Unavailable:") && l.contains("cu
 such a build does not throw — it falls back to the CPU without a word.
 
 **Fact two: the `-gpu` classifiers are real CUDA builds, and they do exist.** `linux-x86_64-gpu`,
-`linux-arm64-gpu` and `windows-x86_64-gpu` are published for OpenCV 4.13.0-1.5.13 (there is no macOS
+`linux-arm64-gpu` and `windows-x86_64-gpu` are published for OpenCV 4.14.0-1.5.14 (there is no macOS
 `-gpu` variant, and no `windows-arm64` OpenCV at all). Their `libopencv_dnn` is five times the size of the
 CPU one and links `libcudart`, `libcudnn` and `libcublas`, so the CUDA DNN backend really is compiled in.
 

@@ -15,8 +15,8 @@ Add the **single** native classifier for where the service runs — not `opencv-
 ```scala
 // production build: exactly one platform
 mvn"com.worxbend::scalacv:0.1.0",
-mvn"org.bytedeco:opencv:4.13.0-1.5.13;classifier=linux-x86_64",
-mvn"org.bytedeco:openblas:0.3.31-1.5.13;classifier=linux-x86_64"
+mvn"org.bytedeco:opencv:4.14.0-1.5.14;classifier=linux-x86_64",
+mvn"org.bytedeco:openblas:0.3.34-1.5.14;classifier=linux-x86_64"
 ```
 
 If you build multi-arch images, produce one artifact per arch with its matching classifier, rather than one fat artifact carrying all of them.

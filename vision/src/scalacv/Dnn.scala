@@ -91,10 +91,11 @@ object Dnn:
     *   the spatial size to resize to. `None` keeps the source's own size, which is right only for a network
     *   with a dynamic input shape.
     * @param mean
-    *   subtracted per channel, in the channel order of the **blob**, not of `mat`. Measured against 4.13.0:
-    *   the swap happens first, so with `swapRB = true` on an ordinary BGR image `mean` is `(R, G, B)`. That
-    *   is what the published per-model mean triples assume, and it is the one parameter interaction here
-    *   whose two readings differ by exactly the amount that makes a model quietly worse rather than broken.
+    *   subtracted per channel, in the channel order of the **blob**, not of `mat`. Measured against 4.13.0
+    *   and 4.14.0: the swap happens first, so with `swapRB = true` on an ordinary BGR image `mean` is
+    *   `(R, G, B)`. That is what the published per-model mean triples assume, and it is the one parameter
+    *   interaction here whose two readings differ by exactly the amount that makes a model quietly worse
+    *   rather than broken.
     * @param swapRB
     *   swaps the first and third channels. Almost every published model was trained on RGB while OpenCV
     *   decodes to BGR, so this is usually `true` in practice; it defaults to `false` only because that is

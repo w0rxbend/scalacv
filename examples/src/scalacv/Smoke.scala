@@ -5,7 +5,7 @@ import org.opencv.core.{CvType, Mat}
 /** Track A's gate.
   *
   * Deliberately allocates a real Mat instead of printing `Core.VERSION`. `Core.VERSION` is a plain static
-  * String resolved from constants at class-init: a program with zero natives on the classpath prints `4.13.0`
+  * String resolved from constants at class-init: a program with zero natives on the classpath prints `4.14.0`
   * and exits 0, so a gate built on it passes on any machine, on any platform, having proved nothing.
   * Allocating a Mat crosses JNI, which is the thing under test.
   *

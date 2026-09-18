@@ -12,7 +12,7 @@
 [![CI](https://github.com/w0rxbend/scalacv/actions/workflows/ci.yml/badge.svg)](https://github.com/w0rxbend/scalacv/actions/workflows/ci.yml)
 [![Scala 3.3 LTS](https://img.shields.io/badge/scala-3.3%20LTS-DC322F.svg)](https://www.scala-lang.org)
 [![JDK 17+](https://img.shields.io/badge/jdk-17%2B-blue.svg)](https://adoptium.net)
-[![OpenCV 4.13.0](https://img.shields.io/badge/opencv-4.13.0-5C3EE8.svg)](https://docs.opencv.org/4.13.0/)
+[![OpenCV 4.14.0](https://img.shields.io/badge/opencv-4.14.0-5C3EE8.svg)](https://docs.opencv.org/4.14.0/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
 
 </div>
@@ -40,8 +40,8 @@ def mvnDeps = Seq(
 
   // Natives for YOUR platform. A build tool cannot express a per-platform classifier in a
   // published POM, so this line is yours to pick — see "Why two lines?" below.
-  mvn"org.bytedeco:opencv:4.13.0-1.5.13;classifier=linux-x86_64",
-  mvn"org.bytedeco:openblas:0.3.31-1.5.13;classifier=linux-x86_64"
+  mvn"org.bytedeco:opencv:4.14.0-1.5.14;classifier=linux-x86_64",
+  mvn"org.bytedeco:openblas:0.3.34-1.5.14;classifier=linux-x86_64"
 )
 ```
 
@@ -100,7 +100,7 @@ Image.reading("photo.jpg") { img =>
 | macOS Intel | `macosx-x86_64` |
 | Windows x86-64 | `windows-x86_64` |
 
-Don't want to choose? `mvn"org.bytedeco:opencv-platform:4.13.0-1.5.13"` bundles every platform and works anywhere — for about **408 MB** instead of 36–80 MB.
+Don't want to choose? `mvn"org.bytedeco:opencv-platform:4.14.0-1.5.14"` bundles every platform and works anywhere — for about **408 MB** instead of 36–80 MB.
 
 `scalacv` alone compiles fine without either native line, but nothing runs: the OpenCV symbols are absent until you add them. Get it wrong and `OpenCv.load()` does not fail with a link error — it prints a copy-pasteable fix naming the platform you are actually on.
 

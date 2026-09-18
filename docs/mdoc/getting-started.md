@@ -38,8 +38,8 @@ def mvnDeps = Seq(
   mvn"com.worxbend::scalacv-vision:0.1.0",  // detectors, DNN, pose, tracking, motion, OCR, calibration, SLAM
   mvn"com.worxbend::scalacv-graphs:0.1.0",  // the Picture scene graph, charts, animated GIFs
   mvn"com.worxbend::scalacv-zio:0.1.0",     // only if you use ZIO
-  mvn"org.bytedeco:opencv:4.13.0-1.5.13;classifier=linux-x86_64",
-  mvn"org.bytedeco:openblas:0.3.31-1.5.13;classifier=linux-x86_64"
+  mvn"org.bytedeco:opencv:4.14.0-1.5.14;classifier=linux-x86_64",
+  mvn"org.bytedeco:openblas:0.3.34-1.5.14;classifier=linux-x86_64"
 )
 ```
 
@@ -52,8 +52,8 @@ libraryDependencies ++= Seq(
   "com.worxbend" %% "scalacv-vision" % "0.1.0",
   "com.worxbend" %% "scalacv-graphs" % "0.1.0",
   "com.worxbend" %% "scalacv-zio"    % "0.1.0",
-  "org.bytedeco" %  "opencv"         % "4.13.0-1.5.13" classifier "linux-x86_64",
-  "org.bytedeco" %  "openblas"       % "0.3.31-1.5.13" classifier "linux-x86_64"
+  "org.bytedeco" %  "opencv"         % "4.14.0-1.5.14" classifier "linux-x86_64",
+  "org.bytedeco" %  "openblas"       % "0.3.34-1.5.14" classifier "linux-x86_64"
 )
 ```
 
@@ -73,7 +73,7 @@ Pick the classifier that matches where the code will run:
 There are `-gpu` variants of `linux-x86_64`, `linux-arm64` and `windows-x86_64` if you need CUDA.
 There is **no** `windows-arm64` build.
 
-Don't want to choose? `mvn"org.bytedeco:opencv-platform:4.13.0-1.5.13"` bundles every platform and
+Don't want to choose? `mvn"org.bytedeco:opencv-platform:4.14.0-1.5.14"` bundles every platform and
 works anywhere — for about **408 MB** instead of 36–80 MB. Good for a laptop, wasteful in a
 single-platform container.
 
