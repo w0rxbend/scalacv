@@ -216,4 +216,105 @@ object ScalacvZioSpec extends ZIOSpecDefault:
         case None =>
           // Source not locatable from the test's working directory: guard rather than fail.
           assertCompletes
+    ,
+
+    test(
+      "acquireRelease frees the Mat when the fiber holding the scope is interrupted, and a throwing " +
+        "acquisition fails in the error channel without releasing anything"
+    ):
+      for
+        _ <- loadNatives
+        raw <- ZIO.succeed(Mat(16, 16, CvType.CV_8UC1))
+        // Interrupt only once the scope has acquired the Mat: an interrupt landing before acquisition
+        // would leave the Mat live and make the assertion flaky. fiber.interrupt awaits the fiber's
+        // finalizers, so the address check after it is deterministic.
+        acquired <- Promise.make[Nothing, Unit]
+        fiber <- ZIO.scoped(raw.scoped *> acquired.succeed(()) *> ZIO.never).fork
+        _ <- acquired.await
+        _ <- fiber.interrupt
+        freedOnInterrupt <- ZIO.succeed(raw.dataAddr() == 0L)
+        exit <- ZIO.scoped(acquireRelease[Mat](throw RuntimeException("no"))).exit
+      yield assertTrue(freedOnInterrupt) &&
+        assertTrue(exit.isFailure) &&
+        // A constructor that throws is a failure the caller can handle, not a defect that kills the fiber.
+        assertTrue(exit.causeOption.exists(_.failures.exists(_.getMessage == "no")))
+    ,
+
+    test(
+      "fromCv keeps the CvError typed and is lazy; readImage hands back a caller-owned image; loadNatives " +
+        "is idempotent"
+    ):
+      val e = CvError.DecodeFailed("p", "d")
+      // Building the effect must not run the thunk: if fromCv were eager this line would throw at
+      // construction, outside any error channel.
+      val deferred = fromCv[Int](throw RuntimeException("boom"))
+      for
+        _ <- loadNatives *> loadNatives
+        ok <- fromCv(Right(7))
+        typed <- fromCv[Int](Left(e)).exit
+        thrown <- deferred.exit
+        path <- ZIO.attempt:
+          val p = Files.createTempFile("scalacv-zio-read-", ".png")
+          Image.blank(8, 8, Scalar.White).write(p.toString).fold(throw _, identity)
+          p
+        img <- readImage(path.toString)
+        dims <- ZIO.succeed((img.width, img.height))
+        // Caller-owned: nothing else closes it, and closing it twice is the documented no-op.
+        _ <- ZIO.succeed { img.close(); img.close() }
+        missing <- readImage("/does/not/exist.png").exit
+      yield assertTrue(ok == 7) &&
+        assert(typed)(fails(equalTo(e))) &&
+        // A thunk that throws is a defect of the run, never a typed CvError.
+        assertTrue(thrown.isFailure) &&
+        assertTrue(thrown.causeOption.exists(_.dieOption.isDefined)) &&
+        assertTrue(dims == (8, 8)) &&
+        assertTrue(missing.isFailure) &&
+        assertTrue(missing.causeOption.exists(_.failures.forall(_.isInstanceOf[CvError])))
+    ,
+
+    test(
+      "framesCopied yields one distinct owned buffer per frame whose pixels survive later pulls and are " +
+        "freed by release"
+    ):
+      ZIO.scoped:
+        for
+          _ <- loadNatives
+          path <- writeSample()
+          cap <- openCapture(path.toString)
+          frames <- framesCopied(cap).runCollect
+          raws = frames.map(_.get)
+          // Read only after the whole stream has completed: aliases of the one decode buffer would all
+          // show the last frame's grey here, whereas true clones keep the level they were pulled with.
+          greys = raws.map(_.get(2, 2)(0))
+          addrs = raws.map(_.dataAddr())
+          _ <- ZIO.succeed(frames.foreach(_.release()))
+          freed = raws.forall(_.dataAddr() == 0L)
+        yield assertTrue(addrs.size == FrameCount) &&
+          assertTrue(addrs.toSet.size == FrameCount) &&
+          assertTrue(greys.toList == greys.toList.sorted) &&
+          assertTrue(greys.head < greys.last) &&
+          assertTrue(freed)
+    ,
+
+    test(
+      "frameStream restores exception mode after take(n) and after a failing consumer, and a fresh " +
+        "captureScoped of the same file still yields every frame"
+    ):
+      ZIO.scoped:
+        for
+          _ <- loadNatives
+          path <- writeSample()
+          cap <- openCapture(path.toString)
+          _ <- ZIO.succeed(cap.setExceptionMode(true))
+          // Early exit by the consumer, not by EOF: the stream's finalizer must still run.
+          taken <- frameStream(cap).take(2).runCount
+          afterTake <- ZIO.succeed(cap.getExceptionMode)
+          failed <- frameStream(cap).mapZIO(_ => ZIO.fail(RuntimeException("consumer"))).runDrain.exit
+          afterFailure <- ZIO.succeed(cap.getExceptionMode)
+          count <- ZIO.scoped(captureScoped(path.toString).flatMap(c => frameStream(c).runCount))
+        yield assertTrue(taken == 2L) &&
+          assertTrue(afterTake) &&
+          assertTrue(failed.isFailure) &&
+          assertTrue(afterFailure) &&
+          assertTrue(count == FrameCount.toLong)
   )
