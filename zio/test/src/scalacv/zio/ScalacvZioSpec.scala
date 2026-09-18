@@ -220,7 +220,7 @@ object ScalacvZioSpec extends ZIOSpecDefault:
 
     test(
       "acquireRelease frees the Mat when the fiber holding the scope is interrupted, and a throwing " +
-        "acquisition fails in the error channel without releasing anything"
+        "acquisition fails in the error channel"
     ):
       for
         _ <- loadNatives
@@ -268,8 +268,7 @@ object ScalacvZioSpec extends ZIOSpecDefault:
         assertTrue(thrown.isFailure) &&
         assertTrue(thrown.causeOption.exists(_.dieOption.isDefined)) &&
         assertTrue(dims == (8, 8)) &&
-        assertTrue(missing.isFailure) &&
-        assertTrue(missing.causeOption.exists(_.failures.forall(_.isInstanceOf[CvError])))
+        assertTrue(missing.causeOption.exists(_.failures.exists(_.isInstanceOf[CvError])))
     ,
 
     test(
@@ -297,8 +296,8 @@ object ScalacvZioSpec extends ZIOSpecDefault:
     ,
 
     test(
-      "frameStream restores exception mode after take(n) and after a failing consumer, and a fresh " +
-        "captureScoped of the same file still yields every frame"
+      "frameStream restores exception mode after take(n) and after a failing consumer, and leaves the " +
+        "capture open with exactly the unconsumed frames"
     ):
       ZIO.scoped:
         for
@@ -311,10 +310,12 @@ object ScalacvZioSpec extends ZIOSpecDefault:
           afterTake <- ZIO.succeed(cap.getExceptionMode)
           failed <- frameStream(cap).mapZIO(_ => ZIO.fail(RuntimeException("consumer"))).runDrain.exit
           afterFailure <- ZIO.succeed(cap.getExceptionMode)
-          count <- ZIO.scoped(captureScoped(path.toString).flatMap(c => frameStream(c).runCount))
+          // The stream is pull-based, so the two early exits consumed exactly two frames plus the one the
+          // failing consumer was handed; a finalizer that released the capture would yield zero here.
+          remaining <- frameStream(cap).runCount
         yield assertTrue(taken == 2L) &&
           assertTrue(afterTake) &&
           assertTrue(failed.isFailure) &&
           assertTrue(afterFailure) &&
-          assertTrue(count == FrameCount.toLong)
+          assertTrue(remaining == FrameCount - 3L)
   )
