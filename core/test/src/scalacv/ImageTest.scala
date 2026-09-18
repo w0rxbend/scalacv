@@ -277,8 +277,8 @@ class ImageTest extends munit.FunSuite:
   test("crop copies exactly the requested window, and the copy outlives the spent parent"):
     val parent = blockScene()
     val window = parent.crop(Rect(11, 3, 7, 5)) // the red block with a one-pixel backdrop margin
-    intercept[IllegalStateException](parent.width)
     try
+      intercept[IllegalStateException](parent.width)
       assertEquals((window.width, window.height), (7, 5))
       assertEquals(pixel(window, 0, 0), Backdrop)
       assertEquals(pixel(window, 1, 1), RedPixel)
@@ -315,10 +315,16 @@ class ImageTest extends munit.FunSuite:
       assertEquals(pixel(padded, 4, 0), On) // top pad: the source's bottom row, same column
     finally padded.close()
 
-  test("rotated accepts BorderType.Wrap, the one mode the filters reject"):
-    val plain = Image.blank(8, 8)
-    try plain.mat.rotated(30.0, border = BorderType.Wrap).use(r => assert(r.rows > 0))
-    finally plain.close()
+  test("rotated honours BorderType.Wrap, the one mode the filters reject, by tiling the corners"):
+    val flat = Image.blank(8, 8, Scalar(10, 20, 30))
+    try
+      flat.mat
+        .rotated(30.0, border = BorderType.Wrap, borderValue = Scalar.Red)
+        .use: m =>
+          // Every tile of a flat source is the same colour, so the exposed corner is that colour if Wrap reached
+          // warpAffine — and red if it fell back to the constant fill.
+          assertEquals(m.get(0, 0).toSeq, Seq(10.0, 20.0, 30.0))
+    finally flat.close()
 
   test("border rejects a negative width by name"):
     val img = Image.blank(4, 4)
