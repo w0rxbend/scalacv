@@ -3,7 +3,7 @@ package scalacv
 import java.nio.file.Files
 
 import org.opencv.core as cv
-import org.opencv.core.{CvType, Mat}
+import org.opencv.core.{Core, CvType, Mat}
 import org.opencv.imgproc.Imgproc
 
 /** The high-level [[Image]] API: the fluent chain, and — the part that matters — its ownership discipline.
@@ -205,3 +205,192 @@ class ImageTest extends munit.FunSuite:
     val out =
       sample().gray.medianBlur(1).adaptiveThreshold().morphology(MorphOp.Open).invert.bytes(".png")
     assert(out.isRight, s"expected encoded bytes, got $out")
+
+  // -- pixel-level effects: where a marked pixel lands, what the documented formulas produce -------
+  //
+  // The dimension checks above cannot tell a flip from its transpose or `adjust` from its argument swap.
+  // These fixtures are a single marked pixel or a flat integral colour, so every expected value is exact by
+  // definition of the op — lossless moves, integer arithmetic, binary morphology — on every build.
+
+  /** The channels at (x, y). `Mat.get` is row-major, so the arguments swap on the way in. */
+  private def pixel(img: Image, x: Int, y: Int): Seq[Double] = img.mat.get(y, x).toIndexedSeq
+
+  /** The count of non-zero pixels of a single-channel image, which it then releases. */
+  private def lit(img: Image): Int =
+    try Core.countNonZero(img.mat)
+    finally img.close()
+
+  private val On = Seq(255.0)
+  private val Off = Seq(0.0)
+
+  /** A 4×3 single-channel canvas whose only white pixel is (x = 0, y = 0). */
+  private def marked(): Image =
+    Image.blank(4, 3, Scalar.Black, channels = 1).drawRect(Rect(0, 0, 1, 1), Scalar.White, Thickness.Filled)
+
+  test("flip mirrors the marked pixel across the axis its name promises"):
+    for (how, x, y) <- Seq((Flip.Horizontal, 3, 0), (Flip.Vertical, 0, 2), (Flip.Both, 3, 2)) do
+      val flipped = marked().flip(how)
+      assertEquals(pixel(flipped, x, y), On, s"$how")
+      assertEquals(lit(flipped), 1, s"$how must move the pixel, not copy it")
+
+  test("a quarter-turn carries the marked corner clockwise to top-right, counter-clockwise to bottom-left"):
+    val cases = Seq(
+      (Rotation.Clockwise, (3, 4), 2, 0),
+      (Rotation.CounterClockwise, (3, 4), 0, 3),
+      (Rotation.Half, (4, 3), 3, 2)
+    )
+    for (rotation, size, x, y) <- cases do
+      val turned = marked().rotate(rotation)
+      assertEquals((turned.width, turned.height), size, s"$rotation")
+      assertEquals(pixel(turned, x, y), On, s"$rotation")
+      assertEquals(lit(turned), 1, s"$rotation must move the pixel, not copy it")
+
+  test("blend weights this image by `weight` and the borrowed other by its complement"):
+    val a = Image.blank(8, 8, Scalar(100, 100, 100))
+    val b = Image.blank(8, 8, Scalar(200, 200, 200))
+    try
+      for (weight, expected) <- Seq((0.25, 175.0), (1.0, 100.0), (0.0, 200.0)) do
+        val mixed = a.copy.blend(b, weight)
+        try assertEquals(pixel(mixed, 4, 4), Seq(expected, expected, expected), s"weight $weight")
+        finally mixed.close()
+      assertEquals(b.width, 8) // borrowed by every blend, never consumed
+    finally
+      a.close(); b.close()
+
+  test("adjust scales by contrast and offsets by brightness; invert is 255 - v"):
+    val flat = Image.blank(8, 8, Scalar(100, 100, 100))
+    val adjusted = flat.copy.adjust(brightness = 10, contrast = 2)
+    // The transpose, 100 · 10 + 2, would saturate to 255 — so 210 proves the arguments reached OpenCV in order.
+    try assertEquals(pixel(adjusted, 4, 4), Seq(210.0, 210.0, 210.0))
+    finally adjusted.close()
+    val inverted = flat.invert
+    try assertEquals(pixel(inverted, 4, 4), Seq(155.0, 155.0, 155.0))
+    finally inverted.close()
+
+  private val Backdrop = Seq(1.0, 2.0, 3.0)
+  private val RedPixel = Seq(0.0, 0.0, 255.0)
+
+  /** A 20×10 BGR scene on a `Backdrop` background with a red block over x 12..16, y 4..6. */
+  private def blockScene(): Image =
+    Image.blank(20, 10, Scalar(1, 2, 3)).drawRect(Rect(12, 4, 5, 3), Scalar.Red, Thickness.Filled)
+
+  test("crop copies exactly the requested window, and the copy outlives the spent parent"):
+    val parent = blockScene()
+    val window = parent.crop(Rect(11, 3, 7, 5)) // the red block with a one-pixel backdrop margin
+    intercept[IllegalStateException](parent.width)
+    try
+      assertEquals((window.width, window.height), (7, 5))
+      assertEquals(pixel(window, 0, 0), Backdrop)
+      assertEquals(pixel(window, 1, 1), RedPixel)
+      assertEquals(pixel(window, 5, 3), RedPixel)
+      assertEquals(pixel(window, 6, 4), Backdrop)
+    finally window.close()
+
+  test("crop accepts a rectangle flush with every edge and rejects one a single pixel past it"):
+    val whole = blockScene().crop(Rect(0, 0, 20, 10))
+    try
+      assertEquals((whole.width, whole.height), (20, 10))
+      assertEquals(pixel(whole, 12, 4), RedPixel)
+      assertEquals(pixel(whole, 11, 4), Backdrop)
+    finally whole.close()
+    val corner = blockScene().crop(Rect(19, 9, 1, 1))
+    try assertEquals((corner.width, corner.height, pixel(corner, 0, 0)), (1, 1, Backdrop))
+    finally corner.close()
+    val img = blockScene()
+    intercept[IllegalArgumentException](img.crop(Rect(16, 0, 5, 10))) // x + width = 21
+    intercept[IllegalArgumentException](img.crop(Rect(0, 8, 20, 3))) // y + height = 11
+    assertEquals(img.width, 20) // rejected up front, so the image is still usable
+    img.close()
+
+  test("pad honours BorderType.Wrap, tiling the opposite edge in"):
+    val stripe = Image
+      .blank(4, 2, Scalar.Black, channels = 1)
+      .drawRect(Rect(3, 0, 1, 2), Scalar.White, Thickness.Filled) // only the right column is white
+    val padded = stripe.pad(1, BorderType.Wrap)
+    try
+      assertEquals((padded.width, padded.height), (6, 4))
+      assertEquals(pixel(padded, 0, 1), On) // left pad: the source's white right column
+      assertEquals(pixel(padded, 4, 1), On) // that source column, shifted by the pad
+      assertEquals(pixel(padded, 5, 1), Off) // right pad: the source's black left column
+      assertEquals(pixel(padded, 4, 0), On) // top pad: the source's bottom row, same column
+    finally padded.close()
+
+  test("rotated accepts BorderType.Wrap, the one mode the filters reject"):
+    val plain = Image.blank(8, 8)
+    try plain.mat.rotated(30.0, border = BorderType.Wrap).use(r => assert(r.rows > 0))
+    finally plain.close()
+
+  test("border rejects a negative width by name"):
+    val img = Image.blank(4, 4)
+    val e = intercept[IllegalArgumentException](img.border(-1, 0, 0, 0))
+    assert(e.getMessage.contains("negative"), e.getMessage)
+    img.close()
+
+  /** A 40×20 BGR scene on a flat colour with a white block, for the arbitrary-angle rotations. */
+  private def wide(): Image =
+    Image.blank(40, 20, Scalar(10, 20, 30)).drawRect(Rect(5, 5, 10, 8), Scalar.White, Thickness.Filled)
+
+  test("an arbitrary-angle rotate sizes its canvas by the rotated bounding box"):
+    assertEquals(dims(wide().rotate(90.0)), (20, 40, 3))
+    assertEquals(dims(wide().rotate(0.0)), (40, 20, 3))
+    assertEquals(dims(wide().rotate(0.0, scale = 2.0)), (80, 40, 3))
+
+  test("rotate by 0° leaves every pixel where it was"):
+    val src = wide()
+    val same = src.copy.rotate(0.0)
+    try assert(Core.norm(src.mat, same.mat, Core.NORM_INF) <= 1.0)
+    finally
+      src.close(); same.close()
+
+  test("an arbitrary rotation centres the source on the canvas and fills the exposed corners"):
+    val src = wide()
+    val turned = src.mat.rotated(45.0, borderValue = Scalar.Red)
+    try
+      turned.use: m =>
+        assertEquals(m.get(0, 0).toSeq, RedPixel) // the canvas corner lies outside the rotated source
+        assertEquals(m.get(m.rows / 2, m.cols / 2).toSeq, Seq(10.0, 20.0, 30.0)) // the source's flat centre
+    finally src.close()
+
+  test("rotate rejects a non-positive scale"):
+    val img = wide()
+    intercept[IllegalArgumentException](img.rotate(10.0, scale = 0))
+    img.close()
+
+  /** An 11×11 single-channel canvas with a lone white pixel at (5, 5). */
+  private def dot(): Image =
+    Image.blank(11, 11, Scalar.Black, channels = 1).drawRect(Rect(5, 5, 1, 1), Scalar.White, Thickness.Filled)
+
+  test("dilate grows a lone pixel into the (2r + 1)-square its radius names"):
+    val grown = dot().dilate(radius = 1)
+    assertEquals(pixel(grown, 4, 4), On) // the block's top-left corner
+    assertEquals(pixel(grown, 3, 3), Off) // just outside it
+    assertEquals(lit(grown), 9)
+    assertEquals(lit(dot().dilate(radius = 2)), 25)
+
+  test("MorphShape.Cross reaches only the four neighbours"):
+    assertEquals(lit(dot().dilate(1, MorphShape.Cross)), 5)
+
+  test("erode and Open remove a lone pixel; Gradient leaves its dilation"):
+    assertEquals(lit(dot().erode(radius = 1)), 0)
+    assertEquals(lit(dot().morphology(MorphOp.Open, 1)), 0)
+    assertEquals(lit(dot().morphology(MorphOp.Gradient, 1)), 9)
+
+  /** An 8×8 single-channel canvas at 100 everywhere: its local mean is 100, so `c` alone decides the sign. */
+  private def flat(): Image = Image.blank(8, 8, Scalar(100), channels = 1)
+
+  test("adaptiveThreshold's reordered parameters reach OpenCV intact: c is subtracted and inverse flips"):
+    for method <- AdaptiveMethod.values do
+      assertEquals(lit(flat().adaptiveThreshold(blockSize = 3, c = 2, method = method)), 64, s"$method")
+      assertEquals(lit(flat().adaptiveThreshold(blockSize = 3, c = -2, method = method)), 0, s"$method")
+      assertEquals(
+        lit(flat().adaptiveThreshold(blockSize = 3, c = 2, method = method, inverse = true)),
+        0,
+        s"$method"
+      )
+
+  test("adaptiveThreshold rejects an even or sub-3 blockSize by name"):
+    for blockSize <- Seq(4, 1) do
+      val img = flat()
+      val e = intercept[IllegalArgumentException](img.adaptiveThreshold(blockSize = blockSize))
+      assert(e.getMessage.contains("blockSize"), e.getMessage)
+      img.close()
