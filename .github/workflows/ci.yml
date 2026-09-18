@@ -42,7 +42,10 @@ jobs:
         run: ./mill examples.runMain scalacv.jvmReport | tee /dev/stderr | grep -q "java.version=${{ matrix.jdk }}"
 
       - name: Test
-        run: ./mill core.test zio.test examples.test
+        # `+`-separated, not space-separated: `test` is a Mill *command*, so in
+        # `./mill core.test zio.test examples.test` the later targets are passed to core.test as munit
+        # test-name filters (matching nothing) and zio/examples never run at all -- green in 2 s.
+        run: ./mill core.test + zio.test + examples.test
 
       - name: Docs snippets still compile
         # The docs are a gate, not a courtesy: a code change that breaks an example fails here.
@@ -185,7 +188,8 @@ jobs:
         # assertions to Apple-silicon arm64, where an arch-specific bug — a wrong native classifier,
         # an endianness or alignment assumption — would otherwise ship unseen. Mill's default JDK
         # (the build header) is enough; the point is the architecture, not another JDK rung.
-        run: ./mill core.test zio.test
+        # `+`-separated for the same reason as the build matrix's Test step.
+        run: ./mill core.test + zio.test
 
   publish-shape:
     name: Published artifact shape
