@@ -165,7 +165,9 @@ jobs:
         # Every publishable module (core, vision, graphs, zio) plus examples. Scoped like the build
         # job: examples-gui stays out of CI. vision and graphs are named explicitly here rather than
         # left unlinted -- they are published surface, so they get the same --check as the rest.
-        run: ./mill core.fix --check vision.fix --check graphs.fix --check zio.fix --check examples.fix --check
+        # `+`-separated, for the same reason as the Test step: without it, `vision.fix` and the rest
+        # are passed to `core.fix` as arguments and only core is ever linted.
+        run: ./mill core.fix --check + vision.fix --check + graphs.fix --check + zio.fix --check + examples.fix --check
 
   natives:
     name: Natives · macos-26 arm64

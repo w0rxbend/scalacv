@@ -27,7 +27,7 @@ object Deps {
   val opencvRelease = opencv.takeWhile(_ != '-')
 
   /** Options for test sources: deliberately looser than main. The leak-catchers
-    * (`-Wvalue-discard`/`-Wnonunit-statement`), `-Xfatal-warnings` and `-Wunused:all` are for the
+    * (`-Wvalue-discard`/`-Wnonunit-statement`), `-Werror` and `-Wunused:all` are for the
     * published surface, not for `intercept[…]` and `Files.deleteIfExists` cleanup that legitimately
     * discard, nor for deliberately-unused test bindings. */
   val looseTestScalacOptions = Seq("-deprecation", "-feature", "-unchecked", "-java-output-version", "17")
@@ -176,17 +176,19 @@ trait ScalacvModule extends ScalaModule with ScalafixModule {
     // Opt in to the next major's language semantics now, on the LTS, so a 3.x upgrade is not a cliff.
     "-source:future",
     // Warnings are errors on the build. Nothing regresses the leak-catchers above unnoticed.
+    // `-Werror`, not its `-Xfatal-warnings` alias: 3.9 deprecates the alias, and a deprecation
+    // warning about the flag that makes warnings fatal fails the build on itself. 3.3 accepts both.
     // (-Yexplicit-nulls was evaluated and deferred: on the 3.3.8 LTS it forces `.nn` at ~200 OpenCV
     // boundary calls — noise asserting non-null on calls that never return null — for marginal gain.
     // Scala 3.5+ Java flexible-types make it far lighter; revisit when the LTS pin moves to 3.9.)
-    "-Xfatal-warnings",
+    "-Werror",
     // Consumers only need JDK 17, even though we build on 25.
     "-java-output-version", "17"
   )
 }
 
 /** Test settings. Test sources are deliberately looser than main: `-Wunused:all` (dead test helpers
-  * are common), the leak-catchers (`-Wvalue-discard`/`-Wnonunit-statement`) and `-Xfatal-warnings` are
+  * are common), the leak-catchers (`-Wvalue-discard`/`-Wnonunit-statement`) and `-Werror` are
   * for the published surface, not for `intercept[…]` and `Files.deleteIfExists` cleanup that legitimately
   * discard. So the strict flags do not carry into tests.
   */
