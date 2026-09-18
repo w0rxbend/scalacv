@@ -405,13 +405,18 @@ object benchmarks extends ScalacvModule {
 /** JavaFX examples. Deliberately excluded from CI and never published: OpenJFX resolves
   * per-host through the `<os>` profile in its parent POM, so this module only ever builds
   * for the machine it is built on.
+  *
+  * The only module that does not honour the JDK 17 floor: OpenJFX 27 ships JDK 25 bytecode (26 was
+  * already 24), so this needs the default `zulu:25`. Building it under a `MILL_JVM_ID` from the CI
+  * matrix's lower rungs fails with UnsupportedClassVersionError -- which costs nothing, because the
+  * rungs never build it.
   */
 object `examples-gui` extends ScalacvModule {
   def moduleDeps = Seq(core, vision)
   def mvnDeps = Deps.opencvNatives ++ Seq(
-    mvn"org.openjfx:javafx-base:26.0.2",
-    mvn"org.openjfx:javafx-graphics:26.0.2",
-    mvn"org.openjfx:javafx-controls:26.0.2"
+    mvn"org.openjfx:javafx-base:27",
+    mvn"org.openjfx:javafx-graphics:27",
+    mvn"org.openjfx:javafx-controls:27"
   )
   def forkArgs = Task { Deps.runtimeJvmArgs(jvmMajor()) }
 }
