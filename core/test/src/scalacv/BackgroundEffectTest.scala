@@ -101,6 +101,7 @@ class BackgroundEffectTest extends munit.FunSuite:
     // default swapRB the blob's planes are (R, G, B), decodeMask takes the LAST of c = 3, and B/255 is 1.0
     // on the painted left half and 0.0 on the right — straddling the 0.5 threshold.
     val f = Files.createTempFile("scalacv-seg-", ".onnx")
+    f.toFile.deleteOnExit() // a failed load throws before the finally below runs
     Files.write(f, TinyOnnx.relu(Seq(1, 3, 4, 6)))
     val net = Dnn.fromOnnx(f.toString).fold(e => fail(s"load failed: $e"), identity)
     val img =
@@ -183,8 +184,8 @@ class BackgroundEffectTest extends munit.FunSuite:
         Managed.use(out.mat.submat(0, H, W / 2, W)): right =>
           Managed.use(ref.mat.submat(0, H, W / 2, W)): refRight =>
             assert(Core.norm(right, refRight, Core.NORM_INF) > 0, "the background half must change")
-        val corner = out.mat.get(35, 70)(2) // the square's top-left corner, red smeared into black
-        assert(corner > 0 && corner < 255, s"a blurred edge is neither pure red nor pure black, got $corner")
+        val edge = out.mat.get(35, 70)(2) // midway down the square's left edge, red smeared into black
+        assert(edge > 0 && edge < 255, s"a blurred edge is neither pure red nor pure black, got $edge")
       finally out.close()
     finally
       ref.close()
