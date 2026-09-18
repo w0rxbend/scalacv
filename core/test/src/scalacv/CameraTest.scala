@@ -220,25 +220,27 @@ class CameraTest extends munit.FunSuite:
 
     var leaked: Option[Image] = None
     // `usingFile` only maps the Either, so the body's exception escapes as a throw — the finally blocks in
-    // foreach and scoped are what is under test here.
-    intercept[RuntimeException]:
+    // foreach and scoped are what is under test here. The message check keeps an IllegalStateException
+    // from a double release inside the scope from passing as the expected exception.
+    val stopped = intercept[RuntimeException]:
       Camera.usingFile(file.toString): cam =>
         cam.foreach(attemptsPerFrame = 1): img =>
           leaked = Some(img)
           throw RuntimeException("stop")
+    assertEquals(stopped.getMessage, "stop")
     intercept[IllegalStateException](leaked.get.width)
 
-  test(
-    "usingFile closes the camera on the way out of a failing body and never runs the body for a missing source"
-  ):
+  test("usingFile closes the camera on the way out of a failing body"):
     val file = recordFixture()
     var escaped: Option[Camera] = None
-    intercept[RuntimeException]:
+    val stopped = intercept[RuntimeException]:
       Camera.usingFile(file.toString): cam =>
         escaped = Some(cam)
         throw RuntimeException("stop")
+    assertEquals(stopped.getMessage, "stop")
     intercept[IllegalStateException](escaped.get.capture)
 
+  test("usingFile never runs the body for a source that did not open"):
     var ran = false
     val missing = Camera.usingFile("/no/such/scalacv.avi"): _ =>
       ran = true
@@ -246,22 +248,30 @@ class CameraTest extends munit.FunSuite:
     assert(missing.isLeft, "a missing source must be a Left")
     assert(!ran, "the body must not run for a source that did not open")
 
-  test("take rejects a negative count, take(0) is Nil, and taken frames are distinct owned copies"):
+  test("take rejects a negative count and take(0) is Nil"):
     val file = recordFixture()
     Camera
       .usingFile(file.toString): cam =>
         intercept[IllegalArgumentException](cam.take(-1))
         assertEquals(cam.take(0), Nil)
+      .fold(e => fail(e.getMessage), identity)
+
+  test("taken frames are distinct owned copies, not views of one buffer"):
+    val file = recordFixture()
+    Camera
+      .usingFile(file.toString): cam =>
         val two = cam.take(2, attemptsPerFrame = 1)
         try
           assertEquals(two.map(_.mat.getNativeObjAddr).distinct.size, 2, "the taken frames alias each other")
-          two.foreach(img => assertEquals(img.width, Width))
+          // Two references to one decode buffer would both read the second frame's grey; owned copies keep
+          // their own. Sampled below the marker row, within the tolerance VideoTest uses for MJPG.
+          for (img, i) <- two.zipWithIndex do
+            val grey = img.mat.get(40, 8)(0)
+            assert(math.abs(grey - (20 + i * 20)) < 8, s"frame $i reads $grey, expected about ${20 + i * 20}")
         finally two.foreach(_.close())
       .fold(e => fail(e.getMessage), identity)
 
-  test(
-    "take past the end is shorter, never padded, and snapshot on an exhausted source is a LoadFailed Left"
-  ):
+  test("take past the end is shorter, never padded"):
     val file = recordFixture()
     Camera
       .usingFile(file.toString): cam =>
@@ -269,6 +279,13 @@ class CameraTest extends munit.FunSuite:
         val rest = cam.take(FrameCount + 5, attemptsPerFrame = 1)
         try assertEquals(rest.size, FrameCount - 2)
         finally rest.foreach(_.close())
+      .fold(e => fail(e.getMessage), identity)
+
+  test("snapshot on an exhausted source is a LoadFailed Left"):
+    val file = recordFixture()
+    Camera
+      .usingFile(file.toString): cam =>
+        cam.foreach(attemptsPerFrame = 1)(_ => ())
         cam.snapshot(attemptsPerFrame = 1) match
           case Left(e: CvError.LoadFailed) =>
             assert(e.getMessage.contains("no frame available"), e.getMessage)
@@ -276,7 +293,7 @@ class CameraTest extends munit.FunSuite:
           case Right(img) => img.close(); fail("an exhausted source must not snapshot")
       .fold(e => fail(e.getMessage), identity)
 
-  test("a recorder rejects impossible open parameters before touching the writer"):
+  test("a recorder rejects a non-positive fps or frame size as a programmer error, not a Left"):
     val out = Files.createTempFile("scalacv-rec-params-", ".avi")
     try
       intercept[IllegalArgumentException](Recorder.open(out.toString, FrameSize, fps = 0))
@@ -284,18 +301,30 @@ class CameraTest extends munit.FunSuite:
       intercept[IllegalArgumentException](Recorder.open(out.toString, Size(0, 10)))
     finally Files.deleteIfExists(out)
 
-  test("a recorder borrows the frame it writes, and is dead but harmless after close"):
-    val out = Files.createTempFile("scalacv-rec-lifecycle-", ".avi")
+  test("a recorder borrows the frame it writes"):
+    val out = Files.createTempFile("scalacv-rec-borrow-", ".avi")
     try
-      Recorder.open(out.toString, FrameSize, codec = Codec.Mjpg) match
-        case Left(e) => fail(e.getMessage)
-        case Right(rec) =>
+      Recorder
+        .using(out.toString, FrameSize, codec = Codec.Mjpg): rec =>
           val img = frame(0)
           try
             assert(rec.write(img).isRight, "a matching frame should write")
             assertEquals((img.width, img.height), (Width, Height), "write must borrow, not consume")
           finally img.close()
-          rec.close()
+        .fold(e => fail(e.getMessage), identity)
+    finally Files.deleteIfExists(out)
+
+  test("a recorder is dead but harmless after close, and close is idempotent"):
+    val out = Files.createTempFile("scalacv-rec-lifecycle-", ".avi")
+    try
+      Recorder.open(out.toString, FrameSize, codec = Codec.Mjpg) match
+        case Left(e) => fail(e.getMessage)
+        case Right(rec) =>
+          try
+            val img = frame(0)
+            try assert(rec.write(img).isRight, "a matching frame should write")
+            finally img.close()
+          finally rec.close()
           rec.close()
           // The size and depth preconditions still pass on a closed recorder; it is the spent handle that
           // refuses, and it does so on the Scala side rather than as a native write into a released writer.
@@ -303,7 +332,13 @@ class CameraTest extends munit.FunSuite:
           try intercept[IllegalStateException](rec.write(again))
           finally again.close()
           intercept[IllegalStateException](rec.writer)
-          assert(Files.size(out) > 0, "the written frame should have been flushed on close")
+          val readBack = Camera
+            .usingFile(out.toString): cam =>
+              var n = 0
+              cam.foreach(attemptsPerFrame = 1)(_ => n += 1)
+              n
+            .fold(e => fail(e.getMessage), identity)
+          assertEquals(readBack, 1, "close must finalise the file with the one frame that was written")
     finally Files.deleteIfExists(out)
 
   test("recordTo writes at the source's fps by default and at the explicit fps when one is given"):
@@ -362,7 +397,6 @@ class CameraTest extends munit.FunSuite:
         assert(capture.getExceptionMode, "restored on the throw path too")
         assert(!escaped.get.hasNext, "an iterator whose block threw must be retired")
 
-        capture.setExceptionMode(false)
         assertEquals(Video.frames(capture)(_.size), FrameCount - 2, "exactly one frame per block was pulled")
       .fold(e => fail(e.getMessage), identity)
 
