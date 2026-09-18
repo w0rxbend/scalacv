@@ -84,6 +84,128 @@ class LocalizationTest extends munit.FunSuite:
           s"expected zero translation, got ${pose.translation}"
         )
 
+  /** A rotation of `degrees` about the camera's Y axis (a yaw), as the row-major 3×3 `CameraPose` carries. */
+  private def yaw(degrees: Double): Seq[Seq[Double]] =
+    val c = math.cos(math.toRadians(degrees))
+    val s = math.sin(math.toRadians(degrees))
+    Seq(Seq(c, 0.0, s), Seq(0.0, 1.0, 0.0), Seq(-s, 0.0, c))
+
+  private def rigid(
+      r: Seq[Seq[Double]],
+      t: Seq[Double]
+  )(p: (Double, Double, Double)): (Double, Double, Double) =
+    val (x, y, z) = p
+    (
+      r(0)(0) * x + r(0)(1) * y + r(0)(2) * z + t(0),
+      r(1)(0) * x + r(1)(1) * y + r(1)(2) * z + t(1),
+      r(2)(0) * x + r(2)(1) * y + r(2)(2) * z + t(2)
+    )
+
+  test("CameraPose.position is -Rᵀ·t, not -R·t, for a rotated camera"):
+    // A quarter turn about Z with t along X: the two formulas disagree in the sign of Y.
+    val pose = CameraPose(
+      rotation = Seq(Seq(0.0, -1.0, 0.0), Seq(1.0, 0.0, 0.0), Seq(0.0, 0.0, 1.0)),
+      translation = Seq(1.0, 0.0, 0.0)
+    )
+    val pos = pose.position
+    assertEqualsDouble(pos(0), 0.0, 1e-12)
+    assertEqualsDouble(pos(1), 1.0, 1e-12)
+    assertEqualsDouble(pos(2), 0.0, 1e-12)
+
+  test("localizer recovers a yawed and translated camera in the x_cam = R·x_world + t convention"):
+    val r = yaw(15.0)
+    val t = Seq(0.3, -0.2, 0.5)
+    val image = world.map(p => project.tupled(rigid(r, t)(p)))
+    Localizer.locate(world, image, Intrinsics(focal, focal, cx, cy)) match
+      case None => fail("solvePnP should converge on an exact projection")
+      case Some(pose) =>
+        // The off-diagonal (0)(2) ≈ +0.2588 is what separates R from its transpose.
+        for i <- 0 until 3; j <- 0 until 3 do
+          assertEqualsDouble(pose.rotation(i)(j), r(i)(j), 1e-3, s"rotation($i)($j)")
+        for i <- 0 until 3 do assertEqualsDouble(pose.translation(i), t(i), 1e-3, s"translation($i)")
+
+  test("localizer rejects mismatched correspondence counts as a programmer error"):
+    intercept[IllegalArgumentException](
+      Localizer.locate(
+        world.take(4),
+        world.take(3).map((x, y, z) => project(x, y, z)),
+        Intrinsics(focal, focal, cx, cy)
+      )
+    )
+
+  // -- Visual odometry -----------------------------------------------------------------------------
+
+  // Twelve points spread wide and deep (z from 3.5 to 12) in front of the camera. A narrow cluster at similar
+  // depth leaves several 5-point hypotheses inside RANSAC's 1px threshold and the yaw drifts by a degree or
+  // two; this spread makes every hypothesis but the true one an outlier, so the recovered pose is exact.
+  private val stereoWorld = Seq(
+    (-2.0, -1.5, 4.0),
+    (2.0, -1.5, 9.0),
+    (-2.0, 1.5, 12.0),
+    (2.0, 1.5, 5.0),
+    (0.0, 0.0, 7.0),
+    (1.0, -0.8, 3.5),
+    (-1.2, 0.6, 10.0),
+    (0.4, 1.2, 6.0),
+    (-0.5, -1.0, 8.5),
+    (1.5, 0.3, 4.5),
+    (-1.8, -0.2, 6.5),
+    (0.8, 0.9, 11.0)
+  )
+
+  private val odometryIntrinsics = Intrinsics(fx = 500, fy = 500, cx = 320, cy = 240)
+
+  private def projectWith(intr: Intrinsics)(p: (Double, Double, Double)): Point =
+    val (x, y, z) = p
+    Point(intr.fx * x / z + intr.cx, intr.fy * y / z + intr.cy)
+
+  test("visual odometry recovers a known yaw and the unit translation direction (x_2 = R·x_1 + t)"):
+    val r = yaw(10.0)
+    val t = Seq(0.3, 0.0, 0.1)
+    val from = stereoWorld.map(projectWith(odometryIntrinsics))
+    val to = stereoWorld.map(p => projectWith(odometryIntrinsics)(rigid(r, t)(p)))
+    VisualOdometry.estimate(from, to, odometryIntrinsics) match
+      case None => fail("recoverPose should converge on an exact projection")
+      case Some(motion) =>
+        // Loose enough for the RANSAC essential-matrix path, tight enough that the transpose ((0)(2) ≈ -0.17
+        // instead of +0.17) fails.
+        for i <- 0 until 3; j <- 0 until 3 do
+          assert(math.abs(motion.rotation(i)(j) - r(i)(j)) < 0.02, s"rotation($i)($j): ${motion.rotation}")
+        val norm = math.sqrt(t.map(v => v * v).sum)
+        val alignment = motion.translation.zip(t.map(_ / norm)).map(_ * _).sum
+        assert(alignment > 0.98, s"translation should point along $t, got ${motion.translation}")
+        assertEquals(motion.inliers, stereoWorld.size, "every exact correspondence is an inlier")
+
+  test("visual odometry reports a sideways camera move as points sliding the other way"):
+    // Camera moved +0.4 along X, so every point sits at x - 0.4 in the second frame: t ∝ (-1, 0, 0), and the
+    // cheirality check fixes that sign rather than leaving it to the essential matrix's ambiguity.
+    val from = stereoWorld.map(projectWith(odometryIntrinsics))
+    val to = stereoWorld.map((x, y, z) => projectWith(odometryIntrinsics)((x - 0.4, y, z)))
+    VisualOdometry.estimate(from, to, odometryIntrinsics) match
+      case None => fail("recoverPose should converge on an exact projection")
+      case Some(motion) =>
+        val Seq(tx, ty, tz) = motion.translation
+        assert(
+          tx < -0.95 && math.abs(ty) < 0.2 && math.abs(tz) < 0.2,
+          s"expected ~(-1, 0, 0), got ${motion.translation}"
+        )
+
+  test("visual odometry rejects mismatched correspondence counts as a programmer error"):
+    intercept[IllegalArgumentException](
+      VisualOdometry.estimate(Seq.fill(6)(Point(1, 1)), Seq.fill(5)(Point(1, 1)), odometryIntrinsics)
+    )
+
+  test("visual odometry never surfaces a raw CvException or a pose for five coincident correspondences"):
+    // What findEssentialMat does on coincident points is solver-dependent (an empty E, a NaN E, a stack of
+    // candidate Es, or a native assertion), so the promise pinned here is the wrapper's: a None or a named
+    // CvError, never a pose and never an unwrapped org.opencv.core.CvException.
+    val same = Seq.fill(5)(Point(100, 100))
+    scala.util.Try(VisualOdometry.estimate(same, same, odometryIntrinsics)) match
+      case scala.util.Success(None) => ()
+      case scala.util.Failure(_: CvError.NativeCall) => ()
+      case scala.util.Success(Some(motion)) => fail(s"degenerate geometry must not yield a pose: $motion")
+      case scala.util.Failure(other) => fail(s"expected None or a named CvError, got $other")
+
   // -- Navigator -----------------------------------------------------------------------------------
 
   /** A disparity map whose left/centre/right thirds have the given near-ness (0..255). */
@@ -134,3 +256,39 @@ class LocalizationTest extends munit.FunSuite:
       finally
         frame0.close(); frame1.close(); frame2.close()
     finally odometry.close()
+
+  test("the odometry pipeline answers None on featureless frames instead of throwing"):
+    // A uniform frame seeds no corners, and a textured frame after it has nothing to track from: both are
+    // "too few points", not errors.
+    val odometry = Odometry.monocular(Intrinsics(fx = 500, fy = 500, cx = 100, cy = 80))
+    try
+      val flat0 = Image.blank(200, 160, Scalar(30, 30, 30))
+      val flat1 = Image.blank(200, 160, Scalar(30, 30, 30))
+      val textured = scene(0, 0)
+      try
+        assertEquals(odometry.update(flat0), None)
+        assertEquals(odometry.update(flat1), None)
+        assertEquals(odometry.update(textured), None)
+        assertEquals(odometry.framesProcessed, 3)
+      finally
+        flat0.close(); flat1.close(); textured.close()
+    finally odometry.close()
+
+  test("the odometry pipeline re-baselines after close rather than touching the released frame"):
+    // The current contract: close releases the retained frame and the next update starts over as a fresh
+    // reference, while the frame count keeps running. If a closed pipeline should throw instead, this is the
+    // test to change.
+    val odometry = Odometry.monocular(Intrinsics(fx = 500, fy = 500, cx = 100, cy = 80))
+    val frame0 = scene(0, 0)
+    val frame1 = scene(4, 3)
+    val frame2 = scene(8, 6)
+    try
+      odometry.update(frame0)
+      odometry.close()
+      assertEquals(odometry.update(frame1), None)
+      assertEquals(odometry.framesProcessed, 2)
+      odometry.update(frame2)
+      assertEquals(odometry.framesProcessed, 3)
+    finally
+      odometry.close()
+      frame0.close(); frame1.close(); frame2.close()
