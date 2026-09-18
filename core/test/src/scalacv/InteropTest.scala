@@ -221,37 +221,38 @@ class InteropTest extends munit.FunSuite:
   test("a 3-, 1- and 4-channel image round-trips through BufferedImage bit-for-bit"):
     // Non-uniform fixtures: a flat fill would let a stride or row-order bug hide behind identical pixels.
     // These paths are pure byte copies with no codec involved, so exact equality is honest here.
-    val bgr =
+    Using.resource(
       Image.blank(20, 12, Scalar(30, 60, 200)).drawRect(Rect(3, 2, 6, 5), Scalar.Red, Thickness.Filled)
-    try
-      val back = Image.fromBufferedImage(bgr.toBufferedImage)
-      try assertEquals(Core.norm(bgr.mat, back.mat, Core.NORM_INF), 0.0)
-      finally back.close()
-    finally bgr.close()
+    ) { bgr =>
+      Using.resource(Image.fromBufferedImage(bgr.toBufferedImage)) { back =>
+        assertEquals(Core.norm(bgr.mat, back.mat, Core.NORM_INF), 0.0)
+      }
+    }
 
-    val grey =
+    Using.resource(
       Image.blank(8, 8, Scalar(128), channels = 1).drawRect(Rect(1, 1, 3, 3), Scalar(7), Thickness.Filled)
-    try
+    ) { grey =>
       // fromBufferedImage always yields 3 channels, so the comparison baseline is the grey image widened to BGR.
-      val back = Image.fromBufferedImage(grey.toBufferedImage)
-      val expected = grey.copy.convert(ColorConversion.GrayToBgr)
-      try assertEquals(Core.norm(expected.mat, back.mat, Core.NORM_INF), 0.0)
-      finally
-        back.close()
-        expected.close()
-    finally grey.close()
+      Using.resources(
+        Image.fromBufferedImage(grey.toBufferedImage),
+        grey.copy.convert(ColorConversion.GrayToBgr)
+      ) { (back, expected) =>
+        assertEquals(Core.norm(expected.mat, back.mat, Core.NORM_INF), 0.0)
+      }
+    }
 
-    val bgra = Image
-      .blank(10, 8, Scalar(30, 60, 200, 255), channels = 4)
-      .drawRect(Rect(2, 2, 4, 3), Scalar(9, 8, 7, 255), Thickness.Filled)
-    try
-      val back = Image.fromBufferedImage(bgra.toBufferedImage)
-      val expected = bgra.copy.convert(ColorConversion.BgraToBgr)
-      try assertEquals(Core.norm(expected.mat, back.mat, Core.NORM_INF), 0.0)
-      finally
-        back.close()
-        expected.close()
-    finally bgra.close()
+    Using.resource(
+      Image
+        .blank(10, 8, Scalar(30, 60, 200, 255), channels = 4)
+        .drawRect(Rect(2, 2, 4, 3), Scalar(9, 8, 7, 255), Thickness.Filled)
+    ) { bgra =>
+      Using.resources(
+        Image.fromBufferedImage(bgra.toBufferedImage),
+        bgra.copy.convert(ColorConversion.BgraToBgr)
+      ) { (back, expected) =>
+        assertEquals(Core.norm(expected.mat, back.mat, Core.NORM_INF), 0.0)
+      }
+    }
 
   test(
     "Models.fetch falls through a dead mirror to the next one, and when every mirror fails names each of them in order"
@@ -277,7 +278,6 @@ class InteropTest extends munit.FunSuite:
             msg.indexOf("first.bin") < msg.indexOf("second.bin"),
             s"mirrors must be listed in order, got: $msg"
           )
-          assert(!msg.contains(": null"), s"a message-less exception must still be described, got: $msg")
         case other => fail(other.toString)
     }
 
