@@ -7,9 +7,9 @@ import org.scalacheck.Prop.forAll
 
 /** Model-free contracts and laws of the vision layer — embedding metrics, [[Gallery]] lookup, gesture rules,
   * pinhole projection, the pose decoders' guards and ArUco corner order. Everything runs on hand-built data:
-  * no model file, no asset, and the only native calls are `projectPoints` and one marker round-trip. Property
-  * laws sit here rather than in the per-feature example suites so only this one file needs to be a ScalaCheck
-  * suite.
+  * no model file, no asset, and the only native work is `projectPoints`, a few synthetic tensors and one
+  * marker round-trip. Property laws sit here rather than in the per-feature example suites so only this one
+  * file needs to be a ScalaCheck suite.
   */
 class VisionContractsTest extends munit.ScalaCheckSuite:
 
@@ -74,7 +74,7 @@ class VisionContractsTest extends munit.ScalaCheckSuite:
 
   // -- FaceEmbedding / Gallery -------------------------------------------------------------------------
 
-  property("embedding metrics obey their laws for any pair of vectors, and the degenerate cases are guarded"):
+  property("embedding metrics obey their laws for any three vectors of one length"):
     forAll(genTriple, Gen.choose(0.1, 10.0)): (triple, k) =>
       val (a, b, c) = triple
       val scaled = FaceEmbedding(b.values.map(_ * k.toFloat))
@@ -209,8 +209,8 @@ class VisionContractsTest extends munit.ScalaCheckSuite:
     "detected ArUco corners come back clockwise from the marker's top-left, in image (x, y) not (row, col)"
   ):
     // Asymmetric margins (top 90, bottom 30, left 30, right 90) around a 200 px tag, so each corner has a
-    // distinct expected position: an x/y swap reports (90, 30) first, a reversed or rotated order fails on
-    // the second point.
+    // distinct expected position: an x/y swap reports (90, 30) first, and a reversed or rotated order puts a
+    // corner 200 px from where it belongs.
     Aruco
       .generateMarker(ArucoDictionary.Dict4x4_50, 5, 200)
       .use(_.border(90, 30, 30, 90, color = Scalar.White))
@@ -219,8 +219,9 @@ class VisionContractsTest extends munit.ScalaCheckSuite:
         assertEquals(found.map(_.id), Seq(5))
         val expected = Seq(Point(30, 90), Point(230, 90), Point(230, 290), Point(30, 290))
         assertEquals(found.head.corners.size, 4)
-        // Corner refinement on a synthetic fronto-parallel tag is sub-pixel everywhere; 4 px is an order of
-        // magnitude above that, and an order mistake is off by 200.
+        // The default detector does no corner refinement: each corner is a contour vertex on the tag's
+        // outermost dark pixel, about 1 px inside the nominal edge on every platform. 4 px covers that with
+        // margin while staying two orders of magnitude below an order mistake.
         found.head.corners
           .zip(expected)
           .foreach: (got, want) =>
