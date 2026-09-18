@@ -305,6 +305,12 @@ object core extends ScalacvPublishModule {
       super.forkArgs() :+
         s"-Dscalacv.poms=${core.pom().path}:${vision.pom().path}:${graphs.pom().path}:${zio.pom().path}"
     }
+
+    /* One forked JVM per suite. The ownership canaries' documented failure mode is the worker JVM
+     * dying (a double free aborts the process), and Mill's default packs several suites into each
+     * worker -- so a crash takes its co-tenants' results with it and the report names none of them.
+     * Per-suite groups still run testParallelism-wide, so this costs JVM startups, not wall clock. */
+    def testForkGrouping = Task { discoveredTestClasses().map(Seq(_)) }
   }
 }
 
