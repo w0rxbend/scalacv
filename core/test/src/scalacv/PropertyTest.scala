@@ -178,6 +178,8 @@ class PropertyTest extends munit.ScalaCheckSuite:
     assertEqualsDouble(i.fy, 320.0, 1e-9)
     assertEquals((i.cx, i.cy), (320.0, 240.0))
     assert(i.distortion.isEmpty)
+
+  test("Intrinsics.approx rejects a field of view outside (0°, 180°) and an empty image"):
     intercept[IllegalArgumentException](Intrinsics.approx(Size(640, 480), horizontalFovDegrees = 0))
     intercept[IllegalArgumentException](Intrinsics.approx(Size(640, 480), horizontalFovDegrees = 180))
     intercept[IllegalArgumentException](Intrinsics.approx(Size(0, 480)))
