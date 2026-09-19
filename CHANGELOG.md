@@ -4,7 +4,7 @@ All notable changes to scalacv are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `early-semver`: while the library is on `0.x`, a minor bump may break compatibility.
 
-## [Unreleased]
+## [0.2.0] — 2026-09-19
 
 ### Fixed
 - `Rect.bottomRight` no longer wraps negative for a corner past `Int.MaxValue`: the sums
@@ -20,6 +20,25 @@ All notable changes to scalacv are recorded here. The format follows
   lines in their build to match; `Build.openCvVersion` now reports `4.14.0`. No scalacv API changed and
   the full suite passes unmodified against 4.14 on JDK 17 and 25 — including the Hough decode types and
   the `blobFromImage` mean/`swapRB` ordering, whose scaladoc now records the 4.14 verification.
+
+### Internal
+- **The test suite grew from 542 to 689 tests**, across core, vision, graphs and zio: `Image` ownership
+  on the failure paths, pixel-level transform behaviour a dimension check cannot see, `Managed`
+  transfer/adoption and suppressed-release policy, `Camera`/`Recorder` lifecycle at end-of-stream and on
+  exceptions, the `BufferedImage` bridge, segmentation and compositing arithmetic, tracker confirmation
+  and coasting, rotation conventions in `Localizer`/`VisualOdometry`, occupancy-grid ray integration,
+  `Picture`/chart/GIF geometry, and ZIO scope release under interruption.
+- **Two CI gates were silently hollow**, both the same Mill target-chaining bug: `./mill a.test b.test`
+  passes the later targets to the first as test-name filters, so `./mill core.test zio.test examples.test`
+  ran **only** `core.test` — the ZIO and examples suites never executed in CI — and the identical form in
+  the scalafix step linted only `core` (20 of 75 sources) while its comment claimed all five modules.
+  Both now use `+`-separated targets; nothing was hiding behind either.
+- One forked JVM per test suite: a double free aborts the worker process, and Mill's default packing of
+  several suites per worker meant such a crash took its co-tenants' results down unnamed.
+- Build tooling: Mill 1.1.9, munit 1.3.6, munit-scalacheck 1.3.1, mdoc 2.9.2, OpenJFX 27 (local-only
+  `examples-gui`). `-Werror` replaces the `-Xfatal-warnings` alias, which Scala 3.9 deprecates — the
+  deprecation warning about the flag would otherwise be promoted to an error by the flag itself. Every
+  CI job is now bounded by `timeout-minutes`, and `examples.test` also runs on the macOS arm64 leg.
 
 ## [0.1.0] — 2026-08-22
 
