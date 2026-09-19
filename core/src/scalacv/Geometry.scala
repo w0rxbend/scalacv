@@ -51,8 +51,12 @@ final case class Rect(x: Int, y: Int, width: Int, height: Int):
   /** The top-left corner as a [[Point]]. */
   def topLeft: Point = Point(x.toDouble, y.toDouble)
 
-  /** The bottom-right corner as a [[Point]] — `(x + width, y + height)`, one past the last enclosed pixel. */
-  def bottomRight: Point = Point((x + width).toDouble, (y + height).toDouble)
+  /** The bottom-right corner as a [[Point]] — `(x + width, y + height)`, one past the last enclosed pixel.
+    *
+    * Each sum widens *before* it is taken, not after: `(x + width).toDouble` wraps to a negative corner once
+    * the sum passes `Int.MaxValue`, the same overflow [[area]] widens to `Long` to avoid.
+    */
+  def bottomRight: Point = Point(x.toDouble + width, y.toDouble + height)
   private[scalacv] def toCv: cv.Rect = cv.Rect(x, y, width, height)
 
 /** A pixel value: up to four channel components, in whatever channel order the Mat uses. OpenCV's default is

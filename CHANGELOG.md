@@ -6,6 +6,13 @@ All notable changes to scalacv are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- `Rect.bottomRight` no longer wraps negative for a corner past `Int.MaxValue`: the sums
+  `x + width` and `y + height` were taken in `Int` and widened afterwards, so
+  `Rect(Int.MaxValue - 1, Int.MaxValue - 1, 5, 5).bottomRight` returned `Point(-2147483645, …)`
+  instead of `Point(2147483651, …)` — the same overflow `Rect.area` already widens to `Long` to
+  avoid. Found by a new property test.
+
 ### Changed
 - **OpenCV 4.14.0** (bytedeco `opencv:4.14.0-1.5.14`, JavaCPP 1.5.14) and **OpenBLAS 0.3.34**
   (`openblas:0.3.34-1.5.14`) replace 4.13.0-1.5.13 / 0.3.31-1.5.13. The two move together because

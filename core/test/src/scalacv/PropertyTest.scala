@@ -126,9 +126,7 @@ class PropertyTest extends munit.ScalaCheckSuite:
         src.close()
         back.close()
 
-  // KNOWN BUG: Rect.bottomRight sums x + width in Int before widening, so a corner past Int.MaxValue wraps
-  // negative — the same overflow Rect.area already guards against with a Long. Geometry.scala:55.
-  property("Rect.bottomRight and topLeft never wrap: bottomRight.x == x.toDouble + width".fail):
+  property("Rect.bottomRight and topLeft never wrap: bottomRight.x == x.toDouble + width"):
     assertEquals(
       Rect(Int.MaxValue - 1, Int.MaxValue - 1, 5, 5).bottomRight,
       Point(2147483651.0, 2147483651.0)
