@@ -67,7 +67,7 @@ jobs:
       # so it belongs immediately after the publish step above — enable both together. `subject-path` globs the
       # jars Mill assembles under out/. Provenance lets a consumer verify the jar came from this tag and repo.
       # - name: Attest build provenance
-      #   uses: actions/attest-build-provenance@v1
+      #   uses: actions/attest-build-provenance@v4
       #   with:
       #     subject-path: "out/**/{jar,sourceJar,docJar}.dest/*.jar"
 
