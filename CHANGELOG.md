@@ -4,6 +4,42 @@ All notable changes to scalacv are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `early-semver`: while the library is on `0.x`, a minor bump may break compatibility.
 
+## [Unreleased]
+
+### Breaking
+- **`scalacv-vision` and `scalacv-graphs` moved to their own packages** — `scalacv.vision` and
+  `scalacv.graphs` — instead of contributing classes to `package scalacv`. Three artifacts publishing
+  into one package is a hard split-package error on a JPMS module path, and unfixable after 1.0, so it is
+  fixed now under early-semver. Consumers keep one import per module: add `import scalacv.vision.*`
+  and/or `import scalacv.graphs.*` beside `import scalacv.*`.
+- **`Tracker.create` now returns `Either[CvError, Tracker]`** instead of throwing `CvError.NativeCall`
+  when an OpenCV build lacks the algorithm — an environment failure belongs in the `Either`, like every
+  other native-resource factory (`FaceDetect.create`, `Cascades.load`, `Dnn.fromOnnx`).
+
+### Changed
+- **The scoped-body error policy is now uniform.** `Camera.using`, `Camera.usingFile` and
+  `Recorder.using` wrap their body in `Cv.attempt`, as `Image.reading` already did: a `CvError` thrown by
+  an operation inside the block comes back as a `Left` instead of escaping past the `Either`. Other
+  exceptions (`IllegalArgumentException`, use-after-close, anything not a `CvError`) still throw.
+
+### Fixed
+- The README's flagship example dropped a full cloned `Mat` unclosed (`img.copy.faces(detector)`) —
+  `faces` borrows, so the copy was both unnecessary and a leak, in the snippet that teaches the ownership
+  model. The docs' install snippets also drifted a release behind (0.1.0 coordinates, "OpenCV 4.13"
+  descriptors); they now match the build.
+
+### Internal
+- The `solvePnP` ceremony (six owned Mats, `Cv.attempt` guard, decode-before-release) was written out in
+  three places; it now lives once in core (`private[scalacv] Pnp.solve`), with head-pose, localization and
+  marker-AR keeping only their solver flag and decode. The mask → contours → filtered boxes tail shared by
+  motion, screen-diff and obstacle detection is one `Mats.blobs`.
+- The zio module's public surface is now covered by the API golden gate (`zio/api.golden`), alongside
+  core/vision/graphs.
+- Release workflow: the GitHub Release is created as a **draft** until Central publishing is enabled (a
+  tag must never announce artifacts that do not exist), the test suite runs as a `needs:` prerequisite
+  before any publish step, and every GitHub Action across all four workflows is pinned to a commit SHA
+  (Dependabot's `github-actions` ecosystem keeps them current).
+
 ## [0.2.0] — 2026-09-19
 
 ### Fixed
