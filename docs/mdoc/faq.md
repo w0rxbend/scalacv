@@ -11,7 +11,7 @@ OpenCv.load()
 ## Getting set up
 
 ### What is scalacv, exactly?
-A Scala 3 wrapper over the official OpenCV 4.13 Java API (shipped by bytedeco). It gives you a fluent, typed, memory-safe surface — [`Image`](/image-api) and friends — instead of raw `org.opencv.*`. The native OpenCV code is unchanged underneath; scalacv is the ergonomics layer. See [Architecture](/architecture).
+A Scala 3 wrapper over the official OpenCV 4.14 Java API (shipped by bytedeco). It gives you a fluent, typed, memory-safe surface — [`Image`](/image-api) and friends — instead of raw `org.opencv.*`. The native OpenCV code is unchanged underneath; scalacv is the ergonomics layer. See [Architecture](/architecture).
 
 ### Do I need to install OpenCV, or `apt-get` anything?
 **No.** The native libraries ship inside per-platform jars and are extracted automatically on the first `OpenCv.load()`. You don't install OpenCV, and you don't need a GUI toolkit — it runs on a bare headless server. See [Getting Started](/getting-started).

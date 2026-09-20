@@ -7,7 +7,7 @@
 
 # scalacv
 
-**An eloquent Scala 3 API for OpenCV 4.13 — a high-level image toolkit over the complete Java bindings. Typed, headless, and honest about native memory.**
+**An eloquent Scala 3 API for OpenCV 4.14 — a high-level image toolkit over the complete Java bindings. Typed, headless, and honest about native memory.**
 
 [![CI](https://github.com/w0rxbend/scalacv/actions/workflows/ci.yml/badge.svg)](https://github.com/w0rxbend/scalacv/actions/workflows/ci.yml)
 [![Scala 3.3 LTS](https://img.shields.io/badge/scala-3.3%20LTS-DC322F.svg)](https://www.scala-lang.org)
@@ -33,10 +33,10 @@
 ```scala
 // build.mill  (or the equivalent for your build tool)
 def mvnDeps = Seq(
-  mvn"com.worxbend::scalacv:0.1.0",         // the OpenCV wrapping: Image, Managed, filters, contours…
+  mvn"com.worxbend::scalacv:0.2.0",         // the OpenCV wrapping: Image, Managed, filters, contours…
   // Optional layers, each depending only on the core — add the ones you use:
-  //   mvn"com.worxbend::scalacv-vision:0.1.0"  // detectors, DNN, pose/tracking, OCR, calibration, SLAM
-  //   mvn"com.worxbend::scalacv-graphs:0.1.0"  // the Picture scene graph, charts, GIF animation
+  //   mvn"com.worxbend::scalacv-vision:0.2.0"  // detectors, DNN, pose/tracking, OCR, calibration, SLAM
+  //   mvn"com.worxbend::scalacv-graphs:0.2.0"  // the Picture scene graph, charts, GIF animation
 
   // Natives for YOUR platform. A build tool cannot express a per-platform classifier in a
   // published POM, so this line is yours to pick — see "Why two lines?" below.
@@ -65,12 +65,16 @@ The `read`/`flatMap` form is there when you want to thread the `Either` yourself
 Image.read("photo.jpg").flatMap(_.gray.blur(2).canny(80, 160).write("edges.png"))
 ```
 
-Detect, annotate, and drop to plain data just as fluently:
+Detect, annotate, and drop to plain data just as fluently. The detectors live in the optional
+`scalacv-vision` layer, which adds one import of its own (`scalacv.graphs.*` works the same way for the
+graphics layer):
 
 ```scala
+import scalacv.vision.*
+
 Image.reading("street.jpg") { img =>
   val codes = img.qrCodes                       // Seq[QrCode] — decoded, immutable
-  img.markFaces(img.copy.faces(detector))       // draw boxes + landmarks
+  img.markFaces(img.faces(detector))            // draw boxes + landmarks (faces borrows; no copy needed)
      .drawText(s"${codes.size} codes", Point(10, 30))
      .write("annotated.png")
 }
@@ -106,7 +110,7 @@ Don't want to choose? `mvn"org.bytedeco:opencv-platform:4.14.0-1.5.14"` bundles 
 
 **Footprint, so nothing surprises you.** For `linux-x86_64` the `opencv` jar is ~31 MB and `openblas` ~20 MB; on the **first** `OpenCv.load()` these are extracted once into `~/.javacpp` (~196 MB on Linux), and every later run reuses that cache. Point it elsewhere with `-Dorg.bytedeco.javacpp.cachedir=…` for a read-only home or a thin container layer.
 
-> **Scala-first.** scalacv targets Scala 3 consumers: the API returns `Seq`/`Option`/`Either` and reaches you through extension methods brought in by `import scalacv.*`. It wraps a Java library but is not designed to be called _from_ Java.
+> **Scala-first.** scalacv targets Scala 3 consumers: the API returns `Seq`/`Option`/`Either` and reaches you through extension methods brought in by one import per module (`scalacv.*`, `scalacv.vision.*`, `scalacv.graphs.*`). It wraps a Java library but is not designed to be called _from_ Java.
 
 ## 🧠 Why this exists
 
