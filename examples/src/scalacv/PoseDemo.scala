@@ -1,5 +1,7 @@
 package scalacv
 
+import scalacv.vision.*
+
 /** Pose estimation, headless.
   *
   * Head pose is self-contained — it needs only a [[Face]]'s five landmarks (here synthesised; normally from

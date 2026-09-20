@@ -1,6 +1,7 @@
 package scalacv.bench
 
 import scalacv.*
+import scalacv.graphs.*
 
 /** Sizes the `Graphics.alpha` overhead: a translucent shape clones the whole Mat and `addWeighted`s the whole
   * Mat, regardless of how small the shape is; an opaque shape draws straight in. The delta between drawing

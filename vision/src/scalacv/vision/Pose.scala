@@ -1,7 +1,9 @@
-package scalacv
+package scalacv.vision
 
-import org.opencv.core.{Mat, MatOfPoint2f, MatOfPoint3f, Point3}
+import org.opencv.core.{Mat, Point3}
 import org.opencv.dnn.Net
+
+import scalacv.*
 
 /** One named landmark of a [[Pose]] — a point in image pixels and the model's confidence in it. */
 final case class Keypoint(name: String, point: Point, score: Float)
@@ -248,37 +250,20 @@ object HeadPose:
     * uncalibrated guess use the [[Size]] overload.
     */
   def estimate(face: Face, intrinsics: Intrinsics): Option[HeadPose] =
-    // `Managed.scope` owns every Mat below: each is registered as it is built, so a throw from a later
-    // constructor frees the earlier ones. The whole solvePnP block runs in Cv.attempt: degenerate landmarks
-    // can make OpenCV *throw* rather than return `ok = false`, and the documented contract here is `None` on
-    // failure, not a raw CvException.
-    Managed.scope: own =>
-      val objectPoints = own(MatOfPoint3f(model*))
-      val imagePoints = own(MatOfPoint2f(face.landmarks.map(_.toCv)*))
-      val camera = own(intrinsics.cameraMatrix)
-      val distortion = own(intrinsics.distCoeffs)
-      val rvec = own(Mat())
-      val tvec = own(Mat())
-      Cv.attempt("solvePnP") {
-        val ok = org.opencv.calib3d.Calib3d.solvePnP(
-          objectPoints,
-          imagePoints,
-          camera,
-          distortion,
-          rvec,
-          tvec,
-          false,
-          org.opencv.calib3d.Calib3d.SOLVEPNP_EPNP
-        )
-        if !ok then None
-        else
+    // Pnp.solve owns and frees every Mat the solve needs; the decode registers its two extras with the same
+    // scope. The Left is folded to None too: degenerate landmarks can make OpenCV *throw* rather than return
+    // `ok = false`, and the documented contract here is `None` on failure, not a raw CvException.
+    Pnp
+      .solve(model.toSeq, face.landmarks.map(_.toCv), intrinsics, org.opencv.calib3d.Calib3d.SOLVEPNP_EPNP) {
+        (own, rvec, _) =>
           val rotation = own(Mat())
           org.opencv.calib3d.Calib3d.Rodrigues(rvec, rotation)
           // RQDecomp3x3 returns the Euler angles (degrees) about x, y, z. mtxR and mtxQ are the
           // decomposition's factors, which this only needs as somewhere for OpenCV to write.
           val euler = org.opencv.calib3d.Calib3d.RQDecomp3x3(rotation, own(Mat()), own(Mat()))
-          Some(HeadPose(yaw = euler(1), pitch = euler(0), roll = euler(2)))
-      }.getOrElse(None)
+          HeadPose(yaw = euler(1), pitch = euler(0), roll = euler(2))
+      }
+      .getOrElse(None)
 
   /** Estimates the head orientation for `face` in an image of `imageSize`, using an uncalibrated pinhole
     * guess — focal length ≈ image width, principal point at the centre, no lens distortion. Enough for

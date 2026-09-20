@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import java.nio.file.Files
 
 import org.opencv.core.{Core, CvType, Mat}

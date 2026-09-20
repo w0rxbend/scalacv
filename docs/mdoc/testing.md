@@ -5,6 +5,7 @@ Vision code is deceptively hard to test well. Two properties trip up a naive tes
 This page shows the patterns scalacv's own suite uses to stay **fast, asset-free, portable, and honest** — so the tests are green because the code is right, not because the runner happens to match the machine that wrote the golden.
 
 ```scala mdoc:silent
+import scalacv.graphs.*
 import scalacv.*
 import org.opencv.core.Core
 

@@ -1,6 +1,8 @@
-package scalacv
+package scalacv.vision
 
 import scala.collection.mutable.ArrayBuffer
+
+import scalacv.*
 
 /** A detected loop closure: the earlier keyframe this frame revisits, how many features matched, and a score
   * (matched features as a fraction of the current frame's).

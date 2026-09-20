@@ -1,6 +1,7 @@
 package scalacv.bench
 
 import scalacv.*
+import scalacv.graphs.*
 
 /** Checks whether the report's "cold" verdict on `Picture.bounds` is right, and whether the O(n²) layout
   * (repeated `beside` recomputes `bounds` each step) actually bites. Builds a row of N shapes by folding

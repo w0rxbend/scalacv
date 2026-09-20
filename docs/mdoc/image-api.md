@@ -9,6 +9,8 @@ you never leak native memory — as long as you follow one simple rule about *mo
 explains from the ground up. Everything else is verbs.
 
 ```scala mdoc:invisible
+import scalacv.graphs.*
+import scalacv.vision.*
 import scalacv.*
 import org.opencv.core.{CvType, Mat, Scalar => CvScalar, Point => CvPoint}
 import org.opencv.imgproc.Imgproc

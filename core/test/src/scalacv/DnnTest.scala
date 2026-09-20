@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path}
 import scala.collection.mutable.ArrayBuffer

@@ -108,8 +108,10 @@ pose overlays) therefore lives in `vision` as **extension methods** on `Image`, 
 different module.
 :::
 
-All of `scalacv.*` comes in with one import; the extension methods from whichever modules are on
-your classpath activate automatically.
+Each module brings its own import — `scalacv.*` for core, `scalacv.vision.*` and `scalacv.graphs.*` for
+the layers you have on the classpath (they are deliberately *not* one shared package, so the artifacts
+can coexist on a JPMS module path). The extension methods from whichever modules are present activate
+automatically.
 
 ## One ownership primitive
 
@@ -201,8 +203,8 @@ returning a `Left`. Full treatment in [The error model](/error-model).
 
 ## Putting it together
 
-A realistic pipeline touches all four ideas: one import (module split), the high-level tier for the
-common path, a mid-level borrow where `Image` doesn't reach, a scope so nothing leaks (ownership),
+A realistic pipeline touches all four ideas: one import per module (the module split), the high-level tier
+for the common path, a mid-level borrow where `Image` doesn't reach, a scope so nothing leaks (ownership),
 and an `Either` at the boundary (error policy):
 
 ```scala mdoc:compile-only

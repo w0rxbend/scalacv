@@ -2,6 +2,8 @@ package scalacv
 
 import org.opencv.core.Mat
 
+import scalacv.vision.*
+
 /** Encodes a payload into a QR code, then decodes it back — a round trip with no fixture file. */
 object QrDecode:
 

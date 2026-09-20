@@ -43,6 +43,7 @@ it yourself naively.
 `Managed[A]` owns a native object and releases it exactly once. Prefer the scoped form:
 
 ```scala mdoc:silent
+import scalacv.vision.*
 import scalacv.*
 import org.opencv.core.{CvType, Mat}
 

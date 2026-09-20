@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import java.nio.file.Files
 
 /** Data-visualisation charts and animation, on top of the Picture layer. */

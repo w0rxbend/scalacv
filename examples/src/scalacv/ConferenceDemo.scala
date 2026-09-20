@@ -1,5 +1,7 @@
 package scalacv
 
+import scalacv.vision.*
+
 /** Video-conferencing background effects, headless. The person mask here is synthetic; in a real call it
   * comes from a selfie-segmentation ONNX model via `Segmenter.decodeMask`, or a green-screen `inRange` key.
   */

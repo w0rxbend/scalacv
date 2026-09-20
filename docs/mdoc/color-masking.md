@@ -22,6 +22,7 @@ each snippet below is careful about it.
 :::
 
 ```scala mdoc:invisible
+import scalacv.graphs.*
 import scalacv.*
 import org.opencv.core.{CvType, Mat}
 OpenCv.load()

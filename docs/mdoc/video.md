@@ -70,6 +70,8 @@ protocol. None of that is a programming error, so it is a `Left` carrying a
 [`CvError`](/error-model), never a throw.
 
 ```scala mdoc:compile-only
+import scalacv.graphs.*
+import scalacv.vision.*
 import scalacv.*
 
 val fromCamera: Either[CvError, Camera] = Camera.open(0)          // device index
@@ -141,6 +143,7 @@ annotate it, write it out. Here is the detect → annotate → record shape, eac
 
 ```scala mdoc:compile-only
 import scalacv.*
+import scalacv.vision.*
 import org.opencv.objdetect.FaceDetectorYN
 
 val detector: FaceDetectorYN = ??? // from FaceDetect.create(model, size); see /object-detection

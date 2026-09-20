@@ -4,6 +4,8 @@ import java.nio.file.{Files, Path}
 
 import org.opencv.core.Mat
 
+import scalacv.vision.*
+
 /** Detects faces with YuNet — the modern detector.
   *
   * Where [[FaceDetectHaar]] runs a 2001 Haar cascade, YuNet is a small CNN (232 kB): more accurate, faster,

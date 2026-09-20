@@ -1,5 +1,7 @@
 package scalacv
 
+import scalacv.vision.*
+
 /** Screen analysis, headless: locate a template on a synthetic screenshot. Swap the blanks for
   * `Image.read("screenshot.png")` / `Image.read("button.png")` for the real thing.
   */

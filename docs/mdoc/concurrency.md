@@ -3,6 +3,7 @@
 Native handles are C++ objects behind a thin Java wrapper. Sharing one across threads without care is a data race in C++, not just in the JVM — and that means a **segfault**, not a caught exception: no stack trace, no test failure, just a dead process. The good news is that the rule for staying safe is short, and most parallel image work fits it naturally. This page says exactly what is safe to share, what isn't, and how to parallelise correctly.
 
 ```scala mdoc:silent
+import scalacv.vision.*
 import scalacv.*
 
 OpenCv.load()

@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import org.opencv.core.Core
 
 /** Tolerance-metric comparisons — PSNR and max-abs-diff — the cross-platform-robust alternative to the

@@ -1,8 +1,10 @@
-package scalacv
+package scalacv.vision
 
 import scala.collection.mutable.ArrayBuffer
 
 import org.opencv.core.{CvType, Mat}
+
+import scalacv.*
 
 /** A 2D occupancy grid — a top-down map of free vs. occupied space, accumulated from range/obstacle
   * observations over time.

@@ -1,4 +1,6 @@
-package scalacv
+package scalacv.graphs
+
+import scalacv.*
 
 /** A colour with an alpha channel — the palette for [[Picture]] graphics.
   *

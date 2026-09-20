@@ -1,5 +1,7 @@
 package scalacv
 
+import scalacv.vision.*
+
 /** The high-level [[Image]] API end to end, on programmatically drawn scenes — no image asset, fully
   * headless. Shows the three shapes the API is built around: a transform chain, a borrowing query, and a
   * consuming terminal.

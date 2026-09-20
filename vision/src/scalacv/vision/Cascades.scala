@@ -1,10 +1,12 @@
-package scalacv
+package scalacv.vision
 
 import java.io.{File, IOException}
 
 import org.bytedeco.javacpp.Loader
 import org.opencv.core.{Mat, MatOfRect}
 import org.opencv.objdetect.CascadeClassifier
+
+import scalacv.*
 
 /** One of the Haar cascades shipped inside the bytedeco OpenCV classifier jar.
   *

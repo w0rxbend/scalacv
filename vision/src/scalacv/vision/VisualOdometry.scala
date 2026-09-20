@@ -1,7 +1,9 @@
-package scalacv
+package scalacv.vision
 
 import org.opencv.calib3d.Calib3d
 import org.opencv.core.{Mat, MatOfPoint2f}
+
+import scalacv.*
 
 /** The camera's motion between two frames: a 3×3 rotation and a translation direction, with the inlier count.
   *

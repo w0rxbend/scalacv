@@ -12,6 +12,8 @@ once and cache it, skip to [The model registry](#the-model-registry). Everything
 plumbing that makes those two things work.
 
 ```scala mdoc:invisible
+import scalacv.graphs.*
+import scalacv.vision.*
 import scalacv.*
 OpenCv.load()
 ```

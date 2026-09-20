@@ -4,6 +4,8 @@ import org.opencv.core as cv
 import org.opencv.core.{CvType, Mat}
 import org.opencv.imgproc.Imgproc
 
+import scalacv.vision.*
+
 /** Tracking-by-detection, headless: two blobs drift across a synthetic clip, are re-detected each frame by
   * contour extraction, and [[ObjectTracker]] stitches those per-frame boxes into stable identities.
   */

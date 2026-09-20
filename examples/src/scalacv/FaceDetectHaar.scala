@@ -2,6 +2,8 @@ package scalacv
 
 import org.opencv.core.Mat
 
+import scalacv.vision.*
+
 /** Detects faces with a Haar cascade — the heritage detector.
   *
   * The cascade is resolved from the bytedeco payload at runtime (no vendored XML), and the classifier is one

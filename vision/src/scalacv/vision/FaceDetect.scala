@@ -1,9 +1,11 @@
-package scalacv
+package scalacv.vision
 
 import java.nio.file.{Files, Path}
 
 import org.opencv.core.{CvType, Mat, Size as CvSize}
 import org.opencv.objdetect.FaceDetectorYN
+
+import scalacv.*
 
 /** One face reported by [[FaceDetect.detect]].
   *

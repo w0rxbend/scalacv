@@ -5,6 +5,7 @@ Images are the warm-up; video is where computer vision earns its keep. This tuto
 Video needs a real file or camera, so these snippets are `compile-only` (they type-check but don't run in the docs build) — copy them into a project with a clip to try them live.
 
 ```scala mdoc:silent
+import scalacv.vision.*
 import scalacv.*
 
 OpenCv.load()

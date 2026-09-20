@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import org.opencv.core.{CvType, Mat, Scalar as CvScalar}
 import org.opencv.imgproc.Imgproc
 

@@ -17,6 +17,7 @@ you can get it from a green screen with zero machine learning (jump to [A green 
 :::
 
 ```scala mdoc:invisible
+import scalacv.vision.*
 import scalacv.*
 OpenCv.load()
 lazy val net: org.opencv.dnn.Net = ??? // a selfie-segmentation model via Dnn.fromOnnx

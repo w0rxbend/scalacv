@@ -22,6 +22,7 @@ Two ideas carry the whole page:
 Everything below is compiled by mdoc against the real library.
 
 ```scala mdoc:silent
+import scalacv.vision.*
 import scalacv.*
 
 OpenCv.load()

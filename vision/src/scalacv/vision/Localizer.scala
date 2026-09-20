@@ -1,7 +1,9 @@
-package scalacv
+package scalacv.vision
 
 import org.opencv.calib3d.Calib3d
-import org.opencv.core.{Mat, MatOfPoint2f, MatOfPoint3f, Point3}
+import org.opencv.core.{Mat, Point3}
+
+import scalacv.*
 
 /** A camera's absolute pose: the 3×3 rotation and 3-vector translation that map world points into the camera
   * frame (`x_cam = R·x_world + t`).
@@ -48,28 +50,23 @@ object Localizer:
     )
     if worldPoints.size < 4 then None
     else
-      // `Managed.scope` owns every Mat below: each is registered as it is built, so a throw from a later
-      // constructor frees the earlier ones. Mirrors HeadPose.estimate in Pose.scala.
-      Managed.scope: own =>
-        val objectPoints = own(MatOfPoint3f(worldPoints.map((x, y, z) => Point3(x, y, z))*))
-        val imgPoints = own(MatOfPoint2f(imagePoints.map(_.toCv)*))
-        val camera = own(intrinsics.cameraMatrix)
-        val distortion = own(intrinsics.distCoeffs)
-        val rvec = own(Mat())
-        val tvec = own(Mat())
-        // The solvePnP block runs inside Cv.attempt because the default SOLVEPNP_ITERATIVE solver does not
-        // always answer with `ok = false`: on four or five non-coplanar points it aborts inside its DLT
-        // initialiser with a native CV_Assert ("needs at least 6 points"), which arrives here as a raw
-        // org.opencv.core.CvException. That is not even a CvError, so a caller catching scalacv's own error
-        // type would miss it, and this method promises an Option. Guarding by counting points instead was
-        // rejected: OpenCV decides planarity itself, by an SVD on the point covariance, and a
-        // re-implemented threshold would disagree with it on near-planar inputs and let the same assertion
-        // through.
-        Cv.attempt("solvePnP") {
-          val ok = Calib3d.solvePnP(objectPoints, imgPoints, camera, distortion, rvec, tvec)
-          if !ok then None
-          else
-            val rotation = own(Mat())
-            Calib3d.Rodrigues(rvec, rotation)
-            Some(CameraPose(Mats.readMatrix(rotation, 3, 3), Mats.readColumn(tvec, 3)))
-        }.getOrElse(None)
+      // The solvePnP block runs inside Cv.attempt (via Pnp.solve, which also owns and frees every Mat)
+      // because the default SOLVEPNP_ITERATIVE solver does not always answer with `ok = false`: on four or
+      // five non-coplanar points it aborts inside its DLT initialiser with a native CV_Assert ("needs at
+      // least 6 points"), which arrives here as a raw org.opencv.core.CvException. That is not even a
+      // CvError, so a caller catching scalacv's own error type would miss it, and this method promises an
+      // Option. Guarding by counting points instead was rejected: OpenCV decides planarity itself, by an
+      // SVD on the point covariance, and a re-implemented threshold would disagree with it on near-planar
+      // inputs and let the same assertion through.
+      Pnp
+        .solve(
+          worldPoints.map((x, y, z) => Point3(x, y, z)),
+          imagePoints.map(_.toCv),
+          intrinsics,
+          Calib3d.SOLVEPNP_ITERATIVE
+        ) { (own, rvec, tvec) =>
+          val rotation = own(Mat())
+          Calib3d.Rodrigues(rvec, rotation)
+          CameraPose(Mats.readMatrix(rotation, 3, 3), Mats.readColumn(tvec, 3))
+        }
+        .getOrElse(None)

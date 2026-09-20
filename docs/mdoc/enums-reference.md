@@ -3,6 +3,7 @@
 scalacv replaces OpenCV's raw `int` constants with **typed enums** — so `image.convert(ColorConversion.BgrToGray)` instead of `Imgproc.cvtColor(..., 6)`, checked by the compiler. This page lists the values you can pass. Every case carries the OpenCV constant underneath (its `cvValue`), so nothing is lost — you just can't pass the wrong one by accident.
 
 ```scala mdoc:silent
+import scalacv.vision.*
 import scalacv.*
 ```
 

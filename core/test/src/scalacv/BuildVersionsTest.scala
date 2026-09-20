@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 

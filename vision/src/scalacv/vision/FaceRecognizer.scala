@@ -1,9 +1,11 @@
-package scalacv
+package scalacv.vision
 
 import java.nio.file.{Files, Paths}
 
 import org.opencv.core.{CvType, Mat}
 import org.opencv.objdetect.FaceRecognizerSF
+
+import scalacv.*
 
 /** A face's identity as a fixed-length embedding — a 128-dimensional vector produced by [[FaceRecognizer]].
   *

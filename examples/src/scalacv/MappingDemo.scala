@@ -1,5 +1,7 @@
 package scalacv
 
+import scalacv.vision.*
+
 /** SLAM mapping helpers, headless: detect a loop closure over revisited places, and accumulate an occupancy
   * grid from range observations.
   */

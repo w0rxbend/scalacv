@@ -13,6 +13,7 @@ onto the image so it appears stuck to the tag. Point a webcam at a printed tag a
 :::
 
 ```scala mdoc:invisible
+import scalacv.vision.*
 import scalacv.*
 OpenCv.load()
 ```

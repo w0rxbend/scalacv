@@ -15,6 +15,8 @@ elsewhere and exported to ONNX; scalacv runs it. There is no autograd, no optimi
 :::
 
 ```scala mdoc:invisible
+import scalacv.graphs.*
+import scalacv.vision.*
 import scalacv.*
 import org.opencv.core.{CvType, Mat}
 OpenCv.load()

@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import java.nio.file.Files
 
 /** Face recognition: the embedding metrics and Gallery lookup (no model needed), load-error handling, and a

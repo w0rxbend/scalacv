@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.util.Using

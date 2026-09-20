@@ -1,7 +1,9 @@
-package scalacv
+package scalacv.graphs
 
 import org.opencv.core.{Core, Mat, MatOfPoint}
 import org.opencv.imgproc.Imgproc
+
+import scalacv.*
 
 /** A stroke dash pattern — alternating on/off run lengths in pixels. OpenCV has no dashed line, so
   * [[Picture]] draws them by hand from this.

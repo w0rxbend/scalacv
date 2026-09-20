@@ -207,12 +207,19 @@ object Camera:
   def openFile(source: String, options: CaptureOptions = CaptureOptions.Default): Either[CvError, Camera] =
     Video.open(source, options).map(new Camera(_))
 
-  /** Opens camera `index`, runs `use`, and closes the camera afterwards — even on an exception. */
+  /** Opens camera `index`, runs `use`, and closes the camera afterwards — even on an exception.
+    *
+    * The whole `use` body runs inside [[Cv.attempt]], as in [[Image.reading]]: a [[CvError.NativeCall]]
+    * thrown by an operation inside the block comes back as a `Left` rather than escaping past the `Either`.
+    * Programmer errors (`IllegalArgumentException`, use-after-close) still throw.
+    */
   def using[A](index: Int, options: CaptureOptions = CaptureOptions.Default)(
       use: Camera => A
   ): Either[CvError, A] = scoped(open(index, options))(use)
 
-  /** Opens `source`, runs `use`, and closes the camera afterwards. */
+  /** Opens `source`, runs `use`, and closes the camera afterwards. The body runs inside [[Cv.attempt]] for
+    * the reason given on [[using]].
+    */
   def usingFile[A](source: String, options: CaptureOptions = CaptureOptions.Default)(
       use: Camera => A
   ): Either[CvError, A] = scoped(openFile(source, options))(use)
@@ -222,9 +229,11 @@ object Camera:
     * so there is nothing to close.
     */
   private def scoped[A](opened: Either[CvError, Camera])(use: Camera => A): Either[CvError, A] =
-    opened.map: camera =>
-      try use(camera)
-      finally camera.close()
+    opened.flatMap: camera =>
+      Cv.attempt("camera")(
+        try use(camera)
+        finally camera.close()
+      )
 
 /** Writes [[Image]]s to a video file — the counterpart to [[Camera]] for output.
   *
@@ -318,6 +327,10 @@ object Recorder:
 
   /** Opens a recorder, runs `use`, and closes it afterwards — even on an exception. `codec` defaults to
     * [[Codec.Mjpg]] for the reason given on [[open]]; `path` should end in `.avi` to match it.
+    *
+    * The whole `use` body runs inside [[Cv.attempt]], as in [[Image.reading]]: a [[CvError.NativeCall]]
+    * thrown by an operation inside the block comes back as a `Left` rather than escaping past the `Either`.
+    * Programmer errors (`IllegalArgumentException`, use-after-close) still throw.
     */
   def using[A](
       path: String,
@@ -326,6 +339,8 @@ object Recorder:
       codec: Codec = Codec.Mjpg,
       color: Boolean = true
   )(use: Recorder => A): Either[CvError, A] =
-    open(path, size, fps, codec, color).map: recorder =>
-      try use(recorder)
-      finally recorder.close()
+    open(path, size, fps, codec, color).flatMap: recorder =>
+      Cv.attempt("recorder")(
+        try use(recorder)
+        finally recorder.close()
+      )

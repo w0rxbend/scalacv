@@ -5,6 +5,7 @@ Let's build something real, one small step at a time: a program that **finds and
 Every step below runs (mdoc compiles it), and we draw our own test scene so you need no image file to follow along. At the end you'll swap the drawn scene for `Image.read("photo.jpg")` and it just works.
 
 ```scala mdoc:silent
+import scalacv.graphs.*
 import scalacv.*
 
 OpenCv.load()

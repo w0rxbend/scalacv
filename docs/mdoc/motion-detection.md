@@ -11,6 +11,7 @@ happening", compare each new frame against it, and report the pixels that disagr
 refinement of that one idea.
 
 ```scala mdoc:invisible
+import scalacv.vision.*
 import scalacv.*
 OpenCv.load()
 def frame(squareX: Int): Image =

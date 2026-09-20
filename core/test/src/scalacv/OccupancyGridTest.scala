@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 /** Unit tests for [[OccupancyGrid]] — the log-odds mapping and the Bresenham ray integration, which are pure
   * in-memory arithmetic. `toImage` is the only part that touches native memory, so `OpenCv.load()` runs once.
   */

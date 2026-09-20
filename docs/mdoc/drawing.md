@@ -7,6 +7,7 @@ this is the page. Every snippet here is compiled by mdoc against the real librar
 out of date.
 
 ```scala mdoc:invisible
+import scalacv.vision.*
 import scalacv.*
 import org.opencv.core.{CvType, Mat}
 OpenCv.load()

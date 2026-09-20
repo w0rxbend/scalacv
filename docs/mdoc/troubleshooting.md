@@ -3,6 +3,7 @@
 The errors people actually hit with scalacv, and the one-line fix for each. Most of them are not bugs in your code — they are OpenCV reporting a missing native, an absent codec, or a spent handle in one of its three incompatible ways, and scalacv turning that into something you can act on. Find your symptom, apply the fix, move on.
 
 ```scala mdoc:silent
+import scalacv.vision.*
 import scalacv.*
 
 OpenCv.load()
@@ -70,10 +71,10 @@ Add the line for the module you need (delete the ones you do not). In Mill:
 
 ```scala
 def mvnDeps = Seq(
-  mvn"com.worxbend::scalacv:0.1.0",         // core
-  mvn"com.worxbend::scalacv-vision:0.1.0",  // detectors, DNN, tracking, OCR, calibration, SLAM
-  mvn"com.worxbend::scalacv-graphs:0.1.0",  // the Picture scene graph, charts, GIFs
-  mvn"com.worxbend::scalacv-zio:0.1.0"      // only if you use ZIO
+  mvn"com.worxbend::scalacv:0.2.0",         // core
+  mvn"com.worxbend::scalacv-vision:0.2.0",  // detectors, DNN, tracking, OCR, calibration, SLAM
+  mvn"com.worxbend::scalacv-graphs:0.2.0",  // the Picture scene graph, charts, GIFs
+  mvn"com.worxbend::scalacv-zio:0.2.0"      // only if you use ZIO
 )
 ```
 
@@ -81,10 +82,10 @@ In sbt:
 
 ```scala
 libraryDependencies ++= Seq(
-  "com.worxbend" %% "scalacv"        % "0.1.0",
-  "com.worxbend" %% "scalacv-vision" % "0.1.0",
-  "com.worxbend" %% "scalacv-graphs" % "0.1.0",
-  "com.worxbend" %% "scalacv-zio"    % "0.1.0"
+  "com.worxbend" %% "scalacv"        % "0.2.0",
+  "com.worxbend" %% "scalacv-vision" % "0.2.0",
+  "com.worxbend" %% "scalacv-graphs" % "0.2.0",
+  "com.worxbend" %% "scalacv-zio"    % "0.2.0"
 )
 ```
 

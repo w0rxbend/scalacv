@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import org.opencv.core.{Core, CvType, Mat, Scalar as CvScalar}
 
 /** The bit-exact gate for the ROI alpha-blend in `Graphics.alpha`.

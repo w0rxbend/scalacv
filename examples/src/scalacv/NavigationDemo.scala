@@ -1,5 +1,7 @@
 package scalacv
 
+import scalacv.vision.*
+
 /** The visual-navigation front end on synthetic scenes, headless: track motion with optical flow, match ORB
   * features, and read obstacles off a disparity map.
   */

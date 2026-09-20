@@ -1,5 +1,7 @@
 package scalacv
 
+import scalacv.vision.*
+
 /** Static hand-gesture recognition, headless. The hand landmarks here are synthetic; normally they come from
   * a hand-landmark ONNX model decoded to a `PoseTopology.Hand21` pose (see PoseEstimator).
   */

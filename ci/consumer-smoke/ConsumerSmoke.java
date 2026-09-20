@@ -10,11 +10,11 @@
 // dry-run" gate passed against a POM that shipped zero .so files; this does not.
 //
 // core is exercised by loading natives and allocating a Mat across JNI. vision and graphs are exercised
-// by linking one public type from each (scalacv.QrCode, scalacv.Color) -- referencing the class literals
-// forces javac to resolve those jars and the runtime to load the classes. scalacv-zio_3 is deliberately
-// not referenced here: its public surface is a package object (scalacv.zio) whose synthetic holder class
-// (`package$package`) cannot be named from Java source, so its resolution is exercised by `cs fetch`
-// listing the coordinate rather than by a symbol reference.
+// by linking one public type from each (scalacv.vision.QrCode, scalacv.graphs.Color) -- referencing the
+// class literals forces javac to resolve those jars and the runtime to load the classes. scalacv-zio_3 is
+// deliberately not referenced here: its public surface is a package object (scalacv.zio) whose synthetic
+// holder class (`package$package`) cannot be named from Java source, so its resolution is exercised by
+// `cs fetch` listing the coordinate rather than by a symbol reference.
 public class ConsumerSmoke {
   public static void main(String[] args) {
     scalacv.OpenCv.load();
@@ -28,8 +28,8 @@ public class ConsumerSmoke {
     // Link one public type from vision and one from graphs, so a failure to resolve either published
     // artifact surfaces here rather than passing silently. Class literals force both the compile-time
     // classpath entry and the runtime class load.
-    Class<?> visionType = scalacv.QrCode.class;
-    Class<?> graphsType = scalacv.Color.class;
+    Class<?> visionType = scalacv.vision.QrCode.class;
+    Class<?> graphsType = scalacv.graphs.Color.class;
     if (visionType == null || graphsType == null) {
       throw new RuntimeException("vision/graphs types did not link");
     }

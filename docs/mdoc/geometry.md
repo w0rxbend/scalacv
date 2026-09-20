@@ -10,6 +10,7 @@ Everything on this page is a plain Scala value: no natives are touched, so the s
 their results.
 
 ```scala mdoc:invisible
+import scalacv.graphs.*
 import scalacv.*
 OpenCv.load()
 ```

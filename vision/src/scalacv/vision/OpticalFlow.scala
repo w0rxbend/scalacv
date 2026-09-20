@@ -1,7 +1,9 @@
-package scalacv
+package scalacv.vision
 
 import org.opencv.core.{MatOfByte, MatOfFloat, MatOfPoint, MatOfPoint2f}
 import org.opencv.imgproc.Imgproc
+
+import scalacv.*
 
 /** One tracked point across two frames: where it started, where it ended up, and whether the tracker kept
   * hold of it.

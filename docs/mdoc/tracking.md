@@ -11,6 +11,7 @@ scalacv gives you three layers, from lowest to highest:
 - an [`ObjectTracker`](/api/core/scalacv/ObjectTracker.html) — tracking-by-detection with stable ids.
 
 ```scala mdoc:invisible
+import scalacv.vision.*
 import scalacv.*
 OpenCv.load()
 ```
@@ -131,15 +132,16 @@ Pick the algorithm with [`TrackerKind`](/api/core/scalacv/TrackerKind.html):
 ```scala mdoc:compile-only
 import scala.util.Using
 
-Using.resource(Tracker.create(TrackerKind.Csrt)): tracker =>
-  Image.reading("frame0.png"): first =>
-    tracker.init(first, Rect(120, 80, 60, 60)) // seed with the object's box
+Tracker.create(TrackerKind.Csrt).foreach: tracker => // Left when the build lacks CSRT
+  Using.resource(tracker): t =>
+    Image.reading("frame0.png"): first =>
+      t.init(first, Rect(120, 80, 60, 60)) // seed with the object's box
 
-  for n <- 1 to 100 do
-    Image.reading(s"frame$n.png"): frame =>
-      tracker.update(frame) match
-        case Some(box) => frame.drawRect(box).write(s"tracked$n.png")
-        case None      => println(s"lost the object at frame $n")
+    for n <- 1 to 100 do
+      Image.reading(s"frame$n.png"): frame =>
+        t.update(frame) match
+          case Some(box) => frame.drawRect(box).write(s"tracked$n.png")
+          case None      => println(s"lost the object at frame $n")
 ```
 
 The lifecycle is exactly two verbs: `init(image, box)` once to seed, then `update(image)` per frame.

@@ -2,6 +2,9 @@ package scalacv
 
 import java.awt.image.BufferedImage
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 /** Ecosystem interop, headless: round-trip an image through java.awt BufferedImage (the same conversion that
   * makes scalacv images display automatically in an Almond notebook), and show the Models downloader specs.
   */

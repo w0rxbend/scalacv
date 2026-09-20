@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import java.nio.file.{Files, Path}
 
 import scala.concurrent.duration.*
@@ -219,9 +222,10 @@ class CameraTest extends munit.FunSuite:
     seen.foreach(img => intercept[IllegalStateException](img.mat))
 
     var leaked: Option[Image] = None
-    // `usingFile` only maps the Either, so the body's exception escapes as a throw — the finally blocks in
-    // foreach and scoped are what is under test here. The message check keeps an IllegalStateException
-    // from a double release inside the scope from passing as the expected exception.
+    // `usingFile` folds a CvError thrown by the body into a Left (as Image.reading does), but any other
+    // exception still escapes as a throw — the finally blocks in foreach and scoped are what is under test
+    // here. The message check keeps an IllegalStateException from a double release inside the scope from
+    // passing as the expected exception.
     val stopped = intercept[RuntimeException]:
       Camera.usingFile(file.toString): cam =>
         cam.foreach(attemptsPerFrame = 1): img =>
@@ -229,6 +233,16 @@ class CameraTest extends munit.FunSuite:
           throw RuntimeException("stop")
     assertEquals(stopped.getMessage, "stop")
     intercept[IllegalStateException](leaked.get.width)
+
+  test("usingFile folds a CvError thrown by the body into a Left, and still closes the camera"):
+    val file = recordFixture()
+    var escaped: Option[Camera] = None
+    val result = Camera.usingFile(file.toString): cam =>
+      escaped = Some(cam)
+      throw CvError.NativeCall("boom", org.opencv.core.CvException("boom"))
+    assert(result.isLeft, "a CvError from the body must come back as a Left, not escape the Either")
+    assert(result.left.toOption.get.getMessage.contains("boom"))
+    intercept[IllegalStateException](escaped.get.capture)
 
   test("usingFile closes the camera on the way out of a failing body"):
     val file = recordFixture()

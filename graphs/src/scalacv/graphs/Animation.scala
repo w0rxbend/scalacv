@@ -1,7 +1,9 @@
-package scalacv
+package scalacv.graphs
 
 import org.opencv.core.{Mat, MatOfInt}
 import org.opencv.imgcodecs.{Animation as CvAnimation, Imgcodecs}
+
+import scalacv.*
 
 /** Animation — a drawing that is a function of the frame number, rendered to a video.
   *

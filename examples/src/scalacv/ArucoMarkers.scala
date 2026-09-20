@@ -2,6 +2,8 @@ package scalacv
 
 import org.opencv.core.Mat
 
+import scalacv.vision.*
+
 /** Generates an ArUco marker and detects it back — a round trip. */
 object ArucoMarkers:
 

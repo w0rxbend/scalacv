@@ -1,6 +1,6 @@
 # Getting Started
 
-**scalacv** is a Scala 3 wrapper for [OpenCV](https://opencv.org) 4.13 — the industry-standard
+**scalacv** is a Scala 3 wrapper for [OpenCV](https://opencv.org) 4.14 — the industry-standard
 computer-vision library. It wraps the official OpenCV **Java API** so you write ordinary Scala:
 `Seq`, `Option`, `Either`, extension methods, and a fluent [`Image`](/image-api) you transform by
 chaining. No raw `int` constants, no manual memory management, no Java ceremony.
@@ -34,10 +34,10 @@ All of it in Mill — delete the scalacv lines you do not need, and keep both by
 
 ```scala
 def mvnDeps = Seq(
-  mvn"com.worxbend::scalacv:0.1.0",         // core: images, video, contours, drawing, filters
-  mvn"com.worxbend::scalacv-vision:0.1.0",  // detectors, DNN, pose, tracking, motion, OCR, calibration, SLAM
-  mvn"com.worxbend::scalacv-graphs:0.1.0",  // the Picture scene graph, charts, animated GIFs
-  mvn"com.worxbend::scalacv-zio:0.1.0",     // only if you use ZIO
+  mvn"com.worxbend::scalacv:0.2.0",         // core: images, video, contours, drawing, filters
+  mvn"com.worxbend::scalacv-vision:0.2.0",  // detectors, DNN, pose, tracking, motion, OCR, calibration, SLAM
+  mvn"com.worxbend::scalacv-graphs:0.2.0",  // the Picture scene graph, charts, animated GIFs
+  mvn"com.worxbend::scalacv-zio:0.2.0",     // only if you use ZIO
   mvn"org.bytedeco:opencv:4.14.0-1.5.14;classifier=linux-x86_64",
   mvn"org.bytedeco:openblas:0.3.34-1.5.14;classifier=linux-x86_64"
 )
@@ -48,10 +48,10 @@ The same for sbt (note `%%` for the Scala artifacts, `%` for the Java-world byte
 
 ```scala
 libraryDependencies ++= Seq(
-  "com.worxbend" %% "scalacv"        % "0.1.0",
-  "com.worxbend" %% "scalacv-vision" % "0.1.0",
-  "com.worxbend" %% "scalacv-graphs" % "0.1.0",
-  "com.worxbend" %% "scalacv-zio"    % "0.1.0",
+  "com.worxbend" %% "scalacv"        % "0.2.0",
+  "com.worxbend" %% "scalacv-vision" % "0.2.0",
+  "com.worxbend" %% "scalacv-graphs" % "0.2.0",
+  "com.worxbend" %% "scalacv-zio"    % "0.2.0",
   "org.bytedeco" %  "opencv"         % "4.14.0-1.5.14" classifier "linux-x86_64",
   "org.bytedeco" %  "openblas"       % "0.3.34-1.5.14" classifier "linux-x86_64"
 )
@@ -113,6 +113,7 @@ Call this **once**, at the top of your program, before touching any other scalac
 idempotent and thread-safe, so calling it again from anywhere is free:
 
 ```scala mdoc:silent
+import scalacv.graphs.*
 import scalacv.*
 
 OpenCv.load()

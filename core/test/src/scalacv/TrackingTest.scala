@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import org.opencv.core as cv
 import org.opencv.core.{CvType, Mat}
 import org.opencv.imgproc.Imgproc
@@ -52,7 +55,7 @@ class TrackingTest extends munit.ScalaCheckSuite:
     finally k.close()
 
   test("a CSRT tracker follows an object across frames"):
-    val tracker = Tracker.create(TrackerKind.Csrt)
+    val tracker = Tracker.create(TrackerKind.Csrt).fold(throw _, identity)
     val f0 = frame(50)
     try
       tracker.init(f0, Rect(35, 85, 30, 30))
@@ -179,7 +182,7 @@ class TrackingTest extends munit.ScalaCheckSuite:
     intercept[IllegalArgumentException](ObjectTracker.create(maxAge = -1)): Unit
 
   test("Tracker.update before init is an IllegalArgumentException, not a native call"):
-    val fresh = Tracker.create(TrackerKind.Csrt)
+    val fresh = Tracker.create(TrackerKind.Csrt).fold(throw _, identity)
     val f0 = frame(50)
     try intercept[IllegalArgumentException](fresh.update(f0)): Unit
     finally
@@ -187,7 +190,7 @@ class TrackingTest extends munit.ScalaCheckSuite:
       f0.close()
 
   test("Tracker.update after close is an IllegalStateException"):
-    val t = Tracker.create(TrackerKind.Csrt)
+    val t = Tracker.create(TrackerKind.Csrt).fold(throw _, identity)
     val f0 = frame(50)
     try
       t.init(f0, Rect(35, 85, 30, 30))
@@ -201,7 +204,7 @@ class TrackingTest extends munit.ScalaCheckSuite:
   test("every TrackerKind constructs and keeps an unchanged object on a still frame"):
     val box = Rect(35, 85, 30, 30)
     for kind <- TrackerKind.values do
-      val tr = Tracker.create(kind)
+      val tr = Tracker.create(kind).fold(throw _, identity)
       val f0 = frame(50)
       val f1 = frame(50)
       try

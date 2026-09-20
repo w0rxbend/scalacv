@@ -1,9 +1,11 @@
-package scalacv
+package scalacv.vision
 
 import scala.jdk.CollectionConverters.*
 
 import org.opencv.core.Mat
 import org.opencv.objdetect.{ArucoDetector, Dictionary, Objdetect, QRCodeDetector}
+
+import scalacv.*
 
 // Fiducial and barcode detection: QR codes ([[Qr]]) and ArUco markers ([[Aruco]]). The shared ownership
 // model — detectors built, used and freed inside a single call, results crossing the boundary as plain data

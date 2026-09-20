@@ -27,6 +27,7 @@ without touching the network. Two specs ship ready-made: `FaceDetect.modelSpec` 
 :::
 
 ```scala mdoc:invisible
+import scalacv.vision.*
 import scalacv.*
 OpenCv.load()
 ```

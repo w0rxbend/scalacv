@@ -51,6 +51,11 @@ val loadNatives: Task[Unit] = ZIO.attemptBlocking(OpenCv.load())
   * rather than the bare `Throwable` a plain `ZIO.attempt` would give. The bridge for every `Either[CvError,
   * A]` the synchronous API returns — `fromCv(Image.read(path))`, `fromCv(Cascades.load(name))`,
   * `fromCv(Dnn.fromOnnx(path))`.
+  *
+  * `ZIO.fromEither` suspends, so the `Either` is evaluated when the effect *runs*, not when it is constructed
+  * — but it runs on whatever executor executes the effect. Deferral is not executor placement: an `Either`
+  * that does blocking work (decoding a file, opening a capture) still belongs inside `ZIO.blocking`, as
+  * [[readImage]] and [[captureScoped]] do, or it will park that work on the compute pool.
   */
 def fromCv[A](result: => Either[CvError, A]): IO[CvError, A] = ZIO.fromEither(result)
 

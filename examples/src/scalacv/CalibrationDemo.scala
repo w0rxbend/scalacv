@@ -5,6 +5,8 @@ import org.opencv.core as cv
 import org.opencv.core.{Core, CvType, Mat}
 import org.opencv.imgproc.Imgproc
 
+import scalacv.vision.*
+
 /** Camera calibration, headless.
   *
   * A real calibration reads a chessboard from a camera at several angles; here the views are synthesised so

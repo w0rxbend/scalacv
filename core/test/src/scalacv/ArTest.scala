@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 /** Marker AR: pose recovery from a synthetic marker view, projection round-trip, and the overlays. */
 class ArTest extends munit.FunSuite:
 

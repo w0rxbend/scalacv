@@ -1,7 +1,9 @@
-package scalacv
+package scalacv.vision
 
 import org.opencv.calib3d.Calib3d
 import org.opencv.core.{Mat, MatOfPoint2f, MatOfPoint3f}
+
+import scalacv.*
 
 /** A rigid pose: where a marker (or any known object) sits relative to the camera.
   *
@@ -64,22 +66,21 @@ object Ar:
     // still nothing native to free.
     require(marker.corners.size == 4, s"a marker pose needs four corners, got ${marker.corners.size}")
     require(markerLength > 0, s"markerLength must be positive, got $markerLength")
-    // Six native Mats for one call. `Managed.scope` owns them all, with the same guarantee six nested
-    // `Managed.use` blocks gave — a throw from a later constructor frees the earlier ones — and without the
-    // six levels of indentation that buried the two lines below that actually do the work.
-    Managed.scope: own =>
-      val obj = own(MatOfPoint3f(markerObjectPoints(markerLength).map(_.toCv)*))
-      val img = own(MatOfPoint2f(marker.corners.map(_.toCv)*))
-      val camera = own(intrinsics.cameraMatrix)
-      val dist = own(intrinsics.distCoeffs)
-      val rvec = own(Mat())
-      val tvec = own(Mat())
-      val ok = Cv.orThrow("solvePnP")(
-        Calib3d.solvePnP(obj, img, camera, dist, rvec, tvec, false, Calib3d.SOLVEPNP_IPPE_SQUARE)
-      )
-      // readColumn copies the rotation and translation out into Seq[Double] before rvec/tvec are released,
-      // which is why it has to run inside this block rather than after it.
-      Option.when(ok)(Pose3D(Mats.readColumn(rvec, 3), Mats.readColumn(tvec, 3)))
+    // Pnp.solve owns and frees every Mat the solve needs, on the throwing path as well as the normal one —
+    // the returned Pose3D is plain Seq[Double], so nothing native escapes and the caller has nothing to
+    // release. A native failure is rethrown as a CvError here, where HeadPose.estimate folds it to None:
+    // IPPE_SQUARE on four coplanar corners has no degenerate-input trap worth hiding.
+    Pnp
+      .solve(
+        markerObjectPoints(markerLength).map(_.toCv),
+        marker.corners.map(_.toCv),
+        intrinsics,
+        Calib3d.SOLVEPNP_IPPE_SQUARE
+      ) { (_, rvec, tvec) =>
+        // readColumn copies the rotation and translation out into Seq[Double] before rvec/tvec are released.
+        Pose3D(Mats.readColumn(rvec, 3), Mats.readColumn(tvec, 3))
+      }
+      .fold(throw _, identity)
 
   /** Projects model `points` (in the marker's frame) to pixel coordinates through `pose` and the camera.
     *

@@ -1,7 +1,7 @@
 ---
 slug: /
 title: scalacv
-description: A Scala 3 wrapper for the OpenCV 4.13 Java API — a fluent, headless image pipeline that is honest about native memory.
+description: A Scala 3 wrapper for the OpenCV 4.14 Java API — a fluent, headless image pipeline that is honest about native memory.
 hide_title: true
 hide_table_of_contents: true
 wrapperClassName: scv-landing
@@ -37,6 +37,7 @@ import Paths from '@site/src/components/Paths';
 This runs headless, with no image file and no display server — which is also how it is tested:
 
 ```scala mdoc:silent
+import scalacv.vision.*
 import scalacv.*
 
 OpenCv.load()

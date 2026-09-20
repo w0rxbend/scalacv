@@ -18,6 +18,7 @@ An embedding is **plain immutable data**. Once you have it, the native models ca
 vector still compares, serialises, and stores like any other `Vector[Float]`.
 
 ```scala mdoc:invisible
+import scalacv.vision.*
 import scalacv.*
 OpenCv.load()
 ```

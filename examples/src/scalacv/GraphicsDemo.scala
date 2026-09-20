@@ -1,5 +1,7 @@
 package scalacv
 
+import scalacv.graphs.*
+
 /** The Picture graphics layer, headless: annotate a detection, make generative art, plot data, and animate.
   */
 @main def graphicsDemo(): Unit =

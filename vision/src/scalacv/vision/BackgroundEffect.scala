@@ -1,8 +1,10 @@
-package scalacv
+package scalacv.vision
 
 import org.opencv.core.{Core, CvType, Mat, Scalar as CvScalar}
 import org.opencv.dnn.Net
 import org.opencv.imgproc.Imgproc
+
+import scalacv.*
 
 /** Video-conferencing background effects — blur or replace the background behind a person.
   *

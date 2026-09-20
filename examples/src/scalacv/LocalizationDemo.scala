@@ -1,5 +1,7 @@
 package scalacv
 
+import scalacv.vision.*
+
 /** Localization and reactive navigation, headless: recover a camera pose from known landmarks (solvePnP), and
   * pick a steering direction from a synthetic depth map.
   */

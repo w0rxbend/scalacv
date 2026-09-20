@@ -113,6 +113,8 @@ artifact alone is enough.
 | Detect faces with a Haar cascade          | [Find faces with a Haar cascade](#find-faces-with-a-haar-cascade)                                       | vision | [Object detection](/object-detection)          |
 
 ```scala mdoc:invisible
+import scalacv.graphs.*
+import scalacv.vision.*
 import scalacv.*
 OpenCv.load()
 ```
@@ -2023,14 +2025,16 @@ def advTrackFrame(centreX: Int): Image =
     .drawRect(Rect(centreX - 15, 85, 30, 30), Scalar.White, Thickness.Filled)
 
 val advTrackedBox: Option[Rect] =
-  Using.resource(Tracker.create(TrackerKind.Csrt)) { tracker =>
-    val seed = advTrackFrame(50)
-    try tracker.init(seed, Rect(35, 85, 30, 30)) // where the object is in the first frame
-    finally seed.close()
+  Tracker.create(TrackerKind.Csrt).toOption.flatMap { created =>
+    Using.resource(created) { tracker =>
+      val seed = advTrackFrame(50)
+      try tracker.init(seed, Rect(35, 85, 30, 30)) // where the object is in the first frame
+      finally seed.close()
 
-    val moved = advTrackFrame(90) // the square has slid 40 px to the right
-    try tracker.update(moved)
-    finally moved.close()
+      val moved = advTrackFrame(90) // the square has slid 40 px to the right
+      try tracker.update(moved)
+      finally moved.close()
+    }
   }
 ```
 

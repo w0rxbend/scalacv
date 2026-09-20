@@ -1,9 +1,11 @@
-package scalacv
+package scalacv.vision
 
 import java.io.File
 
 import org.opencv.core.{Mat, Size as CvSize}
 import org.opencv.dnn.{Dnn as CvDnn, Net}
+
+import scalacv.*
 
 /** Deep-network inference over `org.opencv.dnn`, narrowed to the ONNX path.
   *

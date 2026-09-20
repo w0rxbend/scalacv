@@ -38,6 +38,7 @@ The typed result each primitive returns, in one place:
 | `LoopClosure` | `LoopDetector.detect` | `keyframe`, `matches`, `score` |
 
 ```scala mdoc:invisible
+import scalacv.vision.*
 import scalacv.*
 OpenCv.load()
 def scene(ox: Int, oy: Int): Image =

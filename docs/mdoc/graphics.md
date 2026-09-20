@@ -19,6 +19,8 @@ brings all of them in, along with the `image.draw(picture)` extension. The modul
 :::
 
 ```scala mdoc:invisible
+import scalacv.graphs.*
+import scalacv.vision.*
 import scalacv.*
 OpenCv.load()
 lazy val detector: org.opencv.objdetect.FaceDetectorYN = ??? // a YuNet model, from FaceDetect.create

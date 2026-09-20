@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import java.lang.reflect.{Constructor, Field, Method, Modifier, Type as JType}
 import java.net.URI
 import java.nio.charset.StandardCharsets
@@ -21,13 +24,15 @@ import scala.util.{Random, Try, Using}
   *
   * ==One golden per published module==
   *
-  * `core`, `vision` and `graphs` are three separately published artifacts (`scalacv`, `scalacv-vision`,
-  * `scalacv-graphs`), each with the same binary-compatibility promise, and each contributes classes to the
-  * *same* `scalacv` package. `core.test` has all three on its classpath, so this one suite gates all three:
-  * the rendering and golden-diff logic below is parameterized over a [[Module]] — a name, its compiled
-  * classes directory, and its golden path — and a class is included in a module's surface only if it was
-  * compiled into *that* module's output directory. Core's `Image` therefore never leaks into vision's golden
-  * and vice versa.
+  * `core`, `vision`, `graphs` and `zio` are four separately published artifacts (`scalacv`, `scalacv-vision`,
+  * `scalacv-graphs`, `scalacv-zio`), each with the same binary-compatibility promise. `core` publishes
+  * `package scalacv`; vision, graphs and zio publish `scalacv.vision`, `scalacv.graphs` and `scalacv.zio` —
+  * deliberately *not* the same package, so the artifacts can coexist on a JPMS module path (a split package
+  * across artifacts would be a hard error there). `core.test` has all four on its classpath, so this one
+  * suite gates all four: the rendering and golden-diff logic below is parameterized over a [[Module]] — a
+  * name, its compiled classes directory, and its golden path — and a class is included in a module's surface
+  * only if it was compiled into *that* module's output directory. Core's `Image` therefore never leaks into
+  * vision's golden and vice versa.
   *
   * ==What "public" means here==
   *
@@ -118,8 +123,8 @@ object PublicApi:
       buildRoot.resolve("out").resolve(name).resolve("compile.dest").resolve("classes")
     def goldenPath: Path = buildRoot.resolve(name).resolve("api.golden")
 
-  /** The published modules whose `scalacv` surfaces this suite gates, in golden-file order. */
-  val modules: Seq[Module] = Seq(Module("core"), Module("vision"), Module("graphs"))
+  /** The published modules whose surfaces this suite gates, in golden-file order. */
+  val modules: Seq[Module] = Seq(Module("core"), Module("vision"), Module("graphs"), Module("zio"))
 
   /** `core`, used by the renderer-invariant tests as a representative surface. */
   def coreModule: Module = modules.head
@@ -146,8 +151,9 @@ object PublicApi:
       )
     )
 
-  /** The class loader that sees every module's classes. In a `core.test` fork `core`, `vision` and `graphs`
-    * all sit on the same application classpath, so one loader resolves classes from any of them by name.
+  /** The class loader that sees every module's classes. In a `core.test` fork `core`, `vision`, `graphs` and
+    * `zio` all sit on the same application classpath, so one loader resolves classes from any of them by
+    * name.
     */
   private lazy val loader: ClassLoader = classOf[Managed[?]].getClassLoader
 
@@ -351,7 +357,7 @@ object PublicApi:
 /** The gate: each published module's compiled public surface must equal its committed `<module>/api.golden`.
   *
   * The renderer-invariant tests run against `core` as a representative surface (the renderer is the same for
-  * every module); the per-module tests below gate `core`, `vision` and `graphs` each against their own
+  * every module); the per-module tests below gate `core`, `vision`, `graphs` and `zio` each against their own
   * golden.
   */
 class PublicApiTest extends munit.FunSuite:
@@ -407,7 +413,7 @@ class PublicApiTest extends munit.FunSuite:
     val b = PublicApi.currentFor(core).getBytes(StandardCharsets.UTF_8)
     assert(java.util.Arrays.equals(a, b), "the dump is not reproducible within a single JVM")
 
-  // One gate per published module: core, vision and graphs each against their own golden.
+  // One gate per published module: core, vision, graphs and zio each against their own golden.
   PublicApi.modules.foreach: m =>
     test(s"the ${m.name} public API matches ${m.goldenLabel}"):
       val actual = PublicApi.currentFor(m)

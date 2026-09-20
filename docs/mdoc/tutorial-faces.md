@@ -13,6 +13,7 @@ If you target Windows, download `haarcascade_frontalface_alt.xml` from the OpenC
 These snippets need a real photo, so they're `compile-only` (they type-check in the docs build; run them in a project with a `people.jpg`).
 
 ```scala mdoc:silent
+import scalacv.vision.*
 import scalacv.*
 
 OpenCv.load()

@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 /** Screen analysis: template matching and change detection on synthetic screenshots. */
 class ScreenTest extends munit.FunSuite:
 

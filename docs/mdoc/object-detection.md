@@ -39,6 +39,8 @@ but the detections themselves are still plain data.
 Every runnable example on this page assumes the imports and native load below, established once:
 
 ```scala mdoc:silent
+import scalacv.graphs.*
+import scalacv.vision.*
 import scalacv.*
 import org.opencv.core.{CvType, Mat}
 OpenCv.load()

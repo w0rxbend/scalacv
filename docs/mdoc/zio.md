@@ -22,13 +22,14 @@ same safety without the dependency.
 Add it alongside your natives:
 
 ```scala
-mvn"com.worxbend::scalacv-zio:0.1.0"
+mvn"com.worxbend::scalacv-zio:0.2.0"
 ```
 
 Everything below assumes these imports; in mdoc they are established once and persist across the
 page:
 
 ```scala mdoc:silent
+import scalacv.vision.*
 import _root_.zio.*
 import _root_.zio.stream.*
 import scalacv.*

@@ -1,5 +1,7 @@
 package scalacv
 
+import scalacv.vision.*
+
 import javafx.application.Application
 import javafx.scene.image.{Image, ImageView}
 import javafx.scene.{Group, Scene}

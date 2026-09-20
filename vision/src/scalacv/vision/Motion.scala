@@ -1,7 +1,9 @@
-package scalacv
+package scalacv.vision
 
 import org.opencv.core.{Core, Mat}
 import org.opencv.video.BackgroundSubtractorMOG2
+
+import scalacv.*
 
 /** What one frame of motion detection found — plain immutable data, valid after the frame is freed.
   *
@@ -161,8 +163,7 @@ object MotionDetector:
     val changed = Core.countNonZero(mask)
     val total = mask.rows * mask.cols
     val ratio = if total == 0 then 0.0 else changed.toDouble / total
-    val regions = mask.findContours().map(_.boundingRect).filter(_.area >= minArea).sortBy(-_.area)
-    Motion(ratio >= motionRatio, ratio, regions)
+    Motion(ratio >= motionRatio, ratio, Mats.blobs(mask, minArea))
 
   private final class FrameDiff(threshold: Int, minArea: Int, blurRadius: Int, motionRatio: Double)
       extends MotionDetector:

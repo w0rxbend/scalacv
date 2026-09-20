@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 /** Unit tests for [[Features]] — ORB detection and cross-image matching. The existing coverage in
   * NavigationTest is only a self-match; this adds detection, matching two *different* views of a scene, the
   * distance filter and ordering, and the empty-input guard.

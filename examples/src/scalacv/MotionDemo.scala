@@ -1,5 +1,7 @@
 package scalacv
 
+import scalacv.vision.*
+
 /** Motion detection over a stream of JPEG frames — the ESP32-CAM shape.
   *
   * Here the MJPEG stream is synthesised (a white square that sits still, then jumps at frame 5); a real

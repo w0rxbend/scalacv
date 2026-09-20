@@ -1,6 +1,7 @@
 # Reading & writing images
 
 ```scala mdoc:invisible
+import scalacv.graphs.*
 import scalacv.*
 OpenCv.load()
 ```

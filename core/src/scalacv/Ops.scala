@@ -672,6 +672,15 @@ object Mats:
   private[scalacv] def readColumn(mat: Mat, r: Int): Seq[Double] =
     (0 until r).map(i => mat.get(i, 0)(0))
 
+  /** The bounding boxes of the blobs in a binary mask (`CV_8UC1`, 0/255), boxes smaller than `minArea`
+    * dropped, largest first. The shared tail of every foreground-mask pipeline (motion, screen diff, obstacle
+    * detection): find the contours, box them, filter, sort. The mask is borrowed; the result is plain data.
+    * The *cleanup* step in front of this (dilate, open or close, and at what radius) is deliberately left to
+    * the caller — those are different operations chosen per pipeline, not drift.
+    */
+  private[scalacv] def blobs(mask: Mat, minArea: Int): Seq[Rect] =
+    mask.findContours().map(_.boundingRect).filter(_.area >= minArea).sortBy(-_.area)
+
   /** The inverse of [[readColumn]]: `values` as a caller-owned `n`×1 `CV_64F` Mat, for handing a small vector
     * — a Rodrigues rotation, a translation — back to a native solver.
     *

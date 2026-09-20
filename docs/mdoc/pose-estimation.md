@@ -20,6 +20,7 @@ needs weights it is marked `compile-only` and assumes a `Net` you loaded yoursel
 :::
 
 ```scala mdoc:invisible
+import scalacv.vision.*
 import scalacv.*
 OpenCv.load()
 lazy val net: org.opencv.dnn.Net = ??? // from Dnn.fromOnnx("model.onnx")

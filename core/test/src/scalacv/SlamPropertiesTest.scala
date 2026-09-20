@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import org.scalacheck.Gen
 import org.scalacheck.Prop.{forAll, propBoolean}
 

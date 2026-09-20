@@ -1,6 +1,8 @@
-package scalacv
+package scalacv.vision
 
 import org.opencv.core.Core
+
+import scalacv.*
 
 /** A suggested steering action from what is ahead. */
 enum Steering:

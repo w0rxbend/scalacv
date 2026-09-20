@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 /** Static hand-gesture recognition from synthetic Hand21 poses — no model, pure geometry. */
 class GestureTest extends munit.FunSuite:
 

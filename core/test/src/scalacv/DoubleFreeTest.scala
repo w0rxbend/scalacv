@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import org.opencv.objdetect.{ArucoDetector, CascadeClassifier, QRCodeDetector}
 import org.opencv.dnn.Net
 

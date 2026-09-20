@@ -13,6 +13,7 @@ tuning those two.
 :::
 
 ```scala mdoc:invisible
+import scalacv.vision.*
 import scalacv.*
 OpenCv.load()
 // A synthetic "screenshot": grey with a distinctive outlined white square (contrast to match on).

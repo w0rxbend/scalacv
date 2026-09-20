@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import org.opencv.core as cv
 
 /** The value types are plain data, but their `toCv`/`from` conversions are the binary boundary every detector

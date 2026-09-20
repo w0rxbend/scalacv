@@ -14,6 +14,7 @@ operations (blur families, edges, thresholds, morphology, colour-space conversio
 :::
 
 ```scala mdoc:invisible
+import scalacv.graphs.*
 import scalacv.*
 import org.opencv.core.{CvType, Mat}
 OpenCv.load()

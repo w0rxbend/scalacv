@@ -1,4 +1,6 @@
-package scalacv
+package scalacv.vision
+
+import scalacv.*
 
 /** One recognised word (or line/block, depending on the engine), with where it sits and how sure the engine
   * is. Plain immutable data.

@@ -7,6 +7,7 @@ Running a trained neural network sounds intimidating, but the shape is always th
 Networks need a model file, so these snippets are `compile-only` — bring your own `.onnx` to run them.
 
 ```scala mdoc:silent
+import scalacv.vision.*
 import scalacv.*
 
 OpenCv.load()

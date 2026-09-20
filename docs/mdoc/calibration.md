@@ -15,6 +15,7 @@ off those photos. Feed the result to [Marker AR](/marker-ar), [pose estimation](
 :::
 
 ```scala mdoc:invisible
+import scalacv.vision.*
 import scalacv.*
 import org.opencv.core.{CvType, Mat}
 import org.opencv.core as cv

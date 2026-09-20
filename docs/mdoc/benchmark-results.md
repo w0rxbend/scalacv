@@ -10,6 +10,7 @@ description: What scalacv's benchmarks actually measured — the four shipped wi
 A benchmark result is only worth reading if you know how it was produced, so this page starts with the method. Everything after that is a recovered record: the numbers lived only in commit messages, and this page is now where they live.
 
 ```scala mdoc:silent
+import scalacv.graphs.*
 import scalacv.*
 
 OpenCv.load()

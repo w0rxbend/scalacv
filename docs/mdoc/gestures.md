@@ -18,6 +18,7 @@ you loaded yourself with [`Dnn.fromOnnx`](/dnn).
 :::
 
 ```scala mdoc:invisible
+import scalacv.vision.*
 import scalacv.*
 OpenCv.load()
 lazy val handNet: org.opencv.dnn.Net = ??? // a hand-landmark model via Dnn.fromOnnx

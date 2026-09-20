@@ -1,4 +1,6 @@
-package scalacv
+package scalacv.vision
+
+import scalacv.*
 
 /** A running visual-odometry pipeline: feed frames in order, get the camera's motion each step.
   *

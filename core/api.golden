@@ -1280,6 +1280,7 @@ object scalacv.Managed
 object scalacv.Mats
   extends java.lang.Object
   implements java.io.Serializable
+  def blobs(org.opencv.core.Mat, int): scala.collection.immutable.Seq<scalacv.Rect>
   def chain(org.opencv.core.Mat, scala.collection.immutable.Seq<scala.Function1<org.opencv.core.Mat, scalacv.Managed<org.opencv.core.Mat>>>): scalacv.Managed<org.opencv.core.Mat>
   def column(scala.collection.immutable.Seq<java.lang.Object>): org.opencv.core.Mat
   def grayscale(org.opencv.core.Mat): scalacv.Managed<org.opencv.core.Mat>
@@ -1463,6 +1464,10 @@ object scalacv.OutputDepth
   static val SameAsSource: scalacv.OutputDepth
   static val Signed16: scalacv.OutputDepth
   static val Unsigned8: scalacv.OutputDepth
+object scalacv.Pnp
+  extends java.lang.Object
+  implements java.io.Serializable
+  def solve<A>(scala.collection.immutable.Seq<org.opencv.core.Point3>, scala.collection.immutable.Seq<org.opencv.core.Point>, scalacv.Intrinsics, int, scala.Function3<scalacv.Managed$Scope, org.opencv.core.Mat, org.opencv.core.Mat, A>): scala.util.Either<scalacv.CvError, scala.Option<A>>
 object scalacv.Point
   extends java.lang.Object
   implements java.io.Serializable, scala.deriving.Mirror$Product

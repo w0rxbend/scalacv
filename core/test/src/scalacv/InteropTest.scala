@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import java.awt.image.BufferedImage
 import java.nio.file.{Files, Path}
 import java.security.MessageDigest

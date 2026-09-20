@@ -1,5 +1,7 @@
 package scalacv
 
+import scalacv.vision.*
+
 /** Face recognition, headless: the [[Gallery]] enrol/identify flow shown with stand-in embeddings (so it runs
   * with no model). With a real SFace model you would build these embeddings from detected faces via
   * `FaceRecognizer.embed`; the comparison and lookup are exactly the same.

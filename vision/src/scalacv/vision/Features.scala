@@ -1,7 +1,9 @@
-package scalacv
+package scalacv.vision
 
 import org.opencv.core.{Core, Mat, MatOfDMatch, MatOfKeyPoint}
 import org.opencv.features2d.{BFMatcher, ORB}
+
+import scalacv.*
 
 /** One descriptor-to-descriptor correspondence: the two keypoint indices and how far apart the descriptors
   * are (Hamming distance for ORB — smaller is better).

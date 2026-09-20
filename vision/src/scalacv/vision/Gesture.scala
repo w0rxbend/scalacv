@@ -1,4 +1,6 @@
-package scalacv
+package scalacv.vision
+
+import scalacv.*
 
 /** A recognised static hand gesture. */
 enum HandGesture:

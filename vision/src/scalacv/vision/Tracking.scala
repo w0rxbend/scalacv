@@ -1,9 +1,11 @@
-package scalacv
+package scalacv.vision
 
 import scala.collection.mutable
 
 import org.opencv.core.{Core, CvType, Mat, Rect as CvRect}
 import org.opencv.video.{KalmanFilter, Tracker as CvTracker}
+
+import scalacv.*
 
 /** Which single-object tracking algorithm to run. All three ship in this OpenCV build.
   *
@@ -24,9 +26,10 @@ enum TrackerKind:
   * and single-object; for many objects that come and go, use [[ObjectTracker]] instead.
   *
   * {{{
-  * Using.resource(Tracker.create(TrackerKind.Csrt)): tracker =>
-  *   tracker.init(firstFrame, box)
-  *   for frame <- frames do tracker.update(frame).foreach(b => frame.drawRect(b).write(...))
+  * Tracker.create(TrackerKind.Csrt).foreach: tracker =>
+  *   Using.resource(tracker): t =>
+  *     t.init(firstFrame, box)
+  *     for frame <- frames do t.update(frame).foreach(b => frame.drawRect(b).write(...))
   * }}}
   */
 final class Tracker private (private val handle: Managed[CvTracker]) extends AutoCloseable:
@@ -52,20 +55,28 @@ object Tracker:
 
   private given Releasable[CvTracker] = Releasable.nativeHandle
 
-  /** Builds a tracker of the given kind. Free it when done. */
-  def create(kind: TrackerKind): Tracker =
+  /** Builds a tracker of the given kind; `Left` when this OpenCV build lacks the algorithm. Free the tracker
+    * when done.
+    */
+  def create(kind: TrackerKind): Either[CvError, Tracker] =
     val native: CvTracker = kind match
       case TrackerKind.Csrt => org.opencv.tracking.TrackerCSRT.create()
       case TrackerKind.Kcf => org.opencv.tracking.TrackerKCF.create()
       case TrackerKind.Mil => org.opencv.video.TrackerMIL.create()
     // A build without a given algorithm returns null here; wrapping it in Managed would surface later as an
-    // opaque "already released" at the first `init`. Name it now, as FaceDetect.create does for its null.
+    // opaque "already released" at the first `init`. That is an environment failure, not a programmer error,
+    // so it travels in the Either like every other native-resource factory (FaceDetect.create,
+    // Cascades.load, Dnn.fromOnnx).
     if native == null then
-      throw CvError.NativeCall(
-        s"creating a $kind tracker",
-        IllegalStateException(s"OpenCV returned no $kind tracker — this build may not include that algorithm")
+      Left(
+        CvError.NativeCall(
+          s"creating a $kind tracker",
+          IllegalStateException(
+            s"OpenCV returned no $kind tracker — this build may not include that algorithm"
+          )
+        )
       )
-    new Tracker(Managed(native))
+    else Right(new Tracker(Managed(native)))
 
 /** A constant-velocity Kalman filter over a 2D point — the smoother behind [[ObjectTracker]], useful on its
   * own to steady a jittery detection or to coast through a frame where the measurement dropped out.

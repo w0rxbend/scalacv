@@ -1,7 +1,9 @@
-package scalacv
+package scalacv.vision
 
 import org.opencv.calib3d.StereoSGBM
 import org.opencv.core.{Core, Mat}
+
+import scalacv.*
 
 /** One detected obstacle: where it is in the frame and how near it is (`0` far … `1` right in front). */
 final case class Obstacle(region: Rect, nearness: Double)
@@ -67,10 +69,8 @@ object Obstacles:
         near
           .morphology(MorphOp.Close, radius = 2)
           .use: cleaned =>
-            cleaned
-              .findContours()
-              .map(_.boundingRect)
-              .filter(_.area >= minArea)
+            Mats
+              .blobs(cleaned, minArea)
               .map(region => Obstacle(region, meanNearness(disparity.mat, region)))
               .sortBy(-_.nearness)
 

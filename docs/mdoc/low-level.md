@@ -1,6 +1,6 @@
 # Working with the raw OpenCV API
 
-scalacv is a wrapper, never a wall. Underneath every convenience is the ordinary OpenCV 4.13 Java
+scalacv is a wrapper, never a wall. Underneath every convenience is the ordinary OpenCV 4.14 Java
 API — `org.opencv.core.Mat`, `org.opencv.imgproc.Imgproc`, the detectors — and scalacv is built so
 you can reach it at any point, use the exact call you need, and come back up without ceremony. This
 page is the map of how to move between levels.
@@ -13,6 +13,7 @@ common path. Come back when OpenCV has a function scalacv doesn't wrap yet, or w
 :::
 
 ```scala mdoc:invisible
+import scalacv.vision.*
 import scalacv.*
 import org.opencv.core.{CvType, Mat}
 OpenCv.load()

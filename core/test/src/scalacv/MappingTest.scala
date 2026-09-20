@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 /** The SLAM mapping helpers: loop-closure detection and the occupancy grid. */
 class MappingTest extends munit.FunSuite:
 

@@ -1,5 +1,7 @@
 package scalacv
 
+import scalacv.vision.*
+
 /** Marker AR, headless: synthesize a marker view, recover each tag's 3D pose, and overlay a wireframe cube
   * and coordinate axes — the "hello world" of augmented reality.
   */

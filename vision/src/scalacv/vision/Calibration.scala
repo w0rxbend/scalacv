@@ -1,10 +1,12 @@
-package scalacv
+package scalacv.vision
 
 import scala.jdk.CollectionConverters.*
 
 import org.opencv.calib3d.Calib3d
 import org.opencv.core.{Mat, MatOfPoint2f, MatOfPoint3f, Point3, Size as CvSize, TermCriteria}
 import org.opencv.imgproc.Imgproc
+
+import scalacv.*
 
 /** A planar chessboard calibration target, described by its **inner-corner** grid.
   *

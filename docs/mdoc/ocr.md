@@ -21,6 +21,8 @@ you, then hands the clean result to your `engine`. The only decision you make is
 :::
 
 ```scala mdoc:invisible
+import scalacv.graphs.*
+import scalacv.vision.*
 import scalacv.*
 OpenCv.load()
 def scan(): Image =

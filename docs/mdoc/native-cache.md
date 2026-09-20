@@ -20,6 +20,7 @@ The first `OpenCv.load()` in a fresh environment extracts the platform's native 
 The libraries are then loaded by absolute path, resolving dependencies on demand — which is what keeps a headless box (no GTK) working (see [Troubleshooting](/troubleshooting#headless)). `load()` is idempotent and thread-safe, so calling it at the top of every entry point costs nothing after the first:
 
 ```scala mdoc:silent
+import scalacv.vision.*
 import scalacv.*
 
 OpenCv.load()   // extracts + loads on the first call…

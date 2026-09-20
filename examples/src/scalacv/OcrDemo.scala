@@ -1,5 +1,7 @@
 package scalacv
 
+import scalacv.vision.*
+
 /** OCR preprocessing, headless. scalacv owns the OpenCV half (grayscale, denoise, binarise, deskew); the
   * recognition itself is a pluggable OcrEngine — here a stub, in real use Tesseract via tess4j or bytedeco.
   */

@@ -4,6 +4,8 @@ import org.opencv.core.{CvType, Mat, Point as CvPoint, Scalar as CvScalar}
 import org.opencv.imgproc.Imgproc
 import org.opencv.objdetect.QRCodeEncoder
 
+import scalacv.vision.*
+
 /** Synthetic scenes for the examples, drawn programmatically.
   *
   * The examples exist to be run and to assert their own output in CI, and there is no image asset in this

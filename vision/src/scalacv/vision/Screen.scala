@@ -1,7 +1,9 @@
-package scalacv
+package scalacv.vision
 
 import org.opencv.core.{Core, Mat}
 import org.opencv.imgproc.Imgproc
+
+import scalacv.*
 
 /** One template-match hit — where a template was found and how well it matched. */
 final case class TemplateMatch(location: Rect, score: Double)
@@ -110,4 +112,4 @@ object Screen:
                 mask
                   .dilate(radius = 2)
                   .use: merged =>
-                    merged.findContours().map(_.boundingRect).filter(_.area >= minArea).sortBy(-_.area)
+                    Mats.blobs(merged, minArea)

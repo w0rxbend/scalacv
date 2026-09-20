@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 /** The Picture graphics layer and Color, verified at the pixel level on rendered canvases. */
 class GraphicsTest extends munit.FunSuite:
 

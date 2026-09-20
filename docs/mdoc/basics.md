@@ -3,6 +3,7 @@
 New to computer vision? Start here. This page explains the handful of ideas every other page assumes — what an image *is* to a computer, what pixels and channels are, why OpenCV says **BGR** and not RGB, and how coordinates and data types work — with tiny runnable examples. No prior CV knowledge needed.
 
 ```scala mdoc:silent
+import scalacv.graphs.*
 import scalacv.*
 import org.opencv.core.CvType
 

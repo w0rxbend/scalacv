@@ -23,6 +23,8 @@ built, and the values printed underneath are the real ones — not values someon
 Copy any block into a project with the same dependencies and you get the same result.
 
 ```scala mdoc:silent
+import scalacv.graphs.*
+import scalacv.vision.*
 import scalacv.*
 
 OpenCv.load()

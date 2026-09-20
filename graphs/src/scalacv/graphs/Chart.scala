@@ -1,4 +1,6 @@
-package scalacv
+package scalacv.graphs
+
+import scalacv.*
 
 /** Minimal data visualisation, built from [[Picture]] — proof that the graphics layer composes into charts,
   * and a handy way to overlay a plot on an image (a histogram beside a detection, a signal on a frame).

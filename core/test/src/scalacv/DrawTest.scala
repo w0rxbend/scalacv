@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import org.opencv.core.{Core, CvType, Mat}
 
 /** Every fixture here is drawn from scratch: a black Mat and the operation under test. There is no image file

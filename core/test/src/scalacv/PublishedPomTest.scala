@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 import javax.xml.parsers.DocumentBuilderFactory
 import org.w3c.dom.{Element, Node}
 

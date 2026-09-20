@@ -1,5 +1,8 @@
 package scalacv
 
+import scalacv.graphs.*
+import scalacv.vision.*
+
 /** The SLAM/navigation front end: optical flow, ORB features, stereo obstacles, and visual odometry — all on
   * synthetic scenes, so no dataset is needed.
   */
