@@ -4,7 +4,7 @@ All notable changes to scalacv are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 `early-semver`: while the library is on `0.x`, a minor bump may break compatibility.
 
-## [Unreleased]
+## [0.3.0] — 2026-09-21
 
 ### Breaking
 - **`scalacv-vision` and `scalacv-graphs` moved to their own packages** — `scalacv.vision` and
@@ -39,6 +39,9 @@ All notable changes to scalacv are recorded here. The format follows
   tag must never announce artifacts that do not exist), the test suite runs as a `needs:` prerequisite
   before any publish step, and every GitHub Action across all four workflows is pinned to a commit SHA
   (Dependabot's `github-actions` ecosystem keeps them current).
+- Website: `image-size` overridden to `^2.0.4` for the two infinite-loop advisories (GHSA-w3rx-r6r6-pgpr,
+  GHSA-5p2g-fcmc-qvqq); the fix releases exist only on Codeberg, so the advisories list no patched
+  version.
 
 ## [0.2.0] — 2026-09-19
 
